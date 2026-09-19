@@ -6,21 +6,23 @@ FreightBridge does not require real Supabase credentials during this foundation 
 
 Keep these values only in Render or another backend secret store:
 
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_SECRET_KEY`
 - `DATABASE_URL`
 
-The service-role key bypasses row-level security and must never be exposed to browser code, logs, screenshots, or committed files.
+The Supabase secret key must never be exposed to browser code, logs, screenshots, or committed files.
 
 ## Backend configuration
 
 These values are read by the FastAPI service:
 
 - `SUPABASE_URL`
-- `SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_PUBLISHABLE_KEY`
+- `SUPABASE_SECRET_KEY`
 - `DATABASE_URL`
 
-The anon key can be safe in public clients only when Supabase row-level security policies are correctly designed. In this project foundation, the frontend does not need Supabase credentials.
+Legacy names `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are temporarily accepted by the API for backwards compatibility with the existing Render service. Prefer the new names in all new configuration.
+
+The publishable key can be safe in public clients only when Supabase row-level security policies are correctly designed. In this project foundation, the frontend does not need Supabase credentials.
 
 ## Frontend configuration
 

@@ -16,19 +16,25 @@ This project is not ready for production traffic. These notes describe the inten
 - Service root: `services/freightbridge-api`
 - Build command: `pip install -r requirements.txt`
 - Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-- Required environment variables:
+- Preferred environment variables:
   - `APP_ENV`
   - `ALLOWED_ORIGINS`
   - `SUPABASE_URL`
+  - `SUPABASE_PUBLISHABLE_KEY`
+  - `SUPABASE_SECRET_KEY`
+  - `DATABASE_URL`
+- Legacy names temporarily accepted:
   - `SUPABASE_ANON_KEY`
   - `SUPABASE_SERVICE_ROLE_KEY`
-  - `DATABASE_URL`
+- Health endpoints:
+  - `GET /health` checks API liveness only.
+  - `GET /readiness` checks configuration and Supabase PostgreSQL connectivity.
 
 ## Supabase
 
 - Create a Supabase project when the backend needs persistence.
 - Store database migrations under `infrastructure/supabase/migrations`.
-- Keep `SUPABASE_SERVICE_ROLE_KEY` and `DATABASE_URL` backend-only.
+- Keep `SUPABASE_SECRET_KEY` and `DATABASE_URL` backend-only.
 
 ## Railway
 

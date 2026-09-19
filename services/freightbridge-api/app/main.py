@@ -2,11 +2,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 
 
-def create_app() -> FastAPI:
-  settings = get_settings()
+def create_app(settings: Settings | None = None) -> FastAPI:
+  resolved_settings = settings or get_settings()
 
   app = FastAPI(
     title='FreightBridge API',
@@ -16,7 +16,7 @@ def create_app() -> FastAPI:
 
   app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins,
+    allow_origins=resolved_settings.allowed_origins,
     allow_credentials=True,
     allow_methods=['*'],
     allow_headers=['*'],

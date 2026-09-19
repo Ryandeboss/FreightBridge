@@ -9,7 +9,7 @@ flowchart TD
   API -->|Canonical Model| Pipeline[FreightBridge processing pipeline]
   Pipeline -->|X12/SFTP| Midwest[Midwest Carrier Simulator]
   API --> Supabase[(Supabase PostgreSQL)]
-  SFTP[SFTPGo on Railway] --> Pipeline
+  SFTP[SFTPGo on Railway - reserved] -. later SFTP milestone .-> Pipeline
 ```
 
 ## Component Notes
@@ -18,5 +18,5 @@ flowchart TD
 - Analyst UI: React/Vite operational dashboard deployed to Vercel.
 - FreightBridge API: FastAPI middleware deployed to Render.
 - Supabase PostgreSQL: durable application data and future canonical records.
-- SFTPGo on Railway: future public SFTP ingress with TCP proxying.
+- SFTPGo on Railway: provisioned / reserved for a later public SFTP ingress milestone.
 - Midwest Carrier Simulator: future synthetic X12/SFTP destination.
