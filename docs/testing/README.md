@@ -1,0 +1,9 @@
+# Testing Notes
+
+Current test coverage:
+
+- Frontend lint and production build.
+- Backend `/health` endpoint test with pytest.
+- GitHub Actions workflow for frontend and backend checks.
+
+Future milestones should add API contract tests, simulator tests, database tests, and integration pipeline tests.
