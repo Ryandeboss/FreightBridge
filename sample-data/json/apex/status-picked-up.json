@@ -1,0 +1,9 @@
+{
+  "loadId": "LOAD500",
+  "carrierCode": "MWCX",
+  "statusCode": "PICKED_UP",
+  "statusDescription": "Shipment picked up at origin.",
+  "occurredAt": "2026-10-01T14:30:00Z",
+  "city": "Aurora",
+  "state": "IL"
+}

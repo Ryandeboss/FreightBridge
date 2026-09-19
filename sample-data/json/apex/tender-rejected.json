@@ -1,0 +1,8 @@
+{
+  "loadId": "LOAD500",
+  "decision": "REJECTED",
+  "carrierCode": "MWCX",
+  "reasonCode": "CAPACITY_UNAVAILABLE",
+  "message": "No available driver for requested pickup window.",
+  "decidedAt": "2026-09-19T14:45:00Z"
+}

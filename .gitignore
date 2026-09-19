@@ -52,6 +52,8 @@ sample-data/**/*.edi
 sample-data/**/*.x12
 !sample-data/x12/.gitkeep
 !sample-data/json/.gitkeep
+!sample-data/x12/midwest/
+!sample-data/x12/midwest/*.edi
 
 # Local office temp files
 ~$*

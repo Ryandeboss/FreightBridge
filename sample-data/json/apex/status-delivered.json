@@ -1,0 +1,9 @@
+{
+  "loadId": "LOAD500",
+  "carrierCode": "MWCX",
+  "statusCode": "DELIVERED",
+  "statusDescription": "Shipment delivered to destination.",
+  "occurredAt": "2026-10-02T18:15:00Z",
+  "city": "Detroit",
+  "state": "MI"
+}

@@ -1,6 +1,6 @@
 # Initial Architecture
 
-This diagram captures the intended FreightBridge direction without implementing the future EDI, SFTP, mapping, or partner simulator features.
+This diagram captures the intended FreightBridge direction without implementing the future EDI, SFTP, mapping, or partner simulator features. Milestone 3 specifies the Apex and Midwest endpoint contracts that will inform the future FreightBridge canonical model.
 
 ```mermaid
 flowchart TD
