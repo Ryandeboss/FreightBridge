@@ -130,6 +130,7 @@ Major Milestone 3 contract files:
 - [Apex partner profile](docs/partners/apex/partner-profile.md)
 - [Apex data dictionary](docs/partners/apex/data-dictionary.md)
 - [Apex OpenAPI contract](docs/partners/apex/openapi.yaml)
+- [Apex outbound load tender contract](docs/partners/apex/outbound-load-tender-contract.md)
 - [Apex service catalog](docs/partners/apex/service-catalog.md)
 - [Midwest partner profile](docs/partners/midwest/partner-profile.md)
 - [Midwest data dictionary](docs/partners/midwest/data-dictionary.md)

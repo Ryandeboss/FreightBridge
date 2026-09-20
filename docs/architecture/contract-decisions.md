@@ -34,6 +34,22 @@ Reason: Tender lifecycle proves the core broker-to-carrier integration before br
 
 Consequence: 214/997 are documented now, but code can be phased later without changing the partner contract vocabulary.
 
+## Apex Originates Load Tenders
+
+Decision: Apex is the originator of the ApexLoad tender event. The future FreightBridge endpoint is `POST /api/integrations/apex/load-tenders`.
+
+Reason: The business flow starts in Apex's broker/TMS world and proceeds through FreightBridge to Midwest.
+
+Consequence: Apex-owned `/v1/load-tenders` is documented only as an Apex simulator/business action, while the future Apex -> FreightBridge delivery is documented separately.
+
+## Midwest 214 Uses AF, X6, X1, and D1
+
+Decision: Midwest's supported 214 AT7-01 subset is `AF`, `X6`, `X1`, and `D1`.
+
+Reason: This better reflects X12-facing event meanings while still allowing FreightBridge to normalize statuses internally.
+
+Consequence: Future code must preserve partner X12 meanings and normalize them separately to `PICKED_UP`, `IN_TRANSIT`, `ARRIVED`, and `DELIVERED`.
+
 ## 210 Is Deferred
 
 Decision: 210 Freight Invoice is future/stretch only.

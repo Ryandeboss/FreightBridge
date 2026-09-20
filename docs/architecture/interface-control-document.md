@@ -28,7 +28,7 @@ Midwest Carrier
 
 | Responsibility | Apex | FreightBridge | Midwest |
 | --- | --- | --- | --- |
-| REST JSON contract | Owns Apex side | Consumes/produces future calls | Not applicable |
+| REST JSON contract | Owns Apex `/v1` endpoints and outbound ApexLoad payload | Owns future inbound Apex integration endpoint and produces future Apex callbacks | Not applicable |
 | Canonical model | Not applicable | Future owner | Not applicable |
 | X12 204 generation | Not applicable | Future owner | Receives/validates |
 | X12 990 generation | Receives transformed result | Future transform owner | Produces |
@@ -54,8 +54,8 @@ Midwest Carrier
 
 Initial future flow:
 
-1. Apex creates a load using its REST/JSON representation.
-2. FreightBridge accepts the Apex-side payload.
+1. Apex creates/tenders a load using its REST/JSON representation.
+2. Apex sends the ApexLoad JSON payload to a future FreightBridge-owned inbound endpoint.
 3. FreightBridge eventually transforms through a canonical representation.
 4. FreightBridge sends a Midwest-specific X12 204 file.
 5. Midwest validates receipt and returns a 997.
@@ -71,7 +71,9 @@ Later MVP flow:
 
 ## Synchronous vs. Asynchronous Behavior
 
-- Apex REST calls are synchronous at the transport level.
+- Apex-owned REST calls are synchronous at the transport level.
+- Apex outbound load tender delivery is Apex -> FreightBridge.
+- Tender decisions and shipment statuses are FreightBridge -> Apex on the Apex-facing side.
 - Midwest SFTP exchanges are asynchronous file drops and pickups.
 - 997 is a technical acknowledgment, not a business decision.
 - 990 is the business tender response.
@@ -122,7 +124,7 @@ sequenceDiagram
   participant FB as FreightBridge
   participant Midwest as Midwest Carrier
 
-  Apex->>FB: Submit ApexLoad JSON (LOAD500)
+  Apex->>FB: Send ApexLoad JSON to future FreightBridge endpoint (LOAD500)
   FB->>FB: Future canonical transform
   FB->>Midwest: Send X12 204 over future SFTP
   Midwest->>Midwest: Validate X12 envelope/profile

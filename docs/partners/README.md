@@ -7,6 +7,7 @@ This folder contains synthetic partner contracts for the FreightBridge portfolio
 - [Partner profile](apex/partner-profile.md)
 - [Data dictionary](apex/data-dictionary.md)
 - [OpenAPI contract](apex/openapi.yaml)
+- [Outbound load tender contract](apex/outbound-load-tender-contract.md)
 - [Service catalog](apex/service-catalog.md)
 
 ## Midwest Carrier

@@ -39,8 +39,8 @@ Required project subset:
 | ISA | Interchange header | Required | Synthetic sender `FREIGHTBRIDGE`, receiver `MWCX` |
 | GS | Functional group header | Required | Functional ID `SM` |
 | ST | Transaction header | Required | Transaction set `204` |
-| B2 | Beginning segment | Required | `B2-04` is the shipment/load identifier |
-| L11 | Reference numbers | Required for BOL and PO | `BM` for BOL, `PO` for purchase order |
+| B2 | Beginning segment | Required | `B2-02` is Midwest carrier code / synthetic SCAC `MWCX`; `B2-04` is shipment/load identifier; `B2-06` is payment method |
+| L11 | Reference numbers | Required for BOL and PO | `L11-01` is reference value; `L11-02` is reference qualifier |
 | G62 | Dates/times | Required for demo pickup/delivery appointments | Project uses qualifier assumptions for appointment timing |
 | N1 | Party identification | Required for shipper and consignee | `N1-01 = SH` for shipper, `N1-01 = CN` for consignee |
 | N3 | Street address | Required under SH and CN loops | Address line 1 only in MVP fixture |
@@ -53,13 +53,17 @@ Required project subset:
 
 Preserved project conventions:
 
-- `B2-04` -> shipment/load identifier
+- `B2-02` -> Midwest carrier code / synthetic SCAC, `MWCX`
+- `B2-04` -> shipper/broker shipment identifier, `LOAD500`
+- `B2-06` -> payment method used by the fixture, `PP`
 - `N1-02` where `N1-01 = SH` -> shipper name
 - `N1-02` where `N1-01 = CN` -> consignee name
 - `N4` under SH loop -> origin location
 - `N4` under CN loop -> destination location
-- `REF*BM` -> Bill of Lading
-- `REF*PO` -> Purchase Order
+- `L11*BOL900*BM` -> Bill of Lading, where `BM` is the synthetic Midwest BOL qualifier
+- `L11*PO111*PO` -> Purchase Order, where `PO` is the synthetic Midwest PO qualifier
+
+This Midwest FreightBridge 204 profile uses L11 for these references. This does not claim that REF is never valid in other X12 profiles.
 
 Business rules:
 
@@ -92,14 +96,14 @@ Direction: Midwest -> FreightBridge.
 
 Partner-specific status translation agreement:
 
-| Midwest 214 status code | FreightBridge-facing meaning for later work |
-| --- | --- |
-| `AF` | `PICKED_UP` |
-| `IT` | `IN_TRANSIT` |
-| `AR` | `ARRIVED` |
-| `D1` | `DELIVERED` |
+| AT7-01 code | X12-facing event meaning in this Midwest profile | FreightBridge internal normalization for later work |
+| --- | --- | --- |
+| `AF` | Carrier departed pickup location with shipment | `PICKED_UP` |
+| `X6` | En route to delivery location | `IN_TRANSIT` |
+| `X1` | Arrived at delivery location | `ARRIVED` |
+| `D1` | Completed unloading at delivery location | `DELIVERED` |
 
-This translation is a Midwest partner-specific agreement for this portfolio lab. It is not a universal FreightBridge rule.
+The X12 codes retain their X12-facing meanings. FreightBridge's names are internal normalization labels for future code. This Midwest implementation guide defines only the supported subset for this partner profile.
 
 Project subset:
 

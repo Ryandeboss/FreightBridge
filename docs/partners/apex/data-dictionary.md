@@ -9,8 +9,8 @@ All examples are synthetic.
 | Field | JSON path | Type | Required | Example | Description | Validation notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | loadId | `loadId` | string | Required | `LOAD500` | Apex primary load identifier | Unique within Apex; 6-30 characters |
-| bolNumber | `bolNumber` | string | Required | `BOL900` | Bill of lading reference | Used later for Midwest `REF*BM` |
-| purchaseOrderNumber | `purchaseOrderNumber` | string | Optional | `PO111` | Customer purchase order | Used later for Midwest `REF*PO` when present |
+| bolNumber | `bolNumber` | string | Required | `BOL900` | Bill of lading reference | Used later for Midwest 204 `L11*BOL900*BM` |
+| purchaseOrderNumber | `purchaseOrderNumber` | string | Optional | `PO111` | Customer purchase order | Used later for Midwest 204 `L11*PO111*PO` when present |
 | customerReference | `customerReference` | string | Optional | `CUST-REF-500` | Apex customer-facing reference | 1-40 characters |
 | equipmentType | `equipmentType` | string | Required | `VAN_53` | Requested equipment | MVP values: `VAN_53`, `REEFER_53`, `FLATBED` |
 | weightLbs | `weightLbs` | number | Required | `42000` | Total shipment weight in pounds | Positive number |

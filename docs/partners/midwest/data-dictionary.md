@@ -48,7 +48,7 @@ All examples are synthetic.
 | Concept | Midwest field | Type | Required | Example | Description |
 | --- | --- | --- | --- | --- | --- |
 | Status sequence | `status_seq_no` | integer | Required | `1` | Carrier status event sequence |
-| EDI status code | `edi_status_cd` | string | Required | `AF` | Partner-specific 214 status code |
+| EDI status code | `edi_status_cd` | string | Required | `AF` | Supported Midwest AT7-01 status code: `AF`, `X6`, `X1`, or `D1` |
 | Internal status | `dispatch_status_cd` | string | Required | `PU` | Midwest internal status |
 | Status city | `status_city` | string | Optional | `Aurora` | Event city |
 | Status state | `status_state_cd` | string | Optional | `IL` | Event state |
@@ -60,6 +60,6 @@ Midwest stores references as typed rows rather than Apex-style nested fields.
 
 | Reference type | Midwest field | Example | Notes |
 | --- | --- | --- | --- |
-| Customer shipment | `REF.CS` | `LOAD500` | Often aligns to tender shipment identifier |
-| Bill of lading | `REF.BM` | `BOL900` | Project convention for BOL |
-| Purchase order | `REF.PO` | `PO111` | Project convention for purchase order |
+| Customer shipment | `L11.CS` | `LOAD500` | Often aligns to tender shipment identifier |
+| Bill of lading | `L11.BM` | `BOL900` | Midwest 204 profile convention for BOL |
+| Purchase order | `L11.PO` | `PO111` | Midwest 204 profile convention for purchase order |

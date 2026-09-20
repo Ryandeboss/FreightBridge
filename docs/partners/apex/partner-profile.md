@@ -16,7 +16,8 @@ Apex Logistics is a synthetic trading partner created for the FreightBridge port
 
 ## Message and Document Types
 
-- Load tender submission
+- Apex-side load creation/tender action
+- Outbound load tender delivery to future FreightBridge endpoint
 - Tender decision receipt
 - Shipment status receipt
 - Load lookup by Apex load ID
@@ -48,6 +49,7 @@ Technical contacts are represented by fictional roles only:
 Apex is responsible for:
 
 - Producing valid Apex JSON load tenders.
+- Sending ApexLoad JSON outward to the future FreightBridge endpoint.
 - Receiving FreightBridge-delivered tender decisions and shipment statuses.
 - Maintaining bearer-token access for FreightBridge.
 - Providing stable API behavior within the versioned `/v1` contract.
@@ -55,6 +57,7 @@ Apex is responsible for:
 FreightBridge is responsible for:
 
 - Calling Apex APIs over HTTPS.
+- Providing a future inbound integration endpoint for Apex load tenders.
 - Preserving Apex identifiers for later correlation.
 - Translating future canonical data into Apex JSON responses.
 - Avoiding exposure of Apex authentication tokens.
@@ -63,7 +66,8 @@ FreightBridge is responsible for:
 
 - Apex models freight from a broker/TMS perspective, not as FreightBridge canonical data.
 - Apex uses camelCase JSON fields.
-- Apex expects one load per tender request for the MVP.
+- Apex expects one load per tender event for the MVP.
+- Apex is the originator of the load tender in the planned Apex -> FreightBridge -> Midwest flow.
 - Apex receives tender responses and shipment statuses through REST callbacks.
 
 ## Known Limitations

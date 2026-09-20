@@ -13,8 +13,9 @@ security:
 paths:
   /v1/load-tenders:
     post:
-      summary: Submit a load tender
-      operationId: submitLoadTender
+      summary: Create and tender a load inside Apex
+      description: Apex-owned simulator/business action that creates or tenders a load within Apex Logistics. This is not the future FreightBridge inbound endpoint. Apex outbound delivery to FreightBridge is documented separately in outbound-load-tender-contract.md.
+      operationId: createApexLoadTender
       tags: [Load Tenders]
       security:
         - bearerAuth: []
@@ -29,7 +30,7 @@ paths:
                 $ref: '#/components/examples/ValidLoadTender'
       responses:
         '202':
-          description: Load tender accepted for processing
+          description: Apex load tender created or queued inside Apex
           content:
             application/json:
               schema:
@@ -51,6 +52,7 @@ paths:
   /v1/tender-responses:
     post:
       summary: Receive a tender decision
+      description: Apex-owned endpoint that will eventually receive transformed tender decisions from FreightBridge.
       operationId: receiveTenderResponse
       tags: [Tender Responses]
       security:
@@ -90,6 +92,7 @@ paths:
   /v1/shipment-statuses:
     post:
       summary: Receive shipment status information
+      description: Apex-owned endpoint that will eventually receive transformed shipment statuses from FreightBridge.
       operationId: receiveShipmentStatus
       tags: [Shipment Status]
       security:
@@ -103,6 +106,10 @@ paths:
             examples:
               pickedUp:
                 $ref: '#/components/examples/StatusPickedUp'
+              inTransit:
+                $ref: '#/components/examples/StatusInTransit'
+              arrived:
+                $ref: '#/components/examples/StatusArrived'
               delivered:
                 $ref: '#/components/examples/StatusDelivered'
       responses:
@@ -473,6 +480,24 @@ components:
         occurredAt: '2026-10-01T14:30:00Z'
         city: Aurora
         state: IL
+    StatusInTransit:
+      value:
+        loadId: LOAD500
+        carrierCode: MWCX
+        statusCode: IN_TRANSIT
+        statusDescription: Shipment is en route to destination.
+        occurredAt: '2026-10-01T20:15:00Z'
+        city: Toledo
+        state: OH
+    StatusArrived:
+      value:
+        loadId: LOAD500
+        carrierCode: MWCX
+        statusCode: ARRIVED
+        statusDescription: Shipment arrived at destination.
+        occurredAt: '2026-10-02T17:45:00Z'
+        city: Detroit
+        state: MI
     StatusDelivered:
       value:
         loadId: LOAD500
