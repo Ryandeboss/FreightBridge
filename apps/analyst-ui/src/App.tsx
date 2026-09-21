@@ -35,6 +35,7 @@ function App() {
   const [systemStatus, setSystemStatus] = useState<SystemStatus>({
     api: 'unreachable',
     database: 'unavailable',
+    domainSchema: 'unavailable',
     environment: appEnv,
   });
 
@@ -58,6 +59,7 @@ function App() {
         setSystemStatus({
           api: 'unreachable',
           database: 'unavailable',
+          domainSchema: 'unavailable',
           environment: appEnv,
         });
         setLoadState('error');
@@ -71,6 +73,7 @@ function App() {
   const isLoading = loadState === 'loading';
   const apiOnline = systemStatus.api === 'online';
   const databaseConnected = systemStatus.database === 'connected';
+  const domainSchemaReady = systemStatus.domainSchema === 'ready';
 
   return (
     <main className="app-shell">
@@ -132,6 +135,17 @@ function App() {
                   : databaseConnected
                     ? 'Connected'
                     : 'Unavailable'}
+              </span>
+            </article>
+            <article className="status-row">
+              <span className="status-label">Domain Schema</span>
+              <span className="status-value">
+                <span
+                  className={`mini-dot ${
+                    isLoading ? 'pending' : domainSchemaReady ? 'ok' : 'error'
+                  }`}
+                />
+                {isLoading ? 'Checking' : domainSchemaReady ? 'Ready' : 'Unavailable'}
               </span>
             </article>
           </div>

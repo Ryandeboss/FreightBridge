@@ -32,6 +32,10 @@ def test_readiness_endpoint_returns_ready_when_database_is_available(monkeypatch
     'app.api.routes.readiness.check_database_connectivity',
     lambda: None,
   )
+  monkeypatch.setattr(
+    'app.api.routes.readiness.check_domain_schema',
+    lambda: None,
+  )
 
   response = client.get('/readiness')
 
@@ -43,6 +47,7 @@ def test_readiness_endpoint_returns_ready_when_database_is_available(monkeypatch
     'dependencies': {
       'configuration': 'ok',
       'database': 'ok',
+      'domain_schema': 'ok',
     },
   }
 
@@ -73,11 +78,46 @@ def test_readiness_endpoint_returns_503_when_database_is_unavailable(monkeypatch
   }
 
 
+def test_readiness_endpoint_returns_503_when_domain_schema_is_unavailable(monkeypatch) -> None:
+  from app.infrastructure.database import DomainSchemaUnavailableError
+
+  def fail_schema_check() -> None:
+    raise DomainSchemaUnavailableError('schema unavailable')
+
+  monkeypatch.setattr(
+    'app.api.routes.readiness.check_database_connectivity',
+    lambda: None,
+  )
+  monkeypatch.setattr(
+    'app.api.routes.readiness.check_domain_schema',
+    fail_schema_check,
+  )
+
+  response = client.get('/readiness')
+
+  assert response.status_code == 503
+  assert response.json() == {
+    'detail': {
+      'status': 'not_ready',
+      'service': 'freightbridge-api',
+      'dependencies': {
+        'configuration': 'ok',
+        'database': 'ok',
+        'domain_schema': 'error',
+      },
+    },
+  }
+
+
 def test_readiness_response_does_not_include_secrets(monkeypatch) -> None:
   monkeypatch.setenv('SUPABASE_SECRET_KEY', 'test-secret-value')
   monkeypatch.setenv('DATABASE_URL', 'sensitive-database-url')
   monkeypatch.setattr(
     'app.api.routes.readiness.check_database_connectivity',
+    lambda: None,
+  )
+  monkeypatch.setattr(
+    'app.api.routes.readiness.check_domain_schema',
     lambda: None,
   )
 

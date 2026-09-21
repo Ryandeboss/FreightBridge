@@ -141,6 +141,9 @@ Major Milestone 3 contract files:
 - [Error contract](docs/partners/error-contract.md)
 - [Interface control document](docs/architecture/interface-control-document.md)
 - [Contract decisions](docs/architecture/contract-decisions.md)
+- [Canonical data model](docs/architecture/canonical-data-model.md)
+- [Database schema](docs/architecture/database-schema.md)
+- [Milestone 4 database acceptance](docs/testing/milestone-4-database-acceptance.md)
 
 Sample contract fixtures:
 
@@ -161,6 +164,8 @@ Implemented:
 - Cloud foundation and deployment structure.
 - API liveness and database readiness checks.
 - Frontend status panel for API and Supabase readiness.
+- FreightBridge canonical domain models.
+- PostgreSQL domain schema once `infrastructure/supabase/migrations/20260920_001_create_freightbridge_domain.sql` is applied.
 
 Specified:
 
@@ -170,7 +175,6 @@ Specified:
 
 Planned:
 
-- FreightBridge canonical model.
 - Mapping rules.
 - EDI parser/serializer.
 - SFTP exchange.

@@ -10,6 +10,7 @@ export interface ReadinessResponse {
   dependencies: {
     configuration?: 'ok' | 'error';
     database?: 'ok' | 'error';
+    domain_schema?: 'ok' | 'error';
   };
 }
 
@@ -20,6 +21,7 @@ interface ReadinessErrorResponse {
 export interface SystemStatus {
   api: 'online' | 'unreachable';
   database: 'connected' | 'unavailable';
+  domainSchema: 'ready' | 'unavailable';
   environment: string;
 }
 
@@ -58,6 +60,7 @@ export async function fetchSystemStatus(apiBaseUrl: string): Promise<SystemStatu
     return {
       api: apiOnline ? 'online' : 'unreachable',
       database: readiness.dependencies.database === 'ok' ? 'connected' : 'unavailable',
+      domainSchema: readiness.dependencies.domain_schema === 'ok' ? 'ready' : 'unavailable',
       environment: readiness.environment || 'unknown',
     };
   } catch (error) {
@@ -67,6 +70,7 @@ export async function fetchSystemStatus(apiBaseUrl: string): Promise<SystemStatu
     return {
       api: apiOnline ? 'online' : 'unreachable',
       database: readiness?.dependencies.database === 'ok' ? 'connected' : 'unavailable',
+      domainSchema: readiness?.dependencies.domain_schema === 'ok' ? 'ready' : 'unavailable',
       environment: readiness?.environment || 'unknown',
     };
   }
