@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
+import logging
 from uuid import UUID
 
 import psycopg
@@ -26,6 +27,7 @@ from app.integrations.common.ingestion import payload_sha256
 
 APEX_PARTNER_CODE = 'APEX'
 APEX_DOCUMENT_TYPE = 'APEX_LOAD_TENDER'
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -50,13 +52,25 @@ class ApexLoadTenderIngestionService:
   def __init__(
     self,
     *,
-    connection,
+    audit_connection=None,
+    business_connection=None,
+    connection=None,
     freightbridge_repository: FreightBridgeRepository | None = None,
     integration_repository: IntegrationRepository | None = None,
   ) -> None:
-    self.connection = connection
-    self.freightbridge_repository = freightbridge_repository or FreightBridgeRepository(connection)
-    self.integration_repository = integration_repository or IntegrationRepository(connection)
+    resolved_audit_connection = audit_connection or connection
+    resolved_business_connection = business_connection or connection
+    if resolved_audit_connection is None or resolved_business_connection is None:
+      raise ValueError('audit_connection and business_connection are required')
+
+    self.audit_connection = resolved_audit_connection
+    self.business_connection = resolved_business_connection
+    self.freightbridge_repository = freightbridge_repository or FreightBridgeRepository(
+      resolved_business_connection
+    )
+    self.integration_repository = integration_repository or IntegrationRepository(
+      resolved_audit_connection
+    )
 
   def ingest(
     self,
@@ -249,7 +263,7 @@ class ApexLoadTenderIngestionService:
       ProcessingStatus.PROCESSING,
       ProcessingStage.BUSINESS_VALIDATION,
     )
-    with self.connection.transaction():
+    with self.business_connection.transaction():
       if self.freightbridge_repository.shipment_exists(shipment.shipment_number):
         raise ClassifiedIntegrationFailure(
           status_code=409,
@@ -268,25 +282,47 @@ class ApexLoadTenderIngestionService:
       return self.freightbridge_repository.create_shipment(shipment)
 
   def _record_failure(self, transaction_id: UUID, failure: ClassifiedIntegrationFailure) -> None:
-    try:
-      self.integration_repository.append_error(
+    self._attempt_failure_audit_write(
+      'mark transaction failed',
+      lambda: self.integration_repository.mark_failed(transaction_id, failure.stage),
+    )
+    self._attempt_failure_audit_write(
+      'append integration error',
+      lambda: self.integration_repository.append_error(
         transaction_id=transaction_id,
         category=failure.category,
         error_code=failure.code,
         safe_message=failure.message,
         stage=failure.stage,
         retryable=failure.retryable,
-      )
-      self._log(
+      ),
+    )
+    self._attempt_failure_audit_write(
+      'append failure processing log',
+      lambda: self._log(
         transaction_id,
         failure.stage,
         ProcessingStatus.FAILED,
         failure.message,
         {'error_code': failure.code},
+      ),
+    )
+
+  def _attempt_failure_audit_write(self, operation: str, action) -> None:
+    try:
+      action()
+    except psycopg.Error as exc:
+      logger.warning(
+        'Apex ingestion failure audit write failed during %s: %s',
+        operation,
+        exc.__class__.__name__,
       )
-      self.integration_repository.mark_failed(transaction_id, failure.stage)
-    except psycopg.Error:
-      pass
+    except Exception as exc:
+      logger.warning(
+        'Apex ingestion failure audit write failed during %s: %s',
+        operation,
+        exc.__class__.__name__,
+      )
 
   def _log(
     self,

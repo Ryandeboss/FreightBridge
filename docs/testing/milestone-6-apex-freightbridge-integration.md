@@ -14,6 +14,15 @@ Supabase PostgreSQL
 
 Midwest, X12, and SFTP are not part of this milestone.
 
+## Transaction Design
+
+FreightBridge Apex ingestion uses two independent PostgreSQL connections for each request:
+
+- Audit connection: writes `integration_transactions`, `processing_logs`, and `integration_errors`.
+- Business connection: checks `shipments` and atomically writes canonical `shipments`, `shipment_stops`, and `shipment_references`.
+
+The business connection uses an explicit transaction around canonical persistence. Audit writes intentionally stay outside that business transaction so duplicate detection, mapping failures, or canonical persistence rollbacks do not erase the failure evidence needed for troubleshooting.
+
 ## Environment
 
 Create one new strong random integration token and configure it in both Render services.
@@ -218,6 +227,38 @@ Authorization: Bearer {{apexBearerToken}}
 ```
 
 Expected after one successful dispatch: `409`. Verify no second `public.shipments` row and a new failed integration transaction with `DUPLICATE_TRANSACTION`.
+
+Duplicate audit check:
+
+```sql
+select business_identifier, processing_status, processing_stage, processed_at
+from public.integration_transactions
+where business_identifier = 'LOAD500'
+order by created_at desc
+limit 5;
+```
+
+The duplicate attempt should show:
+
+- `processing_status = FAILED`
+- `processing_stage = BUSINESS_VALIDATION`
+- `processed_at` populated
+
+```sql
+select ie.category, ie.error_code, ie.stage, ie.retryable
+from public.integration_errors ie
+join public.integration_transactions it on it.id = ie.transaction_id
+where it.business_identifier = 'LOAD500'
+order by ie.created_at desc
+limit 5;
+```
+
+Expected duplicate error:
+
+- `category = DUPLICATE_TRANSACTION`
+- `error_code = DUPLICATE_SHIPMENT`
+- `stage = BUSINESS_VALIDATION`
+- `retryable = false`
 
 FreightBridge unavailable:
 

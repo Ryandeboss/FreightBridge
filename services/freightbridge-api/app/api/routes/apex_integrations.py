@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from contextlib import ExitStack
 
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
@@ -12,11 +13,13 @@ router = APIRouter(prefix='/api/integrations/apex', tags=['apex integrations'])
 
 
 def get_apex_ingestion_service() -> Iterator[ApexLoadTenderIngestionService]:
-  connection = connect()
-  try:
-    yield ApexLoadTenderIngestionService(connection=connection)
-  finally:
-    connection.close()
+  with ExitStack() as stack:
+    audit_connection = stack.enter_context(connect())
+    business_connection = stack.enter_context(connect())
+    yield ApexLoadTenderIngestionService(
+      audit_connection=audit_connection,
+      business_connection=business_connection,
+    )
 
 
 @router.post('/load-tenders', status_code=status.HTTP_202_ACCEPTED)

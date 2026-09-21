@@ -2,13 +2,17 @@ from __future__ import annotations
 
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 import json
 from uuid import uuid4
 
 import psycopg
 import pytest
+from fastapi.testclient import TestClient
 
 from app.domain import ErrorCategory, ProcessingStage, ProcessingStatus
+from app.api.routes.apex_integrations import get_apex_ingestion_service
+from app.main import app
 from app.integrations.apex.mapper import ApexMappingError
 from app.integrations.apex.service import ApexLoadTenderIngestionService
 from app.integrations.common.errors import IntegrationAPIError
@@ -64,19 +68,32 @@ class FakeState:
   transactions: dict[object, object] = field(default_factory=dict)
   logs: list[object] = field(default_factory=list)
   errors: list[dict[str, object]] = field(default_factory=list)
+  fail_error_insert: bool = False
+  fail_failure_log_insert: bool = False
 
 
 class FakeTransaction(AbstractContextManager):
+  def __init__(self, connection: 'FakeConnection') -> None:
+    self.connection = connection
+
   def __enter__(self):
+    self.connection.transaction_entries += 1
     return self
 
   def __exit__(self, exc_type, exc, traceback) -> bool:
+    if exc_type is not None:
+      self.connection.transaction_rollbacks += 1
     return False
 
 
 class FakeConnection:
+  def __init__(self, name: str) -> None:
+    self.name = name
+    self.transaction_entries = 0
+    self.transaction_rollbacks = 0
+
   def transaction(self) -> FakeTransaction:
-    return FakeTransaction()
+    return FakeTransaction(self)
 
 
 class FakeFreightBridgeRepository:
@@ -127,6 +144,8 @@ class FakeIntegrationRepository:
     self.state.transactions[transaction_id]['status'] = status
     self.state.transactions[transaction_id]['stage'] = stage
     self.state.transactions[transaction_id]['processed'] = processed
+    if processed:
+      self.state.transactions[transaction_id]['processed_at'] = datetime.now(timezone.utc)
 
   def mark_succeeded(self, transaction_id) -> None:
     self.update_processing_state(
@@ -145,10 +164,14 @@ class FakeIntegrationRepository:
     )
 
   def append_log(self, log) -> object:
+    if log.status == ProcessingStatus.FAILED and self.state.fail_failure_log_insert:
+      raise psycopg.OperationalError('failure log insert unavailable')
     self.state.logs.append(log)
     return uuid4()
 
   def append_error(self, **kwargs) -> object:
+    if self.state.fail_error_insert:
+      raise psycopg.OperationalError('error insert unavailable')
     self.state.errors.append(kwargs)
     return uuid4()
 
@@ -163,12 +186,20 @@ def configure_token(monkeypatch) -> None:
   get_settings.cache_clear()
 
 
-def build_service(state: FakeState, *, fail_create: bool = False) -> ApexLoadTenderIngestionService:
-  return ApexLoadTenderIngestionService(
-    connection=FakeConnection(),
+def build_service(
+  state: FakeState,
+  *,
+  fail_create: bool = False,
+) -> tuple[ApexLoadTenderIngestionService, FakeConnection, FakeConnection]:
+  audit_connection = FakeConnection('audit')
+  business_connection = FakeConnection('business')
+  service = ApexLoadTenderIngestionService(
+    audit_connection=audit_connection,
+    business_connection=business_connection,
     freightbridge_repository=FakeFreightBridgeRepository(state, fail_create=fail_create),
     integration_repository=FakeIntegrationRepository(state),
   )
+  return service, audit_connection, business_connection
 
 
 def auth_header() -> str:
@@ -179,7 +210,8 @@ def test_successful_ingestion_creates_audit_logs_and_canonical_shipment() -> Non
   state = FakeState()
   body = raw_payload()
 
-  result = build_service(state).ingest(
+  service, audit_connection, business_connection = build_service(state)
+  result = service.ingest(
     raw_body=body,
     authorization_header=auth_header(),
     correlation_id='corr-load-500',
@@ -206,6 +238,8 @@ def test_successful_ingestion_creates_audit_logs_and_canonical_shipment() -> Non
     ProcessingStage.COMPLETED,
   ]
   assert state.errors == []
+  assert audit_connection.transaction_entries == 0
+  assert business_connection.transaction_entries == 1
 
 
 @pytest.mark.parametrize('authorization_header', [None, 'Bearer wrong-token'])
@@ -213,7 +247,8 @@ def test_missing_or_invalid_token_fails_with_audit(authorization_header: str | N
   state = FakeState()
 
   with pytest.raises(IntegrationAPIError) as exc_info:
-    build_service(state).ingest(
+    service, _, _ = build_service(state)
+    service.ingest(
       raw_body=raw_payload(),
       authorization_header=authorization_header,
       correlation_id='corr-auth',
@@ -230,7 +265,8 @@ def test_malformed_json_fails_at_parsing() -> None:
   state = FakeState()
 
   with pytest.raises(IntegrationAPIError) as exc_info:
-    build_service(state).ingest(
+    service, _, _ = build_service(state)
+    service.ingest(
       raw_body=b'{bad-json',
       authorization_header=auth_header(),
       correlation_id='corr-json',
@@ -247,7 +283,8 @@ def test_schema_validation_failure_preserves_audit() -> None:
   payload.pop('delivery')
 
   with pytest.raises(IntegrationAPIError) as exc_info:
-    build_service(state).ingest(
+    service, _, _ = build_service(state)
+    service.ingest(
       raw_body=raw_payload(payload),
       authorization_header=auth_header(),
       correlation_id='corr-validation',
@@ -268,7 +305,8 @@ def test_mapping_failure_preserves_audit(monkeypatch) -> None:
   monkeypatch.setattr('app.integrations.apex.service.map_apex_load_to_canonical', fail_mapping)
 
   with pytest.raises(IntegrationAPIError) as exc_info:
-    build_service(state).ingest(
+    service, _, _ = build_service(state)
+    service.ingest(
       raw_body=raw_payload(),
       authorization_header=auth_header(),
       correlation_id='corr-mapping',
@@ -284,7 +322,8 @@ def test_duplicate_shipment_returns_409_and_preserves_audit() -> None:
   state.shipments['LOAD500'] = {'id': uuid4(), 'shipment': object()}
 
   with pytest.raises(IntegrationAPIError) as exc_info:
-    build_service(state).ingest(
+    service, _, business_connection = build_service(state)
+    service.ingest(
       raw_body=raw_payload(),
       authorization_header=auth_header(),
       correlation_id='corr-duplicate',
@@ -294,13 +333,24 @@ def test_duplicate_shipment_returns_409_and_preserves_audit() -> None:
   assert exc_info.value.code == 'DUPLICATE_SHIPMENT'
   assert state.errors[0]['category'] == ErrorCategory.DUPLICATE_TRANSACTION
   assert state.errors[0]['stage'] == ProcessingStage.BUSINESS_VALIDATION
+  transaction = next(iter(state.transactions.values()))
+  assert transaction['status'] == ProcessingStatus.FAILED
+  assert transaction['stage'] == ProcessingStage.BUSINESS_VALIDATION
+  assert transaction['processed_at'] is not None
+  assert any(
+    log.stage == ProcessingStage.BUSINESS_VALIDATION and log.status == ProcessingStatus.FAILED
+    for log in state.logs
+  )
+  assert len(state.shipments) == 1
+  assert business_connection.transaction_rollbacks == 1
 
 
 def test_database_failure_returns_safe_dependency_error() -> None:
   state = FakeState()
 
   with pytest.raises(IntegrationAPIError) as exc_info:
-    build_service(state, fail_create=True).ingest(
+    service, _, business_connection = build_service(state, fail_create=True)
+    service.ingest(
       raw_body=raw_payload(),
       authorization_header=auth_header(),
       correlation_id='corr-db',
@@ -311,11 +361,15 @@ def test_database_failure_returns_safe_dependency_error() -> None:
   assert state.errors[0]['category'] == ErrorCategory.DOWNSTREAM_ERROR
   assert state.errors[0]['retryable'] is True
   assert 'database unavailable' not in exc_info.value.message
+  assert state.shipments == {}
+  assert next(iter(state.transactions.values()))['status'] == ProcessingStatus.FAILED
+  assert any(log.status == ProcessingStatus.FAILED for log in state.logs)
+  assert business_connection.transaction_rollbacks == 1
 
 
 def test_persistence_survives_new_repository_scope() -> None:
   state = FakeState()
-  first_scope = build_service(state)
+  first_scope, _, _ = build_service(state)
   result = first_scope.ingest(
     raw_body=raw_payload(),
     authorization_header=auth_header(),
@@ -327,3 +381,61 @@ def test_persistence_survives_new_repository_scope() -> None:
   assert result.shipment_number == 'LOAD500'
   assert second_scope_repository.shipment_exists('LOAD500')
   assert len(state.transactions) == 1
+
+
+def test_failure_finalization_marks_failed_even_if_error_insert_fails(caplog) -> None:
+  state = FakeState(fail_error_insert=True)
+  state.shipments['LOAD500'] = {'id': uuid4(), 'shipment': object()}
+  service, _, _ = build_service(state)
+
+  with pytest.raises(IntegrationAPIError):
+    service.ingest(
+      raw_body=raw_payload(),
+      authorization_header=auth_header(),
+      correlation_id='corr-audit-partial',
+    )
+
+  transaction = next(iter(state.transactions.values()))
+  assert transaction['status'] == ProcessingStatus.FAILED
+  assert transaction['stage'] == ProcessingStage.BUSINESS_VALIDATION
+  assert transaction['processed_at'] is not None
+  assert state.errors == []
+  assert any(log.status == ProcessingStatus.FAILED for log in state.logs)
+  assert 'append integration error' in caplog.text
+
+
+def test_direct_freightbridge_duplicate_route_returns_409_and_failed_audit() -> None:
+  state = FakeState()
+  state.shipments['LOAD500'] = {'id': uuid4(), 'shipment': object()}
+
+  def override_service():
+    service, _, _ = build_service(state)
+    yield service
+
+  app.dependency_overrides[get_apex_ingestion_service] = override_service
+  try:
+    response = TestClient(app).post(
+      '/api/integrations/apex/load-tenders',
+      headers={
+        'Authorization': auth_header(),
+        'X-Correlation-ID': 'corr-route-duplicate',
+      },
+      content=raw_payload(),
+    )
+  finally:
+    app.dependency_overrides.clear()
+
+  assert response.status_code == 409
+  assert response.json() == {
+    'error': {
+      'code': 'DUPLICATE_SHIPMENT',
+      'message': 'A canonical shipment already exists for this Apex load.',
+      'correlationId': 'corr-route-duplicate',
+    }
+  }
+  transaction = next(iter(state.transactions.values()))
+  assert transaction['status'] == ProcessingStatus.FAILED
+  assert transaction['stage'] == ProcessingStage.BUSINESS_VALIDATION
+  assert transaction['processed_at'] is not None
+  assert state.errors[0]['category'] == ErrorCategory.DUPLICATE_TRANSACTION
+  assert len(state.shipments) == 1
