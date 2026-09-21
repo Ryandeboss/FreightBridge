@@ -1,6 +1,6 @@
 # FreightBridge
 
-FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current contract milestone defines the synthetic partner models and integration contracts that future code will implement; EDI parsing, mappings, SFTP workflows, partner simulator behavior, and business workflows are intentionally deferred.
+FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current state includes the FreightBridge foundation plus an independent Apex REST/JSON simulator; partner mapping, EDI parsing, Midwest behavior, SFTP workflows, and end-to-end business workflows remain intentionally deferred.
 
 ## Planned Architecture
 
@@ -17,11 +17,27 @@ Browser
   -> Supabase
 ```
 
-Milestone 3 defines two independent partner sides:
+Current partner state:
 
-- Apex Logistics: synthetic freight broker / 3PL using HTTPS REST and JSON.
+- Apex Logistics: implemented synthetic freight broker / 3PL simulator using HTTPS REST and JSON.
 - Midwest Carrier: synthetic motor carrier using X12 004010 over future SFTP.
-- FreightBridge: future middleware between the two partner representations.
+- FreightBridge: implemented canonical foundation, not yet connected to Apex or Midwest.
+
+```text
+Apex Simulator
+  [implemented]
+      |
+      | REST/JSON
+      | NOT CONNECTED
+      v
+FreightBridge
+  [implemented foundation]
+      |
+      | future X12/SFTP
+      v
+Midwest
+  [contract only]
+```
 
 See [docs/architecture/initial-architecture.md](docs/architecture/initial-architecture.md) for the first architecture diagram.
 
@@ -41,7 +57,7 @@ apps/
   analyst-ui/             React + TypeScript analyst dashboard placeholder
 services/
   freightbridge-api/      FastAPI integration API foundation
-  apex-partner-sim/       Placeholder for future Apex simulator
+  apex-partner-sim/       FastAPI Apex REST/JSON partner simulator
   midwest-partner-sim/    Placeholder for future Midwest simulator
 docs/
   architecture/           System architecture notes
@@ -82,7 +98,18 @@ pytest
 uvicorn app.main:app --reload
 ```
 
-The backend liveness endpoint is available at `GET /health`. The dependency readiness endpoint is available at `GET /readiness` and verifies application configuration plus Supabase PostgreSQL connectivity with `SELECT 1`.
+Apex simulator:
+
+```bash
+cd services/apex-partner-sim
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+pytest
+uvicorn app.main:app --reload
+```
+
+The FreightBridge and Apex backends both expose `GET /health` and `GET /readiness`. Apex business endpoints require bearer-token authentication.
 
 ## Environment Variables
 
@@ -108,6 +135,13 @@ Backend legacy names temporarily accepted:
 - `SUPABASE_SERVICE_ROLE_KEY`
 
 Create `SUPABASE_PUBLISHABLE_KEY` and `SUPABASE_SECRET_KEY` in Render when convenient. After Render has the new names and the API has redeployed successfully, the legacy names can be removed.
+
+Apex simulator:
+
+- `APP_ENV`
+- `DATABASE_URL`
+- `APEX_API_BEARER_TOKEN`
+- `APEX_API_READONLY_TOKEN`
 
 Railway/SFTP placeholders:
 
@@ -144,6 +178,7 @@ Major Milestone 3 contract files:
 - [Canonical data model](docs/architecture/canonical-data-model.md)
 - [Database schema](docs/architecture/database-schema.md)
 - [Milestone 4 database acceptance](docs/testing/milestone-4-database-acceptance.md)
+- [Milestone 5 Apex acceptance](docs/testing/milestone-5-apex-acceptance.md)
 
 Sample contract fixtures:
 
@@ -154,6 +189,7 @@ Sample contract fixtures:
 
 - Vercel: `apps/analyst-ui`
 - Render: `services/freightbridge-api`
+- Render: `services/apex-partner-sim`
 - Supabase: PostgreSQL and later Storage
 - Railway: SFTPGo provisioned / reserved for later SFTP milestone
 
@@ -166,6 +202,8 @@ Implemented:
 - Frontend status panel for API and Supabase readiness.
 - FreightBridge canonical domain models.
 - PostgreSQL domain schema once `infrastructure/supabase/migrations/20260920_001_create_freightbridge_domain.sql` is applied.
+- Apex Logistics REST/JSON simulator.
+- Apex logical PostgreSQL schema once `infrastructure/supabase/migrations/20260920_002_create_apex_simulator.sql` is applied.
 
 Specified:
 
@@ -175,10 +213,11 @@ Specified:
 
 Planned:
 
+- Apex -> FreightBridge connection.
 - Mapping rules.
 - EDI parser/serializer.
 - SFTP exchange.
-- Apex and Midwest simulators.
+- Midwest simulator.
 - Shipment persistence and analyst workflow features.
 
 Do not begin FreightBridge product features from this milestone.

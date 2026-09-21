@@ -1,11 +1,39 @@
 # Apex Partner Simulator
 
-Placeholder for the future fictitious shipper partner simulator.
+Apex Logistics is a synthetic REST/JSON trading-partner backend for the FreightBridge portfolio lab.
 
-Planned role:
+It is intentionally separate from the FreightBridge canonical domain. The simulator owns its own API models, bearer-token authentication, repository layer, and PostgreSQL schema under `apex_sim`.
 
-- Emit REST/JSON shipment events into FreightBridge.
-- Provide deterministic sample partner payloads for demos and tests.
-- Remain credential-free and synthetic.
+For portfolio cost and deployment simplicity, Apex may use the same physical Supabase PostgreSQL service as FreightBridge. Logical isolation is maintained by keeping Apex data in `apex_sim.*` and never querying FreightBridge `public` domain tables from Apex code.
 
-No partner simulator behavior is implemented in this foundation milestone.
+## Local Development
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+pytest
+uvicorn app.main:app --reload
+```
+
+## Environment
+
+Copy `.env.example` to `.env` for local development.
+
+- `APP_ENV`
+- `DATABASE_URL`
+- `APEX_API_BEARER_TOKEN`
+- `APEX_API_READONLY_TOKEN`
+
+`APEX_API_READONLY_TOKEN` is optional. When configured, it can call `GET` endpoints but receives `403` for write operations.
+
+## Endpoints
+
+- `GET /health`
+- `GET /readiness`
+- `POST /v1/load-tenders`
+- `GET /v1/loads/{loadId}`
+- `POST /v1/tender-responses`
+- `POST /v1/shipment-statuses`
+
+Apex is not connected to FreightBridge yet. No mapping, X12, Midwest, or SFTP behavior is implemented here.

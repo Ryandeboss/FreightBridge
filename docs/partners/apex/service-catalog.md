@@ -1,6 +1,6 @@
 # Apex Logistics Service Catalog
 
-All services are synthetic FreightBridge portfolio contracts. No Apex service is implemented in this milestone.
+All services are synthetic FreightBridge portfolio contracts. MVP Apex-owned REST/JSON services are implemented by `services/apex-partner-sim`; outbound delivery to FreightBridge remains planned.
 
 | Service | Purpose | Direction | Transport | Format | Authentication | Operation / endpoint | Expected response | Error behavior | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |

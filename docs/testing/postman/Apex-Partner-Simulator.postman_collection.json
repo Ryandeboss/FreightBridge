@@ -1,0 +1,355 @@
+{
+  "info": {
+    "name": "Apex Partner Simulator",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "loadId",
+      "value": "LOAD500"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "url": "{{apexBaseUrl}}/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('health is ok', function () { pm.response.to.have.status(200); });",
+                  "pm.test('service is apex', function () { pm.expect(pm.response.json().service).to.eql('apex-partner-sim'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /readiness",
+          "request": {
+            "method": "GET",
+            "url": "{{apexBaseUrl}}/readiness"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('readiness is ready', function () { pm.response.to.have.status(200); });",
+                  "pm.test('apex schema ok', function () { pm.expect(pm.response.json().dependencies.apex_schema).to.eql('ok'); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Happy Path",
+      "item": [
+        {
+          "name": "POST /v1/load-tenders",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{apexBearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "postman-load-500"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loadId\": \"LOAD500\",\n  \"bolNumber\": \"BOL900\",\n  \"purchaseOrderNumber\": \"PO111\",\n  \"customerReference\": \"CUST-REF-500\",\n  \"equipmentType\": \"VAN_53\",\n  \"weightLbs\": 42000,\n  \"pieces\": 22,\n  \"commodityDescription\": \"Packaged auto parts\",\n  \"pickup\": {\n    \"facilityName\": \"ABC Factory\",\n    \"address1\": \"200 Industrial Rd\",\n    \"address2\": \"Dock 4\",\n    \"city\": \"Aurora\",\n    \"state\": \"IL\",\n    \"postalCode\": \"60505\",\n    \"scheduledDateTime\": \"2026-10-01T14:00:00Z\"\n  },\n  \"delivery\": {\n    \"facilityName\": \"XYZ Warehouse\",\n    \"address1\": \"900 Commerce St\",\n    \"address2\": null,\n    \"city\": \"Detroit\",\n    \"state\": \"MI\",\n    \"postalCode\": \"48201\",\n    \"scheduledDateTime\": \"2026-10-02T18:00:00Z\"\n  },\n  \"references\": [\n    {\n      \"type\": \"CUSTOMER_REF\",\n      \"value\": \"CUST-REF-500\",\n      \"description\": \"Customer routing reference\"\n    }\n  ],\n  \"createdAt\": \"2026-09-19T14:00:00Z\",\n  \"updatedAt\": \"2026-09-19T14:05:00Z\"\n}"
+            },
+            "url": "{{apexBaseUrl}}/v1/load-tenders"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('load tender accepted', function () { pm.response.to.have.status(202); });",
+                  "pm.test('accepted for processing', function () { pm.expect(pm.response.json().status).to.eql('ACCEPTED_FOR_PROCESSING'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /v1/loads/{{loadId}}",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{apexBearerToken}}"
+              }
+            ],
+            "url": "{{apexBaseUrl}}/v1/loads/{{loadId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('load found', function () { pm.response.to.have.status(200); });",
+                  "pm.test('LOAD500 round trips', function () { const body = pm.response.json(); pm.expect(body.loadId).to.eql('LOAD500'); pm.expect(body.bolNumber).to.eql('BOL900'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /v1/tender-responses accepted",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{apexBearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loadId\": \"LOAD500\",\n  \"decision\": \"ACCEPTED\",\n  \"carrierCode\": \"MWCX\",\n  \"carrierLoadNumber\": \"MWC900500\",\n  \"message\": \"Tender accepted by Midwest Carrier.\",\n  \"decidedAt\": \"2026-09-19T14:45:00Z\"\n}"
+            },
+            "url": "{{apexBaseUrl}}/v1/tender-responses"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('tender accepted', function () { pm.response.to.have.status(202); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /v1/shipment-statuses picked up",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{apexBearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loadId\": \"LOAD500\",\n  \"carrierCode\": \"MWCX\",\n  \"statusCode\": \"PICKED_UP\",\n  \"statusDescription\": \"Shipment picked up at origin.\",\n  \"occurredAt\": \"2026-10-01T14:30:00Z\",\n  \"city\": \"Aurora\",\n  \"state\": \"IL\"\n}"
+            },
+            "url": "{{apexBaseUrl}}/v1/shipment-statuses"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status accepted', function () { pm.response.to.have.status(202); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Negative Examples",
+      "item": [
+        {
+          "name": "401 missing token",
+          "request": {
+            "method": "GET",
+            "url": "{{apexBaseUrl}}/v1/loads/LOAD500"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('missing token rejected', function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "401 invalid token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer invalid-token"
+              }
+            ],
+            "url": "{{apexBaseUrl}}/v1/loads/LOAD500"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('invalid token rejected', function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "403 read-only token on write",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{apexReadonlyToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loadId\": \"LOAD501\",\n  \"bolNumber\": \"BOL901\",\n  \"equipmentType\": \"VAN_53\",\n  \"weightLbs\": 42000,\n  \"commodityDescription\": \"Packaged auto parts\",\n  \"pickup\": {\n    \"facilityName\": \"ABC Factory\",\n    \"address1\": \"200 Industrial Rd\",\n    \"city\": \"Aurora\",\n    \"state\": \"IL\",\n    \"postalCode\": \"60505\",\n    \"scheduledDateTime\": \"2026-10-01T14:00:00Z\"\n  },\n  \"delivery\": {\n    \"facilityName\": \"XYZ Warehouse\",\n    \"address1\": \"900 Commerce St\",\n    \"city\": \"Detroit\",\n    \"state\": \"MI\",\n    \"postalCode\": \"48201\",\n    \"scheduledDateTime\": \"2026-10-02T18:00:00Z\"\n  },\n  \"createdAt\": \"2026-09-19T14:00:00Z\",\n  \"updatedAt\": \"2026-09-19T14:05:00Z\"\n}"
+            },
+            "url": "{{apexBaseUrl}}/v1/load-tenders"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('read-only write forbidden', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "404 unknown load",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{apexBearerToken}}"
+              }
+            ],
+            "url": "{{apexBaseUrl}}/v1/loads/LOAD999"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('unknown load not found', function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "409 duplicate load",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{apexBearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loadId\": \"LOAD500\",\n  \"bolNumber\": \"BOL900\",\n  \"purchaseOrderNumber\": \"PO111\",\n  \"customerReference\": \"CUST-REF-500\",\n  \"equipmentType\": \"VAN_53\",\n  \"weightLbs\": 42000,\n  \"pieces\": 22,\n  \"commodityDescription\": \"Packaged auto parts\",\n  \"pickup\": {\n    \"facilityName\": \"ABC Factory\",\n    \"address1\": \"200 Industrial Rd\",\n    \"address2\": \"Dock 4\",\n    \"city\": \"Aurora\",\n    \"state\": \"IL\",\n    \"postalCode\": \"60505\",\n    \"scheduledDateTime\": \"2026-10-01T14:00:00Z\"\n  },\n  \"delivery\": {\n    \"facilityName\": \"XYZ Warehouse\",\n    \"address1\": \"900 Commerce St\",\n    \"address2\": null,\n    \"city\": \"Detroit\",\n    \"state\": \"MI\",\n    \"postalCode\": \"48201\",\n    \"scheduledDateTime\": \"2026-10-02T18:00:00Z\"\n  },\n  \"references\": [],\n  \"createdAt\": \"2026-09-19T14:00:00Z\",\n  \"updatedAt\": \"2026-09-19T14:05:00Z\"\n}"
+            },
+            "url": "{{apexBaseUrl}}/v1/load-tenders"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('duplicate load conflicts', function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "422 rejected tender missing reason",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{apexBearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loadId\": \"LOAD500\",\n  \"decision\": \"REJECTED\",\n  \"carrierCode\": \"MWCX\",\n  \"message\": \"No available driver.\",\n  \"decidedAt\": \"2026-09-19T14:45:00Z\"\n}"
+            },
+            "url": "{{apexBaseUrl}}/v1/tender-responses"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('business validation failure', function () { pm.response.to.have.status(422); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

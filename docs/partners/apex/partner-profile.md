@@ -73,6 +73,6 @@ FreightBridge is responsible for:
 ## Known Limitations
 
 - OAuth, mTLS, webhooks, and event subscriptions are deferred.
-- Apex APIs are contract-only in this milestone and are not implemented.
+- Apex runs as an independent simulator and is not connected to FreightBridge yet.
 - Apex does not exchange X12 or SFTP files directly.
 - Real customer, carrier, or contact data must never be used in fixtures.
