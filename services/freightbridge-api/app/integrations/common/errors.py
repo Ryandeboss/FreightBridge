@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from app.domain import ErrorCategory, ProcessingStage
 
 
-@dataclass(frozen=True)
+@dataclass
 class IntegrationAPIError(Exception):
   status_code: int
   code: str
@@ -12,7 +12,7 @@ class IntegrationAPIError(Exception):
   transaction_id: str | None = None
 
 
-@dataclass(frozen=True)
+@dataclass
 class ClassifiedIntegrationFailure(Exception):
   status_code: int
   code: str

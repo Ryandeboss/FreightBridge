@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import json
@@ -15,7 +15,7 @@ from app.api.routes.apex_integrations import get_apex_ingestion_service
 from app.main import app
 from app.integrations.apex.mapper import ApexMappingError
 from app.integrations.apex.service import ApexLoadTenderIngestionService
-from app.integrations.common.errors import IntegrationAPIError
+from app.integrations.common.errors import ClassifiedIntegrationFailure, IntegrationAPIError
 from app.integrations.common.ingestion import payload_sha256
 
 
@@ -204,6 +204,30 @@ def build_service(
 
 def auth_header() -> str:
   return 'Bearer inbound-test-token'
+
+
+@contextmanager
+def generator_based_transaction():
+  try:
+    yield
+  except Exception:
+    raise
+
+
+def test_classified_integration_failure_survives_contextlib_transaction_unwinding() -> None:
+  with pytest.raises(ClassifiedIntegrationFailure) as exc_info:
+    with generator_based_transaction():
+      raise ClassifiedIntegrationFailure(
+        status_code=409,
+        code='DUPLICATE_SHIPMENT',
+        message='A canonical shipment already exists for this Apex load.',
+        category=ErrorCategory.DUPLICATE_TRANSACTION,
+        stage=ProcessingStage.BUSINESS_VALIDATION,
+      )
+
+  assert exc_info.value.code == 'DUPLICATE_SHIPMENT'
+  assert exc_info.value.status_code == 409
+  assert exc_info.value.category == ErrorCategory.DUPLICATE_TRANSACTION
 
 
 def test_successful_ingestion_creates_audit_logs_and_canonical_shipment() -> None:
