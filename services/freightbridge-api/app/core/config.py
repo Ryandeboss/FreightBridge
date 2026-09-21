@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     validation_alias=AliasChoices('SUPABASE_SECRET_KEY', 'SUPABASE_SERVICE_ROLE_KEY'),
   )
   database_url: str | None = Field(default=None, alias='DATABASE_URL')
+  apex_inbound_bearer_token: str | None = Field(default=None, alias='APEX_INBOUND_BEARER_TOKEN')
 
   model_config = SettingsConfigDict(
     env_file='.env',

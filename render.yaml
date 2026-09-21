@@ -19,6 +19,8 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
+      - key: APEX_INBOUND_BEARER_TOKEN
+        sync: false
   - type: web
     name: apex-partner-sim
     env: python
@@ -34,4 +36,8 @@ services:
       - key: APEX_API_BEARER_TOKEN
         sync: false
       - key: APEX_API_READONLY_TOKEN
+        sync: false
+      - key: FREIGHTBRIDGE_API_BASE_URL
+        sync: false
+      - key: FREIGHTBRIDGE_APEX_BEARER_TOKEN
         sync: false

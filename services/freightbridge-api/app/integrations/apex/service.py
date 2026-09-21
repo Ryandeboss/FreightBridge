@@ -1,0 +1,307 @@
+from dataclasses import dataclass
+from datetime import datetime, timezone
+import json
+from uuid import UUID
+
+import psycopg
+from pydantic import ValidationError
+
+from app.domain import (
+  ErrorCategory,
+  IntegrationDirection,
+  IntegrationTransaction,
+  MessageFormat,
+  ProcessingLog,
+  ProcessingStage,
+  ProcessingStatus,
+  Transport,
+)
+from app.infrastructure.repositories import FreightBridgeRepository, IntegrationRepository
+from app.integrations.apex.mapper import ApexMappingError, map_apex_load_to_canonical
+from app.integrations.apex.models import ApexInboundLoad
+from app.integrations.apex.security import apex_inbound_token_is_valid
+from app.integrations.common.errors import ClassifiedIntegrationFailure, IntegrationAPIError
+from app.integrations.common.ingestion import payload_sha256
+
+
+APEX_PARTNER_CODE = 'APEX'
+APEX_DOCUMENT_TYPE = 'APEX_LOAD_TENDER'
+
+
+@dataclass(frozen=True)
+class ApexIngestionResult:
+  status: str
+  correlation_id: str
+  transaction_id: UUID
+  shipment_id: UUID
+  shipment_number: str
+
+  def response_body(self) -> dict[str, str]:
+    return {
+      'status': self.status,
+      'correlationId': self.correlation_id,
+      'transactionId': str(self.transaction_id),
+      'shipmentId': str(self.shipment_id),
+      'shipmentNumber': self.shipment_number,
+    }
+
+
+class ApexLoadTenderIngestionService:
+  def __init__(
+    self,
+    *,
+    connection,
+    freightbridge_repository: FreightBridgeRepository | None = None,
+    integration_repository: IntegrationRepository | None = None,
+  ) -> None:
+    self.connection = connection
+    self.freightbridge_repository = freightbridge_repository or FreightBridgeRepository(connection)
+    self.integration_repository = integration_repository or IntegrationRepository(connection)
+
+  def ingest(
+    self,
+    *,
+    raw_body: bytes,
+    authorization_header: str | None,
+    correlation_id: str,
+  ) -> ApexIngestionResult:
+    received_at = datetime.now(timezone.utc)
+    partner = self.freightbridge_repository.fetch_trading_partner_by_code(APEX_PARTNER_CODE)
+    if partner is None or not partner['active']:
+      raise IntegrationAPIError(
+        status_code=503,
+        code='DEPENDENCY_ERROR',
+        message='Apex trading partner is not available.',
+        correlation_id=correlation_id,
+      )
+
+    transaction_id = self.integration_repository.create_transaction(
+      IntegrationTransaction(
+        correlation_id=correlation_id,
+        partner_id=partner['id'],
+        direction=IntegrationDirection.INBOUND,
+        transport=Transport.REST,
+        message_format=MessageFormat.JSON,
+        document_type=APEX_DOCUMENT_TYPE,
+        payload_hash=payload_sha256(raw_body),
+        processing_status=ProcessingStatus.RECEIVED,
+        processing_stage=ProcessingStage.RECEIVED,
+        received_at=received_at,
+      )
+    )
+    self._log(
+      transaction_id,
+      ProcessingStage.RECEIVED,
+      ProcessingStatus.RECEIVED,
+      'Apex load tender received.',
+      {'partner_code': APEX_PARTNER_CODE},
+    )
+
+    try:
+      self._authenticate(transaction_id, authorization_header)
+      parsed_payload = self._parse(transaction_id, raw_body)
+      apex_load = self._validate(transaction_id, parsed_payload)
+      self.integration_repository.update_business_identifier(transaction_id, apex_load.load_id)
+      mapping_result = self._map(transaction_id, apex_load, partner['id'])
+      shipment_id = self._persist(transaction_id, mapping_result.shipment, apex_load.load_id)
+    except ClassifiedIntegrationFailure as exc:
+      self._record_failure(transaction_id, exc)
+      raise IntegrationAPIError(
+        status_code=exc.status_code,
+        code=exc.code,
+        message=exc.message,
+        correlation_id=correlation_id,
+        transaction_id=str(transaction_id),
+      ) from exc
+    except psycopg.Error as exc:
+      failure = ClassifiedIntegrationFailure(
+        status_code=503,
+        code='DEPENDENCY_ERROR',
+        message='A downstream dependency failed while processing the Apex load tender.',
+        category=ErrorCategory.DOWNSTREAM_ERROR,
+        stage=ProcessingStage.BUSINESS_VALIDATION,
+        retryable=True,
+      )
+      self._record_failure(transaction_id, failure)
+      raise IntegrationAPIError(
+        status_code=failure.status_code,
+        code=failure.code,
+        message=failure.message,
+        correlation_id=correlation_id,
+        transaction_id=str(transaction_id),
+      ) from exc
+
+    self.integration_repository.mark_succeeded(transaction_id)
+    self._log(
+      transaction_id,
+      ProcessingStage.COMPLETED,
+      ProcessingStatus.SUCCEEDED,
+      'Canonical shipment persisted successfully.',
+      {'shipment_number': mapping_result.shipment.shipment_number},
+    )
+    return ApexIngestionResult(
+      status='ACCEPTED',
+      correlation_id=correlation_id,
+      transaction_id=transaction_id,
+      shipment_id=shipment_id,
+      shipment_number=mapping_result.shipment.shipment_number,
+    )
+
+  def _authenticate(self, transaction_id: UUID, authorization_header: str | None) -> None:
+    self.integration_repository.update_processing_state(
+      transaction_id,
+      ProcessingStatus.PROCESSING,
+      ProcessingStage.AUTHENTICATION,
+    )
+    if not apex_inbound_token_is_valid(authorization_header):
+      raise ClassifiedIntegrationFailure(
+        status_code=401,
+        code='AUTHENTICATION_ERROR',
+        message='Missing or invalid Apex partner bearer token.',
+        category=ErrorCategory.AUTHENTICATION_ERROR,
+        stage=ProcessingStage.AUTHENTICATION,
+      )
+    self._log(
+      transaction_id,
+      ProcessingStage.AUTHENTICATION,
+      ProcessingStatus.SUCCEEDED,
+      'Apex partner authentication succeeded.',
+      {'partner_code': APEX_PARTNER_CODE},
+    )
+
+  def _parse(self, transaction_id: UUID, raw_body: bytes) -> object:
+    self.integration_repository.update_processing_state(
+      transaction_id,
+      ProcessingStatus.PROCESSING,
+      ProcessingStage.PARSING,
+    )
+    try:
+      parsed_payload = json.loads(raw_body.decode('utf-8'))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+      raise ClassifiedIntegrationFailure(
+        status_code=400,
+        code='INVALID_JSON',
+        message='Request body is not valid JSON.',
+        category=ErrorCategory.SYNTAX_ERROR,
+        stage=ProcessingStage.PARSING,
+      ) from exc
+    self._log(
+      transaction_id,
+      ProcessingStage.PARSING,
+      ProcessingStatus.SUCCEEDED,
+      'JSON payload parsed.',
+    )
+    return parsed_payload
+
+  def _validate(self, transaction_id: UUID, parsed_payload: object) -> ApexInboundLoad:
+    self.integration_repository.update_processing_state(
+      transaction_id,
+      ProcessingStatus.PROCESSING,
+      ProcessingStage.VALIDATION,
+    )
+    try:
+      apex_load = ApexInboundLoad.model_validate(parsed_payload)
+    except ValidationError as exc:
+      raise ClassifiedIntegrationFailure(
+        status_code=422,
+        code='INVALID_APEX_LOAD',
+        message='Apex load tender failed contract validation.',
+        category=ErrorCategory.BUSINESS_VALIDATION_ERROR,
+        stage=ProcessingStage.VALIDATION,
+      ) from exc
+    self._log(
+      transaction_id,
+      ProcessingStage.VALIDATION,
+      ProcessingStatus.SUCCEEDED,
+      'Apex load tender passed contract validation.',
+      {'loadId': apex_load.load_id},
+    )
+    return apex_load
+
+  def _map(self, transaction_id: UUID, apex_load: ApexInboundLoad, partner_id: UUID):
+    self.integration_repository.update_processing_state(
+      transaction_id,
+      ProcessingStatus.PROCESSING,
+      ProcessingStage.MAPPING,
+    )
+    try:
+      mapping_result = map_apex_load_to_canonical(apex_load, partner_id)
+    except ApexMappingError as exc:
+      raise ClassifiedIntegrationFailure(
+        status_code=422,
+        code='MAPPING_FAILED',
+        message='Apex load tender could not be mapped to a canonical shipment.',
+        category=ErrorCategory.MAPPING_ERROR,
+        stage=ProcessingStage.MAPPING,
+      ) from exc
+    self._log(
+      transaction_id,
+      ProcessingStage.MAPPING,
+      ProcessingStatus.SUCCEEDED,
+      'Apex load tender mapped to canonical shipment.',
+      mapping_result.metadata,
+    )
+    return mapping_result
+
+  def _persist(self, transaction_id: UUID, shipment, load_id: str) -> UUID:
+    self.integration_repository.update_processing_state(
+      transaction_id,
+      ProcessingStatus.PROCESSING,
+      ProcessingStage.BUSINESS_VALIDATION,
+    )
+    with self.connection.transaction():
+      if self.freightbridge_repository.shipment_exists(shipment.shipment_number):
+        raise ClassifiedIntegrationFailure(
+          status_code=409,
+          code='DUPLICATE_SHIPMENT',
+          message='A canonical shipment already exists for this Apex load.',
+          category=ErrorCategory.DUPLICATE_TRANSACTION,
+          stage=ProcessingStage.BUSINESS_VALIDATION,
+        )
+      self._log(
+        transaction_id,
+        ProcessingStage.BUSINESS_VALIDATION,
+        ProcessingStatus.SUCCEEDED,
+        'Canonical shipment passed persistence validation.',
+        {'loadId': load_id, 'shipment_number': shipment.shipment_number},
+      )
+      return self.freightbridge_repository.create_shipment(shipment)
+
+  def _record_failure(self, transaction_id: UUID, failure: ClassifiedIntegrationFailure) -> None:
+    try:
+      self.integration_repository.append_error(
+        transaction_id=transaction_id,
+        category=failure.category,
+        error_code=failure.code,
+        safe_message=failure.message,
+        stage=failure.stage,
+        retryable=failure.retryable,
+      )
+      self._log(
+        transaction_id,
+        failure.stage,
+        ProcessingStatus.FAILED,
+        failure.message,
+        {'error_code': failure.code},
+      )
+      self.integration_repository.mark_failed(transaction_id, failure.stage)
+    except psycopg.Error:
+      pass
+
+  def _log(
+    self,
+    transaction_id: UUID,
+    stage: ProcessingStage,
+    status: ProcessingStatus,
+    message: str,
+    metadata: dict[str, object] | None = None,
+  ) -> UUID:
+    return self.integration_repository.append_log(
+      ProcessingLog(
+        transaction_id=transaction_id,
+        stage=stage,
+        status=status,
+        message=message,
+        metadata=metadata or {},
+      )
+    )

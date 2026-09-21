@@ -24,6 +24,8 @@ Copy `.env.example` to `.env` for local development.
 - `DATABASE_URL`
 - `APEX_API_BEARER_TOKEN`
 - `APEX_API_READONLY_TOKEN`
+- `FREIGHTBRIDGE_API_BASE_URL`
+- `FREIGHTBRIDGE_APEX_BEARER_TOKEN`
 
 `APEX_API_READONLY_TOKEN` is optional. When configured, it can call `GET` endpoints but receives `403` for write operations.
 
@@ -32,8 +34,9 @@ Copy `.env.example` to `.env` for local development.
 - `GET /health`
 - `GET /readiness`
 - `POST /v1/load-tenders`
+- `POST /v1/load-tenders/{loadId}/dispatch`
 - `GET /v1/loads/{loadId}`
 - `POST /v1/tender-responses`
 - `POST /v1/shipment-statuses`
 
-Apex is not connected to FreightBridge yet. No mapping, X12, Midwest, or SFTP behavior is implemented here.
+Apex can explicitly dispatch a stored load tender to FreightBridge over HTTP. No X12, Midwest, or SFTP behavior is implemented here.

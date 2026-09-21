@@ -1,5 +1,7 @@
 # Mapping Documentation
 
-This folder will hold future canonical model, JSON, and X12 mapping notes.
+This folder holds executable mapping requirements and future mapping notes.
 
-EDI parsing and mapping are intentionally out of scope for this foundation milestone.
+- [Apex load tender to canonical shipment](apex-load-tender-to-canonical.md)
+
+EDI parsing, X12 generation, and generic configurable mapping are intentionally out of scope for the current milestone.

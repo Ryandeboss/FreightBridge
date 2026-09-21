@@ -1,0 +1,1 @@
+"""Partner integration boundary adapters."""

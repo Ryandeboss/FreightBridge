@@ -31,7 +31,7 @@ def connect() -> psycopg.Connection:
     raise DatabaseConnectivityError('Database URL is not configured.')
 
   try:
-    return psycopg.connect(settings.database_url, connect_timeout=5)
+    return psycopg.connect(settings.database_url, autocommit=True, connect_timeout=5)
   except psycopg.Error as exc:
     raise DatabaseConnectivityError('Database connection failed.') from exc
 

@@ -209,6 +209,126 @@ def test_create_and_fetch_load_round_trip(client: TestClient) -> None:
   assert fetch_response.json()['pickup']['facilityName'] == 'ABC Factory'
 
 
+def test_dispatch_load_posts_to_freightbridge_and_propagates_correlation(
+  client: TestClient,
+  fake_repository: FakeApexRepository,
+  monkeypatch,
+) -> None:
+  seed_load(fake_repository)
+  monkeypatch.setenv('FREIGHTBRIDGE_API_BASE_URL', 'https://freightbridge.example.test')
+  monkeypatch.setenv('FREIGHTBRIDGE_APEX_BEARER_TOKEN', 'outbound-secret-token')
+  get_settings.cache_clear()
+  captured: dict[str, object] = {}
+
+  def fake_post(url: str, **kwargs):
+    captured['url'] = url
+    captured.update(kwargs)
+    return httpx.Response(
+      202,
+      json={
+        'status': 'ACCEPTED',
+        'correlationId': 'corr-dispatch-001',
+        'transactionId': str(uuid4()),
+        'shipmentId': str(uuid4()),
+        'shipmentNumber': 'LOAD500',
+      },
+    )
+
+  import httpx
+
+  monkeypatch.setattr('app.api.routes.loads.httpx.post', fake_post)
+
+  response = client.post(
+    '/v1/load-tenders/LOAD500/dispatch',
+    headers=auth_headers(correlation_id='corr-dispatch-001'),
+  )
+
+  assert response.status_code == 202
+  assert response.json()['status'] == 'DISPATCHED'
+  assert response.json()['correlationId'] == 'corr-dispatch-001'
+  assert captured['url'] == 'https://freightbridge.example.test/api/integrations/apex/load-tenders'
+  assert captured['headers']['Authorization'] == 'Bearer outbound-secret-token'
+  assert captured['headers']['X-Correlation-ID'] == 'corr-dispatch-001'
+  assert captured['json']['loadId'] == 'LOAD500'
+  assert 'outbound-secret-token' not in response.text
+
+
+def test_dispatch_unknown_load_returns_404(client: TestClient, monkeypatch) -> None:
+  monkeypatch.setenv('FREIGHTBRIDGE_API_BASE_URL', 'https://freightbridge.example.test')
+  monkeypatch.setenv('FREIGHTBRIDGE_APEX_BEARER_TOKEN', 'outbound-secret-token')
+  get_settings.cache_clear()
+
+  response = client.post('/v1/load-tenders/LOAD404/dispatch', headers=auth_headers())
+
+  assert response.status_code == 404
+  assert response.json()['error']['code'] == 'LOAD_NOT_FOUND'
+
+
+def test_dispatch_freightbridge_auth_failure_returns_safe_dependency_error(
+  client: TestClient,
+  fake_repository: FakeApexRepository,
+  monkeypatch,
+) -> None:
+  seed_load(fake_repository)
+  monkeypatch.setenv('FREIGHTBRIDGE_API_BASE_URL', 'https://freightbridge.example.test')
+  monkeypatch.setenv('FREIGHTBRIDGE_APEX_BEARER_TOKEN', 'outbound-secret-token')
+  get_settings.cache_clear()
+
+  import httpx
+
+  monkeypatch.setattr('app.api.routes.loads.httpx.post', lambda *args, **kwargs: httpx.Response(401, json={}))
+
+  response = client.post('/v1/load-tenders/LOAD500/dispatch', headers=auth_headers())
+
+  assert response.status_code == 503
+  assert response.json()['error']['code'] == 'DEPENDENCY_ERROR'
+  assert 'outbound-secret-token' not in response.text
+
+
+def test_dispatch_freightbridge_duplicate_returns_conflict(
+  client: TestClient,
+  fake_repository: FakeApexRepository,
+  monkeypatch,
+) -> None:
+  seed_load(fake_repository)
+  monkeypatch.setenv('FREIGHTBRIDGE_API_BASE_URL', 'https://freightbridge.example.test')
+  monkeypatch.setenv('FREIGHTBRIDGE_APEX_BEARER_TOKEN', 'outbound-secret-token')
+  get_settings.cache_clear()
+
+  import httpx
+
+  monkeypatch.setattr('app.api.routes.loads.httpx.post', lambda *args, **kwargs: httpx.Response(409, json={}))
+
+  response = client.post('/v1/load-tenders/LOAD500/dispatch', headers=auth_headers())
+
+  assert response.status_code == 409
+  assert response.json()['error']['code'] == 'DUPLICATE_LOAD'
+
+
+def test_dispatch_freightbridge_timeout_returns_dependency_error(
+  client: TestClient,
+  fake_repository: FakeApexRepository,
+  monkeypatch,
+) -> None:
+  seed_load(fake_repository)
+  monkeypatch.setenv('FREIGHTBRIDGE_API_BASE_URL', 'https://freightbridge.example.test')
+  monkeypatch.setenv('FREIGHTBRIDGE_APEX_BEARER_TOKEN', 'outbound-secret-token')
+  get_settings.cache_clear()
+
+  import httpx
+
+  def timeout(*args, **kwargs):
+    raise httpx.TimeoutException('timed out')
+
+  monkeypatch.setattr('app.api.routes.loads.httpx.post', timeout)
+
+  response = client.post('/v1/load-tenders/LOAD500/dispatch', headers=auth_headers())
+
+  assert response.status_code == 503
+  assert response.json()['error']['code'] == 'DEPENDENCY_ERROR'
+  assert 'timed out' not in response.text
+
+
 def test_unknown_load_returns_404(client: TestClient) -> None:
   response = client.get('/v1/loads/LOAD999', headers=auth_headers())
 

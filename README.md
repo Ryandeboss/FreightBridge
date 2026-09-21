@@ -1,6 +1,6 @@
 # FreightBridge
 
-FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current state includes the FreightBridge foundation plus an independent Apex REST/JSON simulator; partner mapping, EDI parsing, Midwest behavior, SFTP workflows, and end-to-end business workflows remain intentionally deferred.
+FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current state includes the FreightBridge foundation, an independent Apex REST/JSON simulator, and the first Apex-to-FreightBridge canonical shipment ingestion path; generic mapping, EDI parsing, Midwest behavior, SFTP workflows, and end-to-end carrier workflows remain intentionally deferred.
 
 ## Planned Architecture
 
@@ -19,19 +19,18 @@ Browser
 
 Current partner state:
 
-- Apex Logistics: implemented synthetic freight broker / 3PL simulator using HTTPS REST and JSON.
+- Apex Logistics: implemented synthetic freight broker / 3PL simulator using HTTPS REST and JSON, with explicit dispatch to FreightBridge.
 - Midwest Carrier: synthetic motor carrier using X12 004010 over future SFTP.
-- FreightBridge: implemented canonical foundation, not yet connected to Apex or Midwest.
+- FreightBridge: implemented canonical foundation with Apex load tender ingestion, not yet connected to Midwest.
 
 ```text
 Apex Simulator
   [implemented]
       |
-      | REST/JSON
-      | NOT CONNECTED
+      | HTTPS REST/JSON + bearer
       v
 FreightBridge
-  [implemented foundation]
+  [implemented canonical ingestion]
       |
       | future X12/SFTP
       v
@@ -128,6 +127,7 @@ Backend preferred:
 - `SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_SECRET_KEY`
 - `DATABASE_URL`
+- `APEX_INBOUND_BEARER_TOKEN`
 
 Backend legacy names temporarily accepted:
 
@@ -142,6 +142,8 @@ Apex simulator:
 - `DATABASE_URL`
 - `APEX_API_BEARER_TOKEN`
 - `APEX_API_READONLY_TOKEN`
+- `FREIGHTBRIDGE_API_BASE_URL`
+- `FREIGHTBRIDGE_APEX_BEARER_TOKEN`
 
 Railway/SFTP placeholders:
 
@@ -179,6 +181,8 @@ Major Milestone 3 contract files:
 - [Database schema](docs/architecture/database-schema.md)
 - [Milestone 4 database acceptance](docs/testing/milestone-4-database-acceptance.md)
 - [Milestone 5 Apex acceptance](docs/testing/milestone-5-apex-acceptance.md)
+- [Apex load tender mapping](docs/mappings/apex-load-tender-to-canonical.md)
+- [Milestone 6 Apex -> FreightBridge acceptance](docs/testing/milestone-6-apex-freightbridge-integration.md)
 
 Sample contract fixtures:
 
@@ -204,6 +208,10 @@ Implemented:
 - PostgreSQL domain schema once `infrastructure/supabase/migrations/20260920_001_create_freightbridge_domain.sql` is applied.
 - Apex Logistics REST/JSON simulator.
 - Apex logical PostgreSQL schema once `infrastructure/supabase/migrations/20260920_002_create_apex_simulator.sql` is applied.
+- Apex -> FreightBridge REST/JSON integration.
+- Apex partner authentication for FreightBridge inbound loads.
+- Apex -> canonical shipment mapping.
+- Integration transaction, processing log, and integration error audit for Apex ingestion.
 
 Specified:
 
@@ -213,8 +221,7 @@ Specified:
 
 Planned:
 
-- Apex -> FreightBridge connection.
-- Mapping rules.
+- Generic/configurable mapping engine.
 - EDI parser/serializer.
 - SFTP exchange.
 - Midwest simulator.

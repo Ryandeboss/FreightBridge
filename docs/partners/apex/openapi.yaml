@@ -89,6 +89,40 @@ paths:
           $ref: '#/components/responses/SystemFailure'
         '503':
           $ref: '#/components/responses/DependencyFailure'
+  /v1/load-tenders/{loadId}/dispatch:
+    post:
+      summary: Dispatch an Apex load tender to FreightBridge
+      description: Explicit Apex simulator action that sends an existing ApexLoad to the FreightBridge inbound Apex integration endpoint. This does not contact Midwest or generate X12.
+      operationId: dispatchApexLoadTender
+      tags: [Load Tenders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: loadId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LOAD500
+      responses:
+        '202':
+          description: Apex dispatched the load tender to FreightBridge
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispatchLoadTenderResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/LoadNotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/BusinessValidationFailure'
+        '503':
+          $ref: '#/components/responses/DependencyFailure'
   /v1/shipment-statuses:
     post:
       summary: Receive shipment status information
@@ -356,6 +390,22 @@ components:
           type: string
           format: date-time
           example: '2026-09-19T14:46:00Z'
+    DispatchLoadTenderResponse:
+      type: object
+      required: [loadId, status, correlationId, freightbridge]
+      properties:
+        loadId:
+          type: string
+          example: LOAD500
+        status:
+          type: string
+          example: DISPATCHED
+        correlationId:
+          type: string
+          example: corr-LOAD500-001
+        freightbridge:
+          type: object
+          additionalProperties: true
     ErrorEnvelope:
       type: object
       required: [error]

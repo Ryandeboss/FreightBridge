@@ -73,6 +73,6 @@ FreightBridge is responsible for:
 ## Known Limitations
 
 - OAuth, mTLS, webhooks, and event subscriptions are deferred.
-- Apex runs as an independent simulator and is not connected to FreightBridge yet.
+- Apex runs as an independent simulator and can explicitly dispatch load tenders to FreightBridge.
 - Apex does not exchange X12 or SFTP files directly.
 - Real customer, carrier, or contact data must never be used in fixtures.

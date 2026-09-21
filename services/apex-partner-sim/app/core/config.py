@@ -9,6 +9,8 @@ class Settings(BaseSettings):
   database_url: str | None = Field(default=None, alias='DATABASE_URL')
   apex_api_bearer_token: str | None = Field(default=None, alias='APEX_API_BEARER_TOKEN')
   apex_api_readonly_token: str | None = Field(default=None, alias='APEX_API_READONLY_TOKEN')
+  freightbridge_api_base_url: str | None = Field(default=None, alias='FREIGHTBRIDGE_API_BASE_URL')
+  freightbridge_apex_bearer_token: str | None = Field(default=None, alias='FREIGHTBRIDGE_APEX_BEARER_TOKEN')
 
   model_config = SettingsConfigDict(
     env_file='.env',

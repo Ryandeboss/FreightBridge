@@ -3,16 +3,25 @@ from uuid import UUID
 
 from psycopg import Connection
 from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 
 from app.domain import (
   CanonicalLocation,
   CanonicalShipment,
+  ErrorCategory,
   EquipmentType,
+  IntegrationDirection,
+  IntegrationTransaction,
+  MessageFormat,
+  ProcessingLog,
+  ProcessingStage,
+  ProcessingStatus,
   ReferenceType,
   ShipmentEvent,
   ShipmentReference,
   ShipmentStatus,
   TenderStatus,
+  Transport,
   apply_shipment_event,
 )
 
@@ -110,6 +119,14 @@ class FreightBridgeRepository:
       created_at=shipment['created_at'],
       updated_at=shipment['updated_at'],
     )
+
+  def shipment_exists(self, shipment_number: str) -> bool:
+    with self.connection.cursor(row_factory=dict_row) as cursor:
+      cursor.execute(
+        'SELECT 1 FROM shipments WHERE shipment_number = %s',
+        (shipment_number,),
+      )
+      return cursor.fetchone() is not None
 
   def create_shipment(self, shipment: CanonicalShipment) -> UUID:
     with self.connection.cursor(row_factory=dict_row) as cursor:
@@ -274,3 +291,168 @@ class FreightBridgeRepository:
       postal_code=stop['postal_code'],
       scheduled_at=stop['scheduled_at'],
     )
+
+
+class IntegrationRepository:
+  def __init__(self, connection: Connection):
+    self.connection = connection
+
+  def create_transaction(self, transaction: IntegrationTransaction) -> UUID:
+    with self.connection.cursor(row_factory=dict_row) as cursor:
+      cursor.execute(
+        """
+          INSERT INTO integration_transactions (
+            correlation_id,
+            partner_id,
+            direction,
+            transport,
+            message_format,
+            document_type,
+            business_identifier,
+            x12_version,
+            interchange_control_number,
+            group_control_number,
+            transaction_control_number,
+            payload_hash,
+            raw_payload_location,
+            processing_status,
+            processing_stage,
+            retry_count,
+            parent_transaction_id,
+            received_at,
+            processed_at
+          )
+          VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+          RETURNING id
+        """,
+        (
+          transaction.correlation_id,
+          transaction.partner_id,
+          transaction.direction.value,
+          transaction.transport.value,
+          transaction.message_format.value,
+          transaction.document_type,
+          transaction.business_identifier,
+          transaction.x12_version,
+          transaction.interchange_control_number,
+          transaction.group_control_number,
+          transaction.transaction_control_number,
+          transaction.payload_hash,
+          transaction.raw_payload_location,
+          transaction.processing_status.value,
+          transaction.processing_stage.value,
+          transaction.retry_count,
+          transaction.parent_transaction_id,
+          transaction.received_at,
+          transaction.processed_at,
+        ),
+      )
+      return cursor.fetchone()['id']
+
+  def update_business_identifier(self, transaction_id: UUID, business_identifier: str) -> None:
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        """
+          UPDATE integration_transactions
+          SET business_identifier = %s,
+              updated_at = now()
+          WHERE id = %s
+        """,
+        (business_identifier, transaction_id),
+      )
+
+  def update_processing_state(
+    self,
+    transaction_id: UUID,
+    status: ProcessingStatus,
+    stage: ProcessingStage,
+    *,
+    processed: bool = False,
+  ) -> None:
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        """
+          UPDATE integration_transactions
+          SET processing_status = %s,
+              processing_stage = %s,
+              processed_at = CASE WHEN %s THEN now() ELSE processed_at END,
+              updated_at = now()
+          WHERE id = %s
+        """,
+        (status.value, stage.value, processed, transaction_id),
+      )
+
+  def mark_succeeded(self, transaction_id: UUID) -> None:
+    self.update_processing_state(
+      transaction_id,
+      ProcessingStatus.SUCCEEDED,
+      ProcessingStage.COMPLETED,
+      processed=True,
+    )
+
+  def mark_failed(self, transaction_id: UUID, stage: ProcessingStage) -> None:
+    self.update_processing_state(
+      transaction_id,
+      ProcessingStatus.FAILED,
+      stage,
+      processed=True,
+    )
+
+  def append_log(self, log: ProcessingLog) -> UUID:
+    with self.connection.cursor(row_factory=dict_row) as cursor:
+      cursor.execute(
+        """
+          INSERT INTO processing_logs (
+            transaction_id,
+            stage,
+            status,
+            message,
+            metadata
+          )
+          VALUES (%s, %s, %s, %s, %s)
+          RETURNING id
+        """,
+        (
+          log.transaction_id,
+          log.stage.value,
+          log.status.value,
+          log.message,
+          Jsonb(log.metadata),
+        ),
+      )
+      return cursor.fetchone()['id']
+
+  def append_error(
+    self,
+    *,
+    transaction_id: UUID,
+    category: ErrorCategory,
+    error_code: str,
+    safe_message: str,
+    stage: ProcessingStage,
+    retryable: bool = False,
+  ) -> UUID:
+    with self.connection.cursor(row_factory=dict_row) as cursor:
+      cursor.execute(
+        """
+          INSERT INTO integration_errors (
+            transaction_id,
+            category,
+            error_code,
+            safe_message,
+            stage,
+            retryable
+          )
+          VALUES (%s, %s, %s, %s, %s, %s)
+          RETURNING id
+        """,
+        (
+          transaction_id,
+          category.value,
+          error_code,
+          safe_message,
+          stage.value,
+          retryable,
+        ),
+      )
+      return cursor.fetchone()['id']

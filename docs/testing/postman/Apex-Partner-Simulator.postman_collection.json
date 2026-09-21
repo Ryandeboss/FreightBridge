@@ -119,6 +119,35 @@
           ]
         },
         {
+          "name": "POST /v1/load-tenders/{{loadId}}/dispatch",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{apexBearerToken}}"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "postman-dispatch-LOAD500"
+              }
+            ],
+            "url": "{{apexBaseUrl}}/v1/load-tenders/{{loadId}}/dispatch"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('dispatch accepted', function () { pm.response.to.have.status(202); });",
+                  "pm.test('FreightBridge accepted LOAD500', function () { const body = pm.response.json(); pm.expect(body.status).to.eql('DISPATCHED'); pm.expect(body.freightbridge.shipmentNumber).to.eql('LOAD500'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "POST /v1/tender-responses accepted",
           "request": {
             "method": "POST",
@@ -177,6 +206,139 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status accepted', function () { pm.response.to.have.status(202); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "FreightBridge Direct Negative Examples",
+      "item": [
+        {
+          "name": "401 missing Apex integration token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "postman-fb-missing-auth"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loadId\": \"LOAD500\",\n  \"bolNumber\": \"BOL900\",\n  \"equipmentType\": \"VAN_53\",\n  \"weightLbs\": 42000,\n  \"commodityDescription\": \"Packaged auto parts\",\n  \"pickup\": {\n    \"facilityName\": \"ABC Factory\",\n    \"address1\": \"200 Industrial Rd\",\n    \"city\": \"Aurora\",\n    \"state\": \"IL\",\n    \"postalCode\": \"60505\",\n    \"scheduledDateTime\": \"2026-10-01T14:00:00Z\"\n  },\n  \"delivery\": {\n    \"facilityName\": \"XYZ Warehouse\",\n    \"address1\": \"900 Commerce St\",\n    \"city\": \"Detroit\",\n    \"state\": \"MI\",\n    \"postalCode\": \"48201\",\n    \"scheduledDateTime\": \"2026-10-02T18:00:00Z\"\n  },\n  \"createdAt\": \"2026-09-19T14:00:00Z\",\n  \"updatedAt\": \"2026-09-19T14:05:00Z\"\n}"
+            },
+            "url": "{{freightbridgeBaseUrl}}/api/integrations/apex/load-tenders"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('missing integration token rejected', function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "401 bad Apex integration token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer invalid-token"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loadId\": \"LOAD500\",\n  \"bolNumber\": \"BOL900\",\n  \"equipmentType\": \"VAN_53\",\n  \"weightLbs\": 42000,\n  \"commodityDescription\": \"Packaged auto parts\",\n  \"pickup\": {\n    \"facilityName\": \"ABC Factory\",\n    \"address1\": \"200 Industrial Rd\",\n    \"city\": \"Aurora\",\n    \"state\": \"IL\",\n    \"postalCode\": \"60505\",\n    \"scheduledDateTime\": \"2026-10-01T14:00:00Z\"\n  },\n  \"delivery\": {\n    \"facilityName\": \"XYZ Warehouse\",\n    \"address1\": \"900 Commerce St\",\n    \"city\": \"Detroit\",\n    \"state\": \"MI\",\n    \"postalCode\": \"48201\",\n    \"scheduledDateTime\": \"2026-10-02T18:00:00Z\"\n  },\n  \"createdAt\": \"2026-09-19T14:00:00Z\",\n  \"updatedAt\": \"2026-09-19T14:05:00Z\"\n}"
+            },
+            "url": "{{freightbridgeBaseUrl}}/api/integrations/apex/load-tenders"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('bad integration token rejected', function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "400 malformed JSON",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{freightbridgeApexToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{bad-json"
+            },
+            "url": "{{freightbridgeBaseUrl}}/api/integrations/apex/load-tenders"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('malformed JSON rejected', function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "422 missing delivery",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{freightbridgeApexToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loadId\": \"LOAD500\",\n  \"bolNumber\": \"BOL900\",\n  \"equipmentType\": \"VAN_53\",\n  \"weightLbs\": 42000,\n  \"commodityDescription\": \"Packaged auto parts\",\n  \"pickup\": {\n    \"facilityName\": \"ABC Factory\",\n    \"address1\": \"200 Industrial Rd\",\n    \"city\": \"Aurora\",\n    \"state\": \"IL\",\n    \"postalCode\": \"60505\",\n    \"scheduledDateTime\": \"2026-10-01T14:00:00Z\"\n  },\n  \"createdAt\": \"2026-09-19T14:00:00Z\",\n  \"updatedAt\": \"2026-09-19T14:05:00Z\"\n}"
+            },
+            "url": "{{freightbridgeBaseUrl}}/api/integrations/apex/load-tenders"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('invalid Apex load rejected', function () { pm.response.to.have.status(422); });"
                 ]
               }
             }

@@ -1,10 +1,15 @@
 # Initial Architecture
 
-This diagram captures the current FreightBridge direction. Apex is now implemented as an independent REST/JSON simulator, while the Apex-to-FreightBridge connection, mapping, EDI, SFTP, and Midwest simulator behavior remain future work.
+This diagram captures the current FreightBridge direction. Apex now dispatches REST/JSON load tenders into FreightBridge, where they are authenticated, audited, mapped, and persisted as canonical shipments. EDI, SFTP, and Midwest simulator behavior remain future work.
 
 ```mermaid
 flowchart TD
-  Apex[Apex Partner Simulator - implemented] -. REST/JSON not connected .-> API[FreightBridge API]
+  Apex[Apex Partner Simulator - implemented] -->|HTTPS JSON + bearer| Ingest[FreightBridge REST Ingestion]
+  Ingest --> Tx[IntegrationTransaction]
+  Ingest --> Logs[ProcessingLogs and IntegrationErrors]
+  Ingest --> Mapper[Apex Mapper]
+  Mapper --> Canonical[CanonicalShipment]
+  Canonical --> API[FreightBridge API]
   UI[Analyst UI] --> API
   API -->|Canonical Model - foundation implemented| Pipeline[FreightBridge processing pipeline]
   Pipeline -. future X12/SFTP .-> Midwest[Midwest Carrier - contract only]
@@ -15,9 +20,9 @@ flowchart TD
 
 ## Component Notes
 
-- Apex Partner Simulator: independent synthetic REST/JSON partner backend.
+- Apex Partner Simulator: independent synthetic REST/JSON partner backend that can dispatch loads to FreightBridge.
 - Analyst UI: React/Vite operational dashboard deployed to Vercel.
-- FreightBridge API: FastAPI middleware deployed to Render.
+- FreightBridge API: FastAPI middleware deployed to Render, including Apex REST ingestion and canonical persistence.
 - Supabase PostgreSQL: durable FreightBridge canonical records and, for portfolio cost simplicity, the separate `apex_sim` logical partner schema.
 - SFTPGo on Railway: provisioned / reserved for a later public SFTP ingress milestone.
 - Midwest Carrier Simulator: future synthetic X12/SFTP destination.
