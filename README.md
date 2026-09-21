@@ -1,6 +1,6 @@
 # FreightBridge
 
-FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current state includes the FreightBridge foundation, an independent Apex REST/JSON simulator, and the first Apex-to-FreightBridge canonical shipment ingestion path; generic mapping, EDI parsing, Midwest behavior, SFTP workflows, and end-to-end carrier workflows remain intentionally deferred.
+FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current state includes the FreightBridge foundation, an independent Apex REST/JSON simulator, the first Apex-to-FreightBridge canonical shipment ingestion path, and a generic X12 structural parsing foundation; generic mapping, Midwest business behavior, SFTP workflows, and end-to-end carrier workflows remain intentionally deferred.
 
 ## Planned Architecture
 
@@ -69,7 +69,7 @@ infrastructure/
   docker/                 Future container support
   supabase/migrations/    Empty database migration area
 sample-data/
-  x12/                    Future synthetic X12 payloads
+  x12/                    Synthetic X12 payloads
   json/                   Future synthetic JSON payloads
 scripts/                  Future developer automation
 ```
@@ -179,10 +179,12 @@ Major Milestone 3 contract files:
 - [Contract decisions](docs/architecture/contract-decisions.md)
 - [Canonical data model](docs/architecture/canonical-data-model.md)
 - [Database schema](docs/architecture/database-schema.md)
+- [Generic X12 foundation](docs/architecture/x12-foundation.md)
 - [Milestone 4 database acceptance](docs/testing/milestone-4-database-acceptance.md)
 - [Milestone 5 Apex acceptance](docs/testing/milestone-5-apex-acceptance.md)
 - [Apex load tender mapping](docs/mappings/apex-load-tender-to-canonical.md)
 - [Milestone 6 Apex -> FreightBridge acceptance](docs/testing/milestone-6-apex-freightbridge-integration.md)
+- [Milestone 7 Generic X12 foundation acceptance](docs/testing/milestone-7-x12-foundation.md)
 
 Sample contract fixtures:
 
@@ -212,6 +214,7 @@ Implemented:
 - Apex partner authentication for FreightBridge inbound loads.
 - Apex -> canonical shipment mapping.
 - Integration transaction, processing log, and integration error audit for Apex ingestion.
+- Generic X12 parsing, envelope validation, and serialization foundation.
 
 Specified:
 
@@ -222,7 +225,6 @@ Specified:
 Planned:
 
 - Generic/configurable mapping engine.
-- EDI parser/serializer.
 - SFTP exchange.
 - Midwest simulator.
 - Shipment persistence and analyst workflow features.
