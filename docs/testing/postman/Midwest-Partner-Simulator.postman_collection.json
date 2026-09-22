@@ -44,6 +44,47 @@
       }
     },
     {
+      "name": "Midwest Accept LOAD500",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{midwestBearerToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"decision\": \"ACCEPTED\"\n}"
+        },
+        "url": "{{midwestBaseUrl}}/v1/loads/LOAD500/tender-decisions"
+      }
+    },
+    {
+      "name": "Midwest Reject LOAD500",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{midwestBearerToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"decision\": \"REJECTED\",\n  \"reasonCode\": \"NO_CAP\",\n  \"message\": \"No capacity available.\"\n}"
+        },
+        "url": "{{midwestBaseUrl}}/v1/loads/LOAD500/tender-decisions"
+      }
+    },
+    {
+      "name": "Midwest Dispatch 990 Direct LOAD500",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{midwestBearerToken}}" },
+          { "key": "X-Correlation-ID", "value": "postman-midwest-990-LOAD500" }
+        ],
+        "url": "{{midwestBaseUrl}}/v1/loads/LOAD500/tender-response/dispatch-direct"
+      }
+    },
+    {
       "name": "Midwest Missing Token",
       "request": {
         "method": "GET",
@@ -107,6 +148,22 @@
       "request": {
         "method": "POST",
         "url": "{{freightbridgeBaseUrl}}/api/integrations/midwest/load-tenders/LOAD500/dispatch-direct"
+      }
+    },
+    {
+      "name": "FreightBridge Receive Midwest 990 Accepted",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{freightbridgeMidwestToken}}" },
+          { "key": "Content-Type", "value": "application/edi-x12" },
+          { "key": "X-Correlation-ID", "value": "postman-fb-midwest-990" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "ISA*00*          *00*          *ZZ*MWCX           *ZZ*FREIGHTBRIDGE  *260919*1445*U*00401*000000906*0*T*:~\nGS*GF*MWCX*FREIGHTBRIDGE*20260919*1445*906*X*004010~\nST*990*0001~\nB1*MWCX*LOAD500*20260919*A~\nL11*BOL900*BM~\nL11*PO111*PO~\nL11*MWC900500*CN~\nSE*6*0001~\nGE*1*906~\nIEA*1*000000906~"
+        },
+        "url": "{{freightbridgeBaseUrl}}/api/integrations/midwest/tender-responses"
       }
     }
   ]

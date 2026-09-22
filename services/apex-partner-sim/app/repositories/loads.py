@@ -183,6 +183,60 @@ class ApexLoadRepository:
         )
     return event_id
 
+  def fetch_tender_status(self, load_id: str) -> dict[str, object] | None:
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        """
+        select load_id, current_tender_decision, updated_at
+        from apex_sim.loads
+        where load_id = %s
+        """,
+        (load_id,),
+      )
+      load_row = cursor.fetchone()
+      if load_row is None:
+        return None
+
+      cursor.execute(
+        """
+        select
+          id,
+          decision,
+          carrier_code,
+          carrier_load_number,
+          reason_code,
+          message,
+          decided_at,
+          received_at
+        from apex_sim.tender_responses
+        where load_id = %s
+        order by received_at desc, id desc
+        limit 1
+        """,
+        (load_id,),
+      )
+      response_row = cursor.fetchone()
+
+    latest_response = None
+    if response_row is not None:
+      latest_response = {
+        'eventId': str(response_row['id']),
+        'decision': response_row['decision'],
+        'carrierCode': response_row['carrier_code'],
+        'carrierLoadNumber': response_row['carrier_load_number'],
+        'reasonCode': response_row['reason_code'],
+        'message': response_row['message'],
+        'decidedAt': response_row['decided_at'].isoformat(),
+        'receivedAt': response_row['received_at'].isoformat(),
+      }
+
+    return {
+      'loadId': load_row['load_id'],
+      'currentTenderDecision': load_row['current_tender_decision'],
+      'updatedAt': load_row['updated_at'].isoformat(),
+      'latestResponse': latest_response,
+    }
+
   def record_shipment_status(self, shipment_status: ApexShipmentStatus) -> UUID | None:
     received_at = datetime.now(timezone.utc)
     with self.connection.transaction():

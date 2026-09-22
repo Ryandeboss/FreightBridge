@@ -180,6 +180,31 @@
           ]
         },
         {
+          "name": "GET /v1/loads/{{loadId}}/tender-status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{apexReadonlyToken}}"
+              }
+            ],
+            "url": "{{apexBaseUrl}}/v1/loads/{{loadId}}/tender-status"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('tender status found', function () { pm.response.to.have.status(200); });",
+                  "pm.test('latest decision is accepted', function () { const body = pm.response.json(); pm.expect(body.currentTenderDecision).to.eql('ACCEPTED'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "POST /v1/shipment-statuses picked up",
           "request": {
             "method": "POST",

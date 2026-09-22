@@ -20,6 +20,9 @@ class Settings(BaseSettings):
   apex_inbound_bearer_token: str | None = Field(default=None, alias='APEX_INBOUND_BEARER_TOKEN')
   midwest_sim_base_url: str | None = Field(default=None, alias='MIDWEST_SIM_BASE_URL')
   midwest_sim_bearer_token: str | None = Field(default=None, alias='MIDWEST_SIM_BEARER_TOKEN')
+  midwest_inbound_bearer_token: str | None = Field(default=None, alias='MIDWEST_INBOUND_BEARER_TOKEN')
+  apex_sim_base_url: str | None = Field(default=None, alias='APEX_SIM_BASE_URL')
+  apex_sim_bearer_token: str | None = Field(default=None, alias='APEX_SIM_BEARER_TOKEN')
 
   model_config = SettingsConfigDict(
     env_file='.env',

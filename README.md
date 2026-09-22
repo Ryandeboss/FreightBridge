@@ -1,6 +1,6 @@
 # FreightBridge
 
-FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current state includes the FreightBridge foundation, independent Apex and Midwest simulators, Apex-to-FreightBridge canonical shipment ingestion, a generic X12 structural foundation, Midwest 204 generation from canonical shipments, and temporary direct Midwest 204 delivery over a REST test harness; SFTP workflows and 990/214/997 processing remain intentionally deferred.
+FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current state includes the FreightBridge foundation, independent Apex and Midwest simulators, Apex-to-FreightBridge canonical shipment ingestion, a generic X12 structural foundation, Midwest 204 generation/direct delivery, and Midwest 990 tender-response return processing over a temporary REST test harness; SFTP workflows and 214/997 processing remain intentionally deferred.
 
 ## Planned Architecture
 
@@ -20,8 +20,8 @@ Browser
 Current partner state:
 
 - Apex Logistics: implemented synthetic freight broker / 3PL simulator using HTTPS REST and JSON, with explicit dispatch to FreightBridge.
-- Midwest Carrier: synthetic motor carrier using X12 004010 over future SFTP.
-- FreightBridge: implemented canonical foundation with Apex load tender ingestion, not yet connected to Midwest.
+- Midwest Carrier: synthetic motor carrier using X12 004010 over a temporary REST test harness before future SFTP.
+- FreightBridge: implemented canonical foundation with Apex load tender ingestion, Midwest 204 outbound generation, and Midwest 990 inbound tender-response processing.
 
 ```text
 Apex Simulator
@@ -30,12 +30,17 @@ Apex Simulator
       | HTTPS REST/JSON + bearer
       v
 FreightBridge
-  [implemented canonical ingestion + 204 generation/direct test delivery]
+  [implemented canonical ingestion + 204 outbound + 990 return flow]
       |
       | temporary REST test harness carrying X12 204
       v
 Midwest
   [implemented simulator]
+      |
+      | temporary REST test harness carrying X12 990
+      v
+FreightBridge
+  [forwards canonical tender response to Apex]
 ```
 
 See [docs/architecture/initial-architecture.md](docs/architecture/initial-architecture.md) for the first architecture diagram.
@@ -139,6 +144,9 @@ Backend preferred:
 - `SUPABASE_SECRET_KEY`
 - `DATABASE_URL`
 - `APEX_INBOUND_BEARER_TOKEN`
+- `MIDWEST_INBOUND_BEARER_TOKEN`
+- `APEX_SIM_BASE_URL`
+- `APEX_SIM_BEARER_TOKEN`
 
 Backend legacy names temporarily accepted:
 
@@ -162,6 +170,8 @@ Midwest simulator:
 - `DATABASE_URL`
 - `MIDWEST_API_BEARER_TOKEN`
 - `MIDWEST_API_READONLY_TOKEN`
+- `FREIGHTBRIDGE_API_BASE_URL`
+- `FREIGHTBRIDGE_MIDWEST_BEARER_TOKEN`
 
 FreightBridge Midwest direct test harness:
 
@@ -212,6 +222,7 @@ Major Milestone 3 contract files:
 - [Milestone 7 Generic X12 foundation acceptance](docs/testing/milestone-7-x12-foundation.md)
 - [Milestone 8 Midwest 204 generation acceptance](docs/testing/milestone-8-midwest-204-generation.md)
 - [Milestone 9 Midwest simulator acceptance](docs/testing/milestone-9-midwest-simulator.md)
+- [Milestone 10 Midwest 990 return flow acceptance](docs/testing/milestone-10-midwest-990-return-flow.md)
 
 Sample contract fixtures:
 
@@ -244,6 +255,7 @@ Implemented:
 - Generic X12 parsing, envelope validation, and serialization foundation.
 - Midwest-specific canonical shipment -> X12 204 generation preview endpoint.
 - Independent Midwest Carrier simulator with temporary direct REST/X12 delivery harness.
+- Midwest tender decision endpoint, independent X12 990 generation, FreightBridge inbound 990 processing, and Apex tender-status readback.
 
 Specified:
 
@@ -256,7 +268,7 @@ Planned:
 
 - Generic/configurable mapping engine.
 - SFTP exchange.
-- 990, 214, and 997 processing.
+- 214 and 997 processing.
 - Shipment persistence and analyst workflow features.
 
 Do not begin FreightBridge product features from this milestone.

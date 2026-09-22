@@ -1,13 +1,28 @@
 from datetime import datetime, timezone
+import hashlib
 from uuid import UUID
 
 from psycopg.errors import UniqueViolation
 
+from app.edi.generator_990 import ControlNumbers, Midwest990Source, generate_990
 from app.edi.parser import Parsed204
 from app.models.load import MidwestLoad, Party
+from app.models.tender import MidwestTenderDecisionRequest, TenderDecisionValue
 
 
 class DuplicateLoadError(Exception):
+  pass
+
+
+class LoadNotFoundError(Exception):
+  pass
+
+
+class TenderAlreadyDecidedError(Exception):
+  pass
+
+
+class TenderDecisionNotFoundError(Exception):
   pass
 
 
@@ -214,3 +229,187 @@ class MidwestLoadRepository:
       tenderStatus=row['tender_status'],
       carrierLoadNumber=row['carrier_load_no'],
     )
+
+  def next_carrier_load_number(self) -> str:
+    with self.connection.cursor() as cursor:
+      cursor.execute("select nextval('midwest_sim.carrier_load_number_seq') as value")
+      return f"MWC{cursor.fetchone()['value']}"
+
+  def next_control_numbers(self) -> ControlNumbers:
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        """
+        select
+          nextval('midwest_sim.outbound_interchange_control_seq') as interchange,
+          nextval('midwest_sim.outbound_group_control_seq') as group_control
+        """
+      )
+      row = cursor.fetchone()
+    return ControlNumbers(
+      interchange_control_number=str(row['interchange']).zfill(9),
+      group_control_number=str(row['group_control']),
+      transaction_control_number='0001',
+    )
+
+  def create_tender_decision(
+    self,
+    cust_ship_no: str,
+    request: MidwestTenderDecisionRequest,
+    *,
+    decided_at: datetime | None = None,
+    carrier_load_no: str | None = None,
+    control_numbers: ControlNumbers | None = None,
+  ) -> dict[str, object]:
+    decided_at = decided_at or datetime.now(timezone.utc)
+    with self.connection.transaction():
+      with self.connection.cursor() as cursor:
+        cursor.execute(
+          "select * from midwest_sim.loads where cust_ship_no = %s for update",
+          (cust_ship_no,),
+        )
+        load = cursor.fetchone()
+        if load is None:
+          raise LoadNotFoundError(cust_ship_no)
+        if load['tender_status'] != 'PENDING':
+          raise TenderAlreadyDecidedError(cust_ship_no)
+
+        resolved_carrier_load_no = (
+          carrier_load_no
+          if request.decision == TenderDecisionValue.ACCEPTED
+          else None
+        )
+        if request.decision == TenderDecisionValue.ACCEPTED and resolved_carrier_load_no is None:
+          resolved_carrier_load_no = self.next_carrier_load_number()
+
+        cursor.execute(
+          """
+          insert into midwest_sim.tender_decisions (
+            load_id, decision, carrier_load_no, reason_code, message, decided_at
+          )
+          values (%s, %s, %s, %s, %s, %s)
+          returning id
+          """,
+          (
+            load['id'],
+            request.decision.value,
+            resolved_carrier_load_no,
+            request.reason_code,
+            request.message,
+            decided_at,
+          ),
+        )
+        decision_id = cursor.fetchone()['id']
+        cursor.execute(
+          """
+          update midwest_sim.loads
+          set tender_status = %s,
+              carrier_load_no = %s,
+              updated_at = now()
+          where id = %s
+          """,
+          (request.decision.value, resolved_carrier_load_no, load['id']),
+        )
+
+        controls = control_numbers or self.next_control_numbers()
+        raw_x12 = generate_990(
+          Midwest990Source(
+            cust_ship_no=load['cust_ship_no'],
+            bol_ref=load['bol_ref'],
+            po_ref=load['po_ref'],
+            decision=request.decision.value,
+            carrier_load_no=resolved_carrier_load_no,
+            reason_code=request.reason_code,
+            decided_at=decided_at,
+          ),
+          controls,
+        )
+        cursor.execute(
+          """
+          insert into midwest_sim.outbound_edi_documents (
+            tender_decision_id, document_type, customer_shipment_number,
+            x12_version, interchange_control_number, group_control_number,
+            transaction_control_number, payload_hash, raw_x12,
+            processing_status, generated_at
+          )
+          values (%s, '990', %s, '004010', %s, %s, %s, %s, %s, 'GENERATED', %s)
+          returning id
+          """,
+          (
+            decision_id,
+            load['cust_ship_no'],
+            controls.interchange_control_number,
+            controls.group_control_number,
+            controls.transaction_control_number,
+            hashlib.sha256(raw_x12.encode('utf-8')).hexdigest(),
+            raw_x12,
+            decided_at,
+          ),
+        )
+        document_id = cursor.fetchone()['id']
+
+    return {
+      'decision_id': decision_id,
+      'outbound_document_id': document_id,
+      'customer_shipment_number': cust_ship_no,
+      'decision': request.decision.value,
+      'carrier_load_number': resolved_carrier_load_no,
+      'reason_code': request.reason_code,
+      'message': request.message,
+      'decided_at': decided_at,
+    }
+
+  def fetch_outbound_990(self, cust_ship_no: str) -> dict[str, object] | None:
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        """
+        select oed.*
+        from midwest_sim.outbound_edi_documents oed
+        where oed.customer_shipment_number = %s
+          and oed.document_type = '990'
+        order by oed.created_at desc
+        limit 1
+        """,
+        (cust_ship_no,),
+      )
+      return cursor.fetchone()
+
+  def mark_outbound_delivering(self, document_id: UUID) -> None:
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        """
+        update midwest_sim.outbound_edi_documents
+        set processing_status = 'DELIVERING',
+            attempt_count = attempt_count + 1,
+            last_attempt_at = now(),
+            updated_at = now()
+        where id = %s
+        """,
+        (document_id,),
+      )
+
+  def mark_outbound_delivered(self, document_id: UUID) -> None:
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        """
+        update midwest_sim.outbound_edi_documents
+        set processing_status = 'DELIVERED',
+            delivered_at = now(),
+            updated_at = now()
+        where id = %s
+        """,
+        (document_id,),
+      )
+
+  def mark_outbound_failed(self, document_id: UUID, error_code: str, message: str) -> None:
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        """
+        update midwest_sim.outbound_edi_documents
+        set processing_status = 'FAILED',
+            error_code = %s,
+            safe_error_message = %s,
+            updated_at = now()
+        where id = %s
+        """,
+        (error_code, message, document_id),
+      )

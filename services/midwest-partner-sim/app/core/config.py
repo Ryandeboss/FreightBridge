@@ -12,6 +12,11 @@ class Settings(BaseSettings):
     default=None,
     alias='MIDWEST_API_READONLY_TOKEN',
   )
+  freightbridge_api_base_url: str | None = Field(default=None, alias='FREIGHTBRIDGE_API_BASE_URL')
+  freightbridge_midwest_bearer_token: str | None = Field(
+    default=None,
+    alias='FREIGHTBRIDGE_MIDWEST_BEARER_TOKEN',
+  )
 
   model_config = SettingsConfigDict(
     env_file='.env',

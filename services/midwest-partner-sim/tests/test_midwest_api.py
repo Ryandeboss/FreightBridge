@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -7,14 +8,22 @@ from fastapi.testclient import TestClient
 from app.api.dependencies import get_load_repository
 from app.api.routes import readiness
 from app.core.config import get_settings
+from app.edi.generator_990 import ControlNumbers, Midwest990Source, generate_990
 from app.edi import parse_midwest_204
 from app.infrastructure import database
 from app.main import app
 from app.repositories.loads import DuplicateLoadError
+from app.repositories.loads import LoadNotFoundError, TenderAlreadyDecidedError
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 MIDWEST_204 = (PROJECT_ROOT / 'sample-data' / 'x12' / 'midwest' / '204-valid.edi').read_text(
+  encoding='utf-8'
+)
+MIDWEST_990_ACCEPTED = (PROJECT_ROOT / 'sample-data' / 'x12' / 'midwest' / '990-accepted.edi').read_text(
+  encoding='utf-8'
+)
+MIDWEST_990_REJECTED = (PROJECT_ROOT / 'sample-data' / 'x12' / 'midwest' / '990-rejected.edi').read_text(
   encoding='utf-8'
 )
 
@@ -114,6 +123,138 @@ def test_get_load_returns_midwest_owned_shape() -> None:
   assert body['carrierLoadNumber'] is None
 
 
+def test_990_generator_matches_golden_accepted_and_rejected_fixtures() -> None:
+  decided_at = datetime(2026, 9, 19, 14, 45, tzinfo=timezone.utc)
+  accepted = generate_990(
+    Midwest990Source(
+      cust_ship_no='LOAD500',
+      bol_ref='BOL900',
+      po_ref='PO111',
+      decision='ACCEPTED',
+      carrier_load_no='MWC900500',
+      reason_code=None,
+      decided_at=decided_at,
+    ),
+    ControlNumbers('000000906', '906', '0001'),
+  )
+  rejected = generate_990(
+    Midwest990Source(
+      cust_ship_no='LOAD500',
+      bol_ref='BOL900',
+      po_ref='PO111',
+      decision='REJECTED',
+      carrier_load_no=None,
+      reason_code='NO_CAP',
+      decided_at=decided_at,
+    ),
+    ControlNumbers('000000916', '916', '0001'),
+  )
+
+  assert _compact_x12(accepted) == _compact_x12(MIDWEST_990_ACCEPTED)
+  assert _compact_x12(rejected) == _compact_x12(MIDWEST_990_REJECTED)
+
+
+def test_create_accepted_tender_decision_generates_outbound_990() -> None:
+  repository = FakeRepository()
+  repository.create_load_from_204(parse_midwest_204(MIDWEST_204))
+  app.dependency_overrides[get_load_repository] = lambda: repository
+
+  response = TestClient(app).post(
+    '/v1/loads/LOAD500/tender-decisions',
+    headers={'Authorization': 'Bearer test-token'},
+    json={'decision': 'ACCEPTED'},
+  )
+
+  assert response.status_code == 200
+  body = response.json()
+  assert body['customerShipmentNumber'] == 'LOAD500'
+  assert body['decision'] == 'ACCEPTED'
+  assert body['carrierLoadNumber'] == 'MWC900500'
+  assert 'ST*990*0001' in repository.outbound['raw_x12']
+  assert repository.load_tender_status == 'ACCEPTED'
+
+
+def test_create_rejected_tender_decision_requires_reason() -> None:
+  repository = FakeRepository()
+  repository.create_load_from_204(parse_midwest_204(MIDWEST_204))
+  app.dependency_overrides[get_load_repository] = lambda: repository
+
+  response = TestClient(app).post(
+    '/v1/loads/LOAD500/tender-decisions',
+    headers={'Authorization': 'Bearer test-token'},
+    json={'decision': 'REJECTED'},
+  )
+
+  assert response.status_code == 422
+
+
+def test_create_tender_decision_unknown_and_duplicate_loads() -> None:
+  repository = FakeRepository()
+  app.dependency_overrides[get_load_repository] = lambda: repository
+
+  missing = TestClient(app).post(
+    '/v1/loads/LOAD404/tender-decisions',
+    headers={'Authorization': 'Bearer test-token'},
+    json={'decision': 'ACCEPTED'},
+  )
+  assert missing.status_code == 404
+  assert missing.json()['error']['code'] == 'LOAD_NOT_FOUND'
+
+  repository.create_load_from_204(parse_midwest_204(MIDWEST_204))
+  assert TestClient(app).post(
+    '/v1/loads/LOAD500/tender-decisions',
+    headers={'Authorization': 'Bearer test-token'},
+    json={'decision': 'ACCEPTED'},
+  ).status_code == 200
+  duplicate = TestClient(app).post(
+    '/v1/loads/LOAD500/tender-decisions',
+    headers={'Authorization': 'Bearer test-token'},
+    json={'decision': 'REJECTED', 'reasonCode': 'NO_CAP'},
+  )
+
+  assert duplicate.status_code == 409
+  assert duplicate.json()['error']['code'] == 'TENDER_ALREADY_DECIDED'
+
+
+def test_dispatch_tender_response_direct_delivers_generated_990(monkeypatch) -> None:
+  repository = FakeRepository()
+  repository.create_load_from_204(parse_midwest_204(MIDWEST_204))
+  repository.create_tender_decision(
+    'LOAD500',
+    type('Decision', (), {'decision': type('Value', (), {'value': 'ACCEPTED'})(), 'reason_code': None, 'message': None})(),
+  )
+  app.dependency_overrides[get_load_repository] = lambda: repository
+  monkeypatch.setenv('FREIGHTBRIDGE_API_BASE_URL', 'https://freightbridge.example.test')
+  monkeypatch.setenv('FREIGHTBRIDGE_MIDWEST_BEARER_TOKEN', 'midwest-outbound-token')
+  get_settings.cache_clear()
+  captured: dict[str, object] = {}
+
+  class FakeResponse:
+    status_code = 202
+
+    def json(self):
+      return {'status': 'ACCEPTED'}
+
+  def fake_post(url: str, **kwargs):
+    captured['url'] = url
+    captured.update(kwargs)
+    return FakeResponse()
+
+  monkeypatch.setattr('app.api.routes.tender_decisions.httpx.post', fake_post)
+
+  response = TestClient(app).post(
+    '/v1/loads/LOAD500/tender-response/dispatch-direct',
+    headers={'Authorization': 'Bearer test-token', 'X-Correlation-ID': 'corr-990'},
+  )
+
+  assert response.status_code == 202
+  assert response.json()['status'] == 'DELIVERED_TO_FREIGHTBRIDGE_TEST_GATEWAY'
+  assert captured['url'] == 'https://freightbridge.example.test/api/integrations/midwest/tender-responses'
+  assert captured['headers']['Authorization'] == 'Bearer midwest-outbound-token'
+  assert captured['content'].decode('utf-8') == repository.outbound['raw_x12']
+  assert repository.outbound_statuses == ['DELIVERING', 'DELIVERED']
+
+
 @pytest.mark.parametrize(
   ('payload', 'expected_code'),
   [
@@ -169,6 +310,10 @@ class FakeRepository:
     self.load = None
     self.accepted_documents = 0
     self.rejected_documents = 0
+    self.load_tender_status = 'PENDING'
+    self.carrier_load_number = None
+    self.outbound = None
+    self.outbound_statuses: list[str] = []
 
   def create_inbound_document(self, **kwargs):
     return uuid4()
@@ -184,6 +329,53 @@ class FakeRepository:
       raise DuplicateLoadError(parsed.cust_ship_no)
     self.load = parsed
     return uuid4()
+
+  def create_tender_decision(self, cust_ship_no, request):
+    if self.load is None or self.load.cust_ship_no != cust_ship_no:
+      raise LoadNotFoundError(cust_ship_no)
+    if self.load_tender_status != 'PENDING':
+      raise TenderAlreadyDecidedError(cust_ship_no)
+
+    decision = request.decision.value
+    decided_at = datetime(2026, 9, 19, 14, 45, tzinfo=timezone.utc)
+    self.carrier_load_number = 'MWC900500' if decision == 'ACCEPTED' else None
+    self.load_tender_status = decision
+    raw_x12 = generate_990(
+      Midwest990Source(
+        cust_ship_no=cust_ship_no,
+        bol_ref=self.load.bol_ref,
+        po_ref=self.load.po_ref,
+        decision=decision,
+        carrier_load_no=self.carrier_load_number,
+        reason_code=request.reason_code,
+        decided_at=decided_at,
+      ),
+      ControlNumbers('000000906', '906', '0001'),
+    )
+    self.outbound = {'id': uuid4(), 'raw_x12': raw_x12}
+    return {
+      'customer_shipment_number': cust_ship_no,
+      'decision': decision,
+      'carrier_load_number': self.carrier_load_number,
+      'reason_code': request.reason_code,
+      'message': request.message,
+      'decided_at': decided_at,
+      'outbound_document_id': uuid4(),
+    }
+
+  def fetch_outbound_990(self, cust_ship_no):
+    if self.load is None or self.load.cust_ship_no != cust_ship_no:
+      return None
+    return self.outbound
+
+  def mark_outbound_delivering(self, document_id) -> None:
+    self.outbound_statuses.append('DELIVERING')
+
+  def mark_outbound_delivered(self, document_id) -> None:
+    self.outbound_statuses.append('DELIVERED')
+
+  def mark_outbound_failed(self, document_id, error_code, message) -> None:
+    self.outbound_statuses.append('FAILED')
 
   def fetch_load(self, cust_ship_no):
     if self.load is None or self.load.cust_ship_no != cust_ship_no:
@@ -213,6 +405,10 @@ class FakeRepository:
       ),
       pickupAppointment=self.load.pickup_appt_ts,
       deliveryAppointment=self.load.delivery_appt_ts,
-      tenderStatus='PENDING',
-      carrierLoadNumber=None,
+      tenderStatus=self.load_tender_status,
+      carrierLoadNumber=self.carrier_load_number,
     )
+
+
+def _compact_x12(payload: str) -> str:
+  return payload.replace('\r', '').replace('\n', '').strip()

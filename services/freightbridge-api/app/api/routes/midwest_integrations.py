@@ -7,8 +7,10 @@ from fastapi.responses import JSONResponse
 
 from app.infrastructure.database import DatabaseConnectivityError, connect
 from app.integrations.common.correlation import CORRELATION_HEADER, resolve_correlation_id
+from app.integrations.common.errors import IntegrationAPIError
 from app.integrations.midwest.dispatch_service import MidwestDirectDispatchService
 from app.integrations.midwest.errors import Midwest204MappingError, MidwestShipmentNotFoundError
+from app.integrations.midwest.inbound_990_service import Midwest990IngestionService
 from app.integrations.midwest.service import Midwest204DependencyError, Midwest204GenerationService
 from app.integrations.midwest.transport import MidwestDeliveryError, MidwestHttpTestTransport
 
@@ -48,6 +50,27 @@ def get_midwest_direct_dispatch_service() -> Iterator[MidwestDirectDispatchServi
         'error': {
           'code': 'DEPENDENCY_ERROR',
           'message': 'A downstream dependency failed while dispatching the Midwest 204.',
+        }
+      },
+    ) from exc
+
+
+def get_midwest_990_ingestion_service() -> Iterator[Midwest990IngestionService]:
+  try:
+    with ExitStack() as stack:
+      audit_connection = stack.enter_context(connect())
+      business_connection = stack.enter_context(connect())
+      yield Midwest990IngestionService(
+        audit_connection=audit_connection,
+        business_connection=business_connection,
+      )
+  except DatabaseConnectivityError as exc:
+    raise HTTPException(
+      status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+      detail={
+        'error': {
+          'code': 'DEPENDENCY_ERROR',
+          'message': 'A downstream dependency failed while ingesting the Midwest 990.',
         }
       },
     ) from exc
@@ -163,4 +186,38 @@ def dispatch_midwest_load_tender_direct(
     status_code=status.HTTP_202_ACCEPTED,
     content=result.response_body(),
     headers={CORRELATION_HEADER: correlation_id},
+  )
+
+
+@router.post('/tender-responses', status_code=status.HTTP_202_ACCEPTED)
+async def receive_midwest_tender_response(
+  request: Request,
+  service: Midwest990IngestionService = Depends(get_midwest_990_ingestion_service),
+) -> JSONResponse:
+  correlation_id = resolve_correlation_id(request.headers.get(CORRELATION_HEADER))
+  raw_body = await request.body()
+
+  try:
+    result = service.ingest(
+      raw_body=raw_body,
+      authorization_header=request.headers.get('Authorization'),
+      correlation_id=correlation_id,
+    )
+  except IntegrationAPIError as exc:
+    return JSONResponse(
+      status_code=exc.status_code,
+      content={
+        'error': {
+          'code': exc.code,
+          'message': exc.message,
+          'correlationId': exc.correlation_id,
+        }
+      },
+      headers={CORRELATION_HEADER: exc.correlation_id},
+    )
+
+  return JSONResponse(
+    status_code=status.HTTP_202_ACCEPTED,
+    content=result.response_body(),
+    headers={CORRELATION_HEADER: result.correlation_id},
   )

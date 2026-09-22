@@ -20,10 +20,19 @@ from app.domain import (
   ShipmentEvent,
   ShipmentReference,
   ShipmentStatus,
+  TenderResponse,
   TenderStatus,
   Transport,
   apply_shipment_event,
 )
+
+
+class ShipmentNotFoundForTenderError(Exception):
+  pass
+
+
+class TenderAlreadyDecidedError(Exception):
+  pass
 
 
 class FreightBridgeRepository:
@@ -280,6 +289,67 @@ class FreightBridgeRepository:
       )
       return True
 
+  def record_tender_response(self, response: TenderResponse, shipment_number: str) -> dict[str, UUID]:
+    with self.connection.cursor(row_factory=dict_row) as cursor:
+      cursor.execute(
+        """
+          SELECT id, tender_status
+          FROM shipments
+          WHERE shipment_number = %s
+          FOR UPDATE
+        """,
+        (shipment_number,),
+      )
+      shipment = cursor.fetchone()
+      if shipment is None:
+        raise ShipmentNotFoundForTenderError(shipment_number)
+      if shipment['tender_status'] != TenderStatus.PENDING.value:
+        raise TenderAlreadyDecidedError(shipment_number)
+
+      cursor.execute(
+        """
+          INSERT INTO tender_responses (
+            shipment_id,
+            carrier_partner_id,
+            decision,
+            carrier_load_number,
+            reason_code,
+            message,
+            decided_at,
+            received_at,
+            source_transaction_id
+          )
+          VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+          RETURNING id
+        """,
+        (
+          shipment['id'],
+          response.carrier_partner_id,
+          response.decision.value,
+          response.carrier_load_number,
+          response.reason_code,
+          response.message,
+          response.decided_at,
+          response.received_at,
+          response.source_transaction_id,
+        ),
+      )
+      tender_response_id = cursor.fetchone()['id']
+
+      cursor.execute(
+        """
+          UPDATE shipments
+          SET tender_status = %s,
+              updated_at = now()
+          WHERE id = %s
+        """,
+        (response.decision.value, shipment['id']),
+      )
+      return {
+        'id': tender_response_id,
+        'shipment_id': shipment['id'],
+      }
+
   @staticmethod
   def _location_from_stop(stop: dict[str, object]) -> CanonicalLocation:
     return CanonicalLocation(
@@ -359,6 +429,38 @@ class IntegrationRepository:
           WHERE id = %s
         """,
         (business_identifier, transaction_id),
+      )
+
+  def update_x12_metadata(
+    self,
+    transaction_id: UUID,
+    *,
+    business_identifier: str,
+    x12_version: str,
+    interchange_control_number: str,
+    group_control_number: str,
+    transaction_control_number: str,
+  ) -> None:
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        """
+          UPDATE integration_transactions
+          SET business_identifier = %s,
+              x12_version = %s,
+              interchange_control_number = %s,
+              group_control_number = %s,
+              transaction_control_number = %s,
+              updated_at = now()
+          WHERE id = %s
+        """,
+        (
+          business_identifier,
+          x12_version,
+          interchange_control_number,
+          group_control_number,
+          transaction_control_number,
+          transaction_id,
+        ),
       )
 
   def update_processing_state(

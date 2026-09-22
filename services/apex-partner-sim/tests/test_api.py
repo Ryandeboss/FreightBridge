@@ -38,6 +38,26 @@ class FakeApexRepository:
     self.tender_history.append(response)
     return uuid4()
 
+  def fetch_tender_status(self, load_id: str):
+    if load_id not in self.loads:
+      return None
+    latest = self.tender_history[-1] if self.tender_history else None
+    return {
+      'loadId': load_id,
+      'currentTenderDecision': latest.decision.value if latest else None,
+      'updatedAt': self.loads[load_id].updated_at.isoformat(),
+      'latestResponse': {
+        'eventId': str(uuid4()),
+        'decision': latest.decision.value,
+        'carrierCode': latest.carrier_code,
+        'carrierLoadNumber': latest.carrier_load_number,
+        'reasonCode': latest.reason_code,
+        'message': latest.message,
+        'decidedAt': latest.decided_at.isoformat(),
+        'receivedAt': datetime.now(timezone.utc).isoformat(),
+      } if latest else None,
+    }
+
   def record_shipment_status(self, shipment_status: ApexShipmentStatus):
     if shipment_status.load_id not in self.loads:
       return None
@@ -377,6 +397,22 @@ def test_tender_response_unknown_load_returns_404(client: TestClient) -> None:
 
   assert response.status_code == 404
   assert response.json()['error']['code'] == 'LOAD_NOT_FOUND'
+
+
+def test_get_tender_status_returns_latest_tender_response(
+  client: TestClient,
+  fake_repository: FakeApexRepository,
+) -> None:
+  seed_load(fake_repository)
+  client.post('/v1/tender-responses', headers=auth_headers(), json=tender_payload('ACCEPTED'))
+
+  response = client.get('/v1/loads/LOAD500/tender-status', headers=auth_headers(READONLY_TOKEN))
+
+  assert response.status_code == 200
+  body = response.json()
+  assert body['loadId'] == 'LOAD500'
+  assert body['currentTenderDecision'] == 'ACCEPTED'
+  assert body['latestResponse']['carrierLoadNumber'] == 'MWC900500'
 
 
 @pytest.mark.parametrize('status_code', ['PICKED_UP', 'IN_TRANSIT', 'ARRIVED', 'DELIVERED'])

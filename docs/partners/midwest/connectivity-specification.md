@@ -8,7 +8,14 @@ Milestone 9 adds a temporary direct HTTPS endpoint on the Midwest simulator for 
 POST /v1/edi/inbound/204
 ```
 
-That endpoint accepts raw X12 over HTTP so FreightBridge can exercise an end-to-end 204 delivery flow before SFTP exists. It is not the final Midwest production transport contract.
+Milestone 10 adds the temporary reverse path:
+
+```text
+POST /v1/loads/{customer_shipment_number}/tender-response/dispatch-direct
+POST /api/integrations/midwest/tender-responses
+```
+
+These endpoints accept/send raw X12 over HTTP so FreightBridge can exercise an end-to-end 204/990 tender flow before SFTP exists. They are not the final Midwest production transport contract.
 
 ## Transport
 
@@ -26,8 +33,10 @@ Temporary test harness:
 
 - Protocol: HTTPS
 - Authentication: bearer token
-- FreightBridge endpoint: `POST /api/integrations/midwest/load-tenders/{shipment_number}/dispatch-direct`
-- Midwest endpoint: `POST /v1/edi/inbound/204`
+- FreightBridge outbound 204 endpoint: `POST /api/integrations/midwest/load-tenders/{shipment_number}/dispatch-direct`
+- Midwest inbound 204 endpoint: `POST /v1/edi/inbound/204`
+- Midwest outbound 990 endpoint: `POST /v1/loads/{customer_shipment_number}/tender-response/dispatch-direct`
+- FreightBridge inbound 990 endpoint: `POST /api/integrations/midwest/tender-responses`
 - Payload format: raw `application/edi-x12`
 - Replacement target: future SFTP delivery
 

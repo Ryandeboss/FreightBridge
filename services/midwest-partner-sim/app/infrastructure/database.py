@@ -7,6 +7,8 @@ from app.core.config import get_settings
 REQUIRED_MIDWEST_TABLES: tuple[str, ...] = (
   'loads',
   'inbound_edi_documents',
+  'tender_decisions',
+  'outbound_edi_documents',
 )
 
 
