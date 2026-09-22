@@ -4,6 +4,10 @@ from app.integrations.midwest.control_numbers import (
   TimestampControlNumberProvider,
   X12ControlNumbers,
 )
+from app.integrations.midwest.dispatch_service import (
+  MidwestDirectDispatchResult,
+  MidwestDirectDispatchService,
+)
 from app.integrations.midwest.errors import Midwest204ErrorCode, Midwest204MappingError
 from app.integrations.midwest.mapping_204 import (
   build_midwest_204_interchange,
@@ -13,6 +17,12 @@ from app.integrations.midwest.mapping_204 import (
 )
 from app.integrations.midwest.models import Midwest204GenerationResult
 from app.integrations.midwest.service import Midwest204GenerationService
+from app.integrations.midwest.transport import (
+  MidwestDeliveryError,
+  MidwestDeliveryResult,
+  MidwestHttpTestTransport,
+  MidwestOutboundTransport,
+)
 
 __all__ = [
   'ControlNumberProvider',
@@ -21,6 +31,12 @@ __all__ = [
   'Midwest204GenerationResult',
   'Midwest204GenerationService',
   'Midwest204MappingError',
+  'MidwestDeliveryError',
+  'MidwestDeliveryResult',
+  'MidwestDirectDispatchResult',
+  'MidwestDirectDispatchService',
+  'MidwestHttpTestTransport',
+  'MidwestOutboundTransport',
   'TimestampControlNumberProvider',
   'X12ControlNumbers',
   'build_midwest_204_interchange',

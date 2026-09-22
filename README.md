@@ -1,6 +1,6 @@
 # FreightBridge
 
-FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current state includes the FreightBridge foundation, an independent Apex REST/JSON simulator, the first Apex-to-FreightBridge canonical shipment ingestion path, a generic X12 structural foundation, and Midwest 204 generation from canonical shipments; SFTP workflows, Midwest simulator behavior, 990/214/997 processing, and end-to-end carrier workflows remain intentionally deferred.
+FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current state includes the FreightBridge foundation, independent Apex and Midwest simulators, Apex-to-FreightBridge canonical shipment ingestion, a generic X12 structural foundation, Midwest 204 generation from canonical shipments, and temporary direct Midwest 204 delivery over a REST test harness; SFTP workflows and 990/214/997 processing remain intentionally deferred.
 
 ## Planned Architecture
 
@@ -30,12 +30,12 @@ Apex Simulator
       | HTTPS REST/JSON + bearer
       v
 FreightBridge
-  [implemented canonical ingestion + 204 generation preview]
+  [implemented canonical ingestion + 204 generation/direct test delivery]
       |
-      | generated X12 204, future SFTP
+      | temporary REST test harness carrying X12 204
       v
 Midwest
-  [contract + future simulator]
+  [implemented simulator]
 ```
 
 See [docs/architecture/initial-architecture.md](docs/architecture/initial-architecture.md) for the first architecture diagram.
@@ -57,7 +57,7 @@ apps/
 services/
   freightbridge-api/      FastAPI integration API foundation
   apex-partner-sim/       FastAPI Apex REST/JSON partner simulator
-  midwest-partner-sim/    Placeholder for future Midwest simulator
+  midwest-partner-sim/    FastAPI Midwest X12 partner simulator
 docs/
   architecture/           System architecture notes
   partners/               Synthetic partner contracts and profiles
@@ -108,6 +108,17 @@ pytest
 uvicorn app.main:app --reload
 ```
 
+Midwest simulator:
+
+```bash
+cd services/midwest-partner-sim
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+pytest
+uvicorn app.main:app --reload
+```
+
 The FreightBridge and Apex backends both expose `GET /health` and `GET /readiness`. Apex business endpoints require bearer-token authentication.
 
 ## Environment Variables
@@ -144,6 +155,18 @@ Apex simulator:
 - `APEX_API_READONLY_TOKEN`
 - `FREIGHTBRIDGE_API_BASE_URL`
 - `FREIGHTBRIDGE_APEX_BEARER_TOKEN`
+
+Midwest simulator:
+
+- `APP_ENV`
+- `DATABASE_URL`
+- `MIDWEST_API_BEARER_TOKEN`
+- `MIDWEST_API_READONLY_TOKEN`
+
+FreightBridge Midwest direct test harness:
+
+- `MIDWEST_SIM_BASE_URL`
+- `MIDWEST_SIM_BEARER_TOKEN`
 
 Railway/SFTP placeholders:
 
@@ -188,6 +211,7 @@ Major Milestone 3 contract files:
 - [Milestone 6 Apex -> FreightBridge acceptance](docs/testing/milestone-6-apex-freightbridge-integration.md)
 - [Milestone 7 Generic X12 foundation acceptance](docs/testing/milestone-7-x12-foundation.md)
 - [Milestone 8 Midwest 204 generation acceptance](docs/testing/milestone-8-midwest-204-generation.md)
+- [Milestone 9 Midwest simulator acceptance](docs/testing/milestone-9-midwest-simulator.md)
 
 Sample contract fixtures:
 
@@ -219,6 +243,7 @@ Implemented:
 - Integration transaction, processing log, and integration error audit for Apex ingestion.
 - Generic X12 parsing, envelope validation, and serialization foundation.
 - Midwest-specific canonical shipment -> X12 204 generation preview endpoint.
+- Independent Midwest Carrier simulator with temporary direct REST/X12 delivery harness.
 
 Specified:
 
@@ -231,7 +256,6 @@ Planned:
 
 - Generic/configurable mapping engine.
 - SFTP exchange.
-- Midwest simulator.
 - 990, 214, and 997 processing.
 - Shipment persistence and analyst workflow features.
 

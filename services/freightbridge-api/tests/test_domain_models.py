@@ -138,7 +138,7 @@ def test_integration_transaction_models() -> None:
 
   assert json_transaction.x12_version is None
 
-  x12_transaction = IntegrationTransaction(
+  sftp_x12_transaction = IntegrationTransaction(
     correlation_id='corr-LOAD500-204',
     partner_id=partner_id,
     direction=IntegrationDirection.OUTBOUND,
@@ -150,17 +150,18 @@ def test_integration_transaction_models() -> None:
     interchange_control_number='000000905',
   )
 
-  assert x12_transaction.message_format == MessageFormat.X12
+  assert sftp_x12_transaction.message_format == MessageFormat.X12
 
-  with pytest.raises(ValidationError):
-    IntegrationTransaction(
-      correlation_id='bad',
-      partner_id=partner_id,
-      direction=IntegrationDirection.INBOUND,
-      transport=Transport.REST,
-      message_format=MessageFormat.X12,
-      document_type='204',
-    )
+  rest_x12_transaction = IntegrationTransaction(
+    correlation_id='corr-LOAD500-direct',
+    partner_id=partner_id,
+    direction=IntegrationDirection.OUTBOUND,
+    transport=Transport.REST,
+    message_format=MessageFormat.X12,
+    document_type='204',
+  )
+
+  assert rest_x12_transaction.message_format == MessageFormat.X12
 
 
 def test_safe_integration_error_structure() -> None:

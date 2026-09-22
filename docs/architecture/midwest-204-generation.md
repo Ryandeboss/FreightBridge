@@ -59,4 +59,12 @@ POST /api/integrations/midwest/load-tenders/{shipment_number}/generate
 
 The endpoint fetches the canonical shipment, generates a Midwest 204, validates the envelope, and returns metadata plus serialized X12. It does not send a file, create SFTP credentials, or mark an outbound delivery as complete.
 
-No database migration is required.
+Milestone 9 adds a separate direct test-harness endpoint:
+
+```text
+POST /api/integrations/midwest/load-tenders/{shipment_number}/dispatch-direct
+```
+
+This endpoint generates the same Midwest 204 and delivers it to the independent Midwest simulator over HTTPS as raw `application/edi-x12`. The transport is named `REST_TEST_HARNESS` in responses and audit logs. It is intentionally separate from the future SFTP transport.
+
+Generation-only preview required no database migration. Direct simulator delivery requires `20260922_003_create_midwest_simulator.sql` for the new `midwest_sim` schema and the temporary REST/X12 audit allowance.

@@ -2,6 +2,14 @@
 
 This document describes the future SFTP integration for synthetic Midwest Carrier. Railway/SFTPGo must not be configured or activated during this milestone.
 
+Milestone 9 adds a temporary direct HTTPS endpoint on the Midwest simulator for development and integration testing:
+
+```text
+POST /v1/edi/inbound/204
+```
+
+That endpoint accepts raw X12 over HTTP so FreightBridge can exercise an end-to-end 204 delivery flow before SFTP exists. It is not the final Midwest production transport contract.
+
 ## Transport
 
 - Protocol: SFTP
@@ -13,6 +21,15 @@ This document describes the future SFTP integration for synthetic Midwest Carrie
 - Username placeholder: `mwcx_freightbridge`
 
 No real hosts, IP addresses, passwords, ports, private keys, or credentials are included in this repository.
+
+Temporary test harness:
+
+- Protocol: HTTPS
+- Authentication: bearer token
+- FreightBridge endpoint: `POST /api/integrations/midwest/load-tenders/{shipment_number}/dispatch-direct`
+- Midwest endpoint: `POST /v1/edi/inbound/204`
+- Payload format: raw `application/edi-x12`
+- Replacement target: future SFTP delivery
 
 ## Directory Perspective
 

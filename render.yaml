@@ -21,6 +21,10 @@ services:
         sync: false
       - key: APEX_INBOUND_BEARER_TOKEN
         sync: false
+      - key: MIDWEST_SIM_BASE_URL
+        sync: false
+      - key: MIDWEST_SIM_BEARER_TOKEN
+        sync: false
   - type: web
     name: apex-partner-sim
     env: python
@@ -40,4 +44,20 @@ services:
       - key: FREIGHTBRIDGE_API_BASE_URL
         sync: false
       - key: FREIGHTBRIDGE_APEX_BEARER_TOKEN
+        sync: false
+  - type: web
+    name: midwest-partner-sim
+    env: python
+    plan: free
+    rootDir: services/midwest-partner-sim
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: MIDWEST_API_BEARER_TOKEN
+        sync: false
+      - key: MIDWEST_API_READONLY_TOKEN
         sync: false

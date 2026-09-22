@@ -1,0 +1,113 @@
+{
+  "info": {
+    "name": "Midwest Partner Simulator",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Midwest Health",
+      "request": {
+        "method": "GET",
+        "url": "{{midwestBaseUrl}}/health"
+      }
+    },
+    {
+      "name": "Midwest Readiness",
+      "request": {
+        "method": "GET",
+        "url": "{{midwestBaseUrl}}/readiness"
+      }
+    },
+    {
+      "name": "Midwest Receive Valid 204",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{midwestBearerToken}}" },
+          { "key": "Content-Type", "value": "application/edi-x12" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "ISA*00*          *00*          *ZZ*FREIGHTBRIDGE  *ZZ*MWCX           *260919*1400*U*00401*000000905*0*T*:~\nGS*SM*FREIGHTBRIDGE*MWCX*20260919*1400*905*X*004010~\nST*204*0001~\nB2**MWCX**LOAD500**PP~\nL11*BOL900*BM~\nL11*PO111*PO~\nG62*37*20261001*I*1400~\nG62*38*20261002*K*1800~\nS5*1*LD~\nN1*SH*ABC Factory~\nN3*200 Industrial Rd~\nN4*Aurora*IL*60505~\nS5*2*UL~\nN1*CN*XYZ Warehouse~\nN3*900 Commerce St~\nN4*Detroit*MI*48201~\nL3*42000*G***22~\nSE*16*0001~\nGE*1*905~\nIEA*1*000000905~"
+        },
+        "url": "{{midwestBaseUrl}}/v1/edi/inbound/204"
+      }
+    },
+    {
+      "name": "Midwest Get LOAD500",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{midwestBearerToken}}" }
+        ],
+        "url": "{{midwestBaseUrl}}/v1/loads/LOAD500"
+      }
+    },
+    {
+      "name": "Midwest Missing Token",
+      "request": {
+        "method": "GET",
+        "url": "{{midwestBaseUrl}}/v1/loads/LOAD500"
+      }
+    },
+    {
+      "name": "Midwest Invalid Token",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer invalid-token" }
+        ],
+        "url": "{{midwestBaseUrl}}/v1/loads/LOAD500"
+      }
+    },
+    {
+      "name": "Midwest Malformed X12",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{midwestBearerToken}}" },
+          { "key": "Content-Type", "value": "application/edi-x12" }
+        ],
+        "body": { "mode": "raw", "raw": "ISA*bad~" },
+        "url": "{{midwestBaseUrl}}/v1/edi/inbound/204"
+      }
+    },
+    {
+      "name": "Midwest Unsupported Version",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{midwestBearerToken}}" },
+          { "key": "Content-Type", "value": "application/edi-x12" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "ISA*00*          *00*          *ZZ*FREIGHTBRIDGE  *ZZ*MWCX           *260919*1400*U*00501*000000905*0*T*:~\nGS*SM*FREIGHTBRIDGE*MWCX*20260919*1400*905*X*004010~\nST*204*0001~\nB2**MWCX**LOAD500**PP~\nL11*BOL900*BM~\nL11*PO111*PO~\nG62*37*20261001*I*1400~\nG62*38*20261002*K*1800~\nS5*1*LD~\nN1*SH*ABC Factory~\nN3*200 Industrial Rd~\nN4*Aurora*IL*60505~\nS5*2*UL~\nN1*CN*XYZ Warehouse~\nN3*900 Commerce St~\nN4*Detroit*MI*48201~\nL3*42000*G***22~\nSE*16*0001~\nGE*1*905~\nIEA*1*000000905~"
+        },
+        "url": "{{midwestBaseUrl}}/v1/edi/inbound/204"
+      }
+    },
+    {
+      "name": "Midwest Duplicate LOAD500",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{midwestBearerToken}}" },
+          { "key": "Content-Type", "value": "application/edi-x12" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "Run after Midwest Receive Valid 204 with the same body."
+        },
+        "url": "{{midwestBaseUrl}}/v1/edi/inbound/204"
+      }
+    },
+    {
+      "name": "FreightBridge Dispatch Direct LOAD500",
+      "request": {
+        "method": "POST",
+        "url": "{{freightbridgeBaseUrl}}/api/integrations/midwest/load-tenders/LOAD500/dispatch-direct"
+      }
+    }
+  ]
+}

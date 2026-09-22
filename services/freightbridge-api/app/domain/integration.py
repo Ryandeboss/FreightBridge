@@ -42,7 +42,8 @@ class IntegrationTransaction(BaseModel):
   @model_validator(mode='after')
   def validate_transport_format(self) -> 'IntegrationTransaction':
     if self.transport == Transport.REST and self.message_format != MessageFormat.JSON:
-      raise ValueError('REST transactions use JSON in the MVP domain')
+      if self.message_format != MessageFormat.X12:
+        raise ValueError('REST transactions use JSON or X12 test-harness payloads')
     if self.transport == Transport.SFTP and self.message_format != MessageFormat.X12:
       raise ValueError('SFTP transactions use X12 in the MVP domain')
     return self

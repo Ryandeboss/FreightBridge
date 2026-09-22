@@ -12,10 +12,12 @@ All examples are synthetic.
 | Customer shipment number | `cust_ship_no` | string | Required | `LOAD500` | Customer or broker shipment identifier received in EDI |
 | Bill of lading | `bol_ref` | string | Required | `BOL900` | BOL reference from tender |
 | Purchase order reference | `po_ref` | string | Optional | `PO111` | Purchase order reference from tender |
-| Equipment code | `equip_code` | string | Required | `DV53` | Midwest equipment code for a 53-foot dry van |
+| Equipment code | `equip_code` | string | Nullable in current simulator | `DV53` | Midwest internal equipment code. The current FreightBridge 204 subset does not transmit equipment type. |
 | Gross weight | `gross_weight_lb` | decimal | Required | `42000` | Tendered shipment weight |
-| Piece count | `handling_units` | integer | Optional | `22` | Handling unit count |
-| Freight description | `freight_desc` | string | Required | `Packaged auto parts` | Commodity description used by dispatch |
+| Piece count | `handling_units` | integer | Required in current 204 subset | `22` | Handling unit count from the current L3 profile |
+| Freight description | `freight_desc` | string | Nullable in current simulator | `Packaged auto parts` | Midwest internal freight description. The current FreightBridge 204 subset does not transmit commodity description. |
+
+Current integration note: the Milestone 8/9 FreightBridge-to-Midwest 204 subset intentionally does not send equipment type or commodity description. Midwest simulator columns for those concepts remain nullable until the partner profile is expanded.
 
 ## Midwest Party and Stop Data
 
