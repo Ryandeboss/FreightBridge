@@ -12,7 +12,8 @@ from app.integrations.midwest.dispatch_service import MidwestDirectDispatchServi
 from app.integrations.midwest.errors import Midwest204MappingError, MidwestShipmentNotFoundError
 from app.integrations.midwest.inbound_990_service import Midwest990IngestionService
 from app.integrations.midwest.service import Midwest204DependencyError, Midwest204GenerationService
-from app.integrations.midwest.transport import MidwestDeliveryError, MidwestHttpTestTransport
+from app.integrations.midwest.sftp_poll_service import MidwestSftpOutboundPollService, MidwestSftpReadinessService
+from app.integrations.midwest.transport import MidwestDeliveryError, MidwestHttpTestTransport, MidwestSftpTransport
 
 router = APIRouter(prefix='/api/integrations/midwest', tags=['midwest integrations'])
 
@@ -55,6 +56,28 @@ def get_midwest_direct_dispatch_service() -> Iterator[MidwestDirectDispatchServi
     ) from exc
 
 
+def get_midwest_sftp_dispatch_service() -> Iterator[MidwestDirectDispatchService]:
+  try:
+    with ExitStack() as stack:
+      audit_connection = stack.enter_context(connect())
+      business_connection = stack.enter_context(connect())
+      yield MidwestDirectDispatchService(
+        audit_connection=audit_connection,
+        business_connection=business_connection,
+        transport=MidwestSftpTransport(),
+      )
+  except DatabaseConnectivityError as exc:
+    raise HTTPException(
+      status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+      detail={
+        'error': {
+          'code': 'DEPENDENCY_ERROR',
+          'message': 'A downstream dependency failed while dispatching the Midwest 204 via SFTP.',
+        }
+      },
+    ) from exc
+
+
 def get_midwest_990_ingestion_service() -> Iterator[Midwest990IngestionService]:
   try:
     with ExitStack() as stack:
@@ -74,6 +97,31 @@ def get_midwest_990_ingestion_service() -> Iterator[Midwest990IngestionService]:
         }
       },
     ) from exc
+
+
+def get_midwest_sftp_outbound_poll_service() -> Iterator[MidwestSftpOutboundPollService]:
+  try:
+    with ExitStack() as stack:
+      audit_connection = stack.enter_context(connect())
+      business_connection = stack.enter_context(connect())
+      yield MidwestSftpOutboundPollService(
+        audit_connection=audit_connection,
+        business_connection=business_connection,
+      )
+  except DatabaseConnectivityError as exc:
+    raise HTTPException(
+      status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+      detail={
+        'error': {
+          'code': 'DEPENDENCY_ERROR',
+          'message': 'A downstream dependency failed while polling Midwest SFTP outbound.',
+        }
+      },
+    ) from exc
+
+
+def get_midwest_sftp_readiness_service() -> MidwestSftpReadinessService:
+  return MidwestSftpReadinessService()
 
 
 @router.post('/load-tenders/{shipment_number}/generate', status_code=status.HTTP_200_OK)
@@ -189,6 +237,62 @@ def dispatch_midwest_load_tender_direct(
   )
 
 
+@router.post('/load-tenders/{shipment_number}/dispatch-sftp', status_code=status.HTTP_202_ACCEPTED)
+def dispatch_midwest_load_tender_sftp(
+  shipment_number: str,
+  request: Request,
+  service: MidwestDirectDispatchService = Depends(get_midwest_sftp_dispatch_service),
+) -> JSONResponse:
+  correlation_id = resolve_correlation_id(request.headers.get(CORRELATION_HEADER))
+  try:
+    result = service.dispatch(
+      shipment_number=shipment_number,
+      correlation_id=correlation_id,
+    )
+  except MidwestShipmentNotFoundError:
+    return JSONResponse(
+      status_code=status.HTTP_404_NOT_FOUND,
+      content={'error': {'code': 'SHIPMENT_NOT_FOUND', 'message': 'Canonical shipment was not found.'}},
+      headers={CORRELATION_HEADER: correlation_id},
+    )
+  except Midwest204MappingError as exc:
+    return JSONResponse(
+      status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+      content={
+        'error': {
+          'code': 'MIDWEST_204_MAPPING_ERROR',
+          'message': exc.message,
+          'detailCode': exc.code.value,
+          'field': exc.field,
+        }
+      },
+      headers={CORRELATION_HEADER: correlation_id},
+    )
+  except MidwestDeliveryError as exc:
+    return JSONResponse(
+      status_code=exc.status_code,
+      content={'error': {'code': exc.code, 'message': exc.message}},
+      headers={CORRELATION_HEADER: correlation_id},
+    )
+  except (DatabaseConnectivityError, Midwest204DependencyError, psycopg.Error):
+    return JSONResponse(
+      status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+      content={
+        'error': {
+          'code': 'DEPENDENCY_ERROR',
+          'message': 'A downstream dependency failed while dispatching the Midwest 204 via SFTP.',
+        }
+      },
+      headers={CORRELATION_HEADER: correlation_id},
+    )
+
+  return JSONResponse(
+    status_code=status.HTTP_202_ACCEPTED,
+    content=result.response_body(),
+    headers={CORRELATION_HEADER: correlation_id},
+  )
+
+
 @router.post('/tender-responses', status_code=status.HTTP_202_ACCEPTED)
 async def receive_midwest_tender_response(
   request: Request,
@@ -221,3 +325,32 @@ async def receive_midwest_tender_response(
     content=result.response_body(),
     headers={CORRELATION_HEADER: result.correlation_id},
   )
+
+
+@router.post('/sftp/outbound/poll', status_code=status.HTTP_202_ACCEPTED)
+def poll_midwest_sftp_outbound(
+  request: Request,
+  service: MidwestSftpOutboundPollService = Depends(get_midwest_sftp_outbound_poll_service),
+) -> JSONResponse:
+  correlation_id = resolve_correlation_id(request.headers.get(CORRELATION_HEADER))
+  result = service.poll(correlation_id=correlation_id)
+  return JSONResponse(
+    status_code=status.HTTP_202_ACCEPTED,
+    content=result.response_body(),
+    headers={CORRELATION_HEADER: correlation_id},
+  )
+
+
+@router.get('/sftp/readiness', status_code=status.HTTP_200_OK)
+def midwest_sftp_readiness(
+  service: MidwestSftpReadinessService = Depends(get_midwest_sftp_readiness_service),
+) -> JSONResponse:
+  try:
+    result = service.check()
+  except Exception:
+    result = {
+      'status': 'not_ready',
+      'transport': 'SFTP',
+      'directories': {'inbound': False, 'outbound': False, 'archive': False, 'error': False},
+    }
+  return JSONResponse(status_code=status.HTTP_200_OK, content=result)

@@ -9,7 +9,7 @@ Where details are simplified or uncertain, they are documented as FreightBridge 
 - X12 version: `004010`
 - Supported MVP transaction sets: `204`, `990`, `214`, `997`
 - Future / stretch transaction: `210` freight invoice
-- Transport: future SFTP
+- Transport: Railway/SFTPGo SFTP for 204/990 exchange; temporary REST harness retained for regression testing
 - Segment terminator: `~`
 - Element separator: `*`
 - Component separator: `:`
@@ -24,7 +24,7 @@ Project fixtures use:
 - GS / GE for functional group envelope
 - ST / SE for transaction envelope
 
-Control numbers in fixtures are synthetic and deterministic enough for contract review. Future implementation must generate unique control numbers per outbound interchange.
+Control numbers in fixtures are synthetic and deterministic enough for contract review. Runtime outbound generation uses unique control numbers for each generated interchange.
 
 ## 204 Motor Carrier Load Tender
 

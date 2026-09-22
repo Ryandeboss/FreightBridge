@@ -65,6 +65,14 @@ Milestone 9 adds a separate direct test-harness endpoint:
 POST /api/integrations/midwest/load-tenders/{shipment_number}/dispatch-direct
 ```
 
-This endpoint generates the same Midwest 204 and delivers it to the independent Midwest simulator over HTTPS as raw `application/edi-x12`. The transport is named `REST_TEST_HARNESS` in responses and audit logs. It is intentionally separate from the future SFTP transport.
+This endpoint generates the same Midwest 204 and delivers it to the independent Midwest simulator over HTTPS as raw `application/edi-x12`. The transport is named `REST_TEST_HARNESS` in responses and audit logs.
 
-Generation-only preview required no database migration. Direct simulator delivery requires `20260922_003_create_midwest_simulator.sql` for the new `midwest_sim` schema and the temporary REST/X12 audit allowance.
+Milestone 11 adds the production-style SFTP route:
+
+```text
+POST /api/integrations/midwest/load-tenders/{shipment_number}/dispatch-sftp
+```
+
+This endpoint generates the Midwest 204, writes `APEX_MWCX_204_<ISA13>.edi` atomically to SFTP `/inbound`, and records the remote path on the outbound integration audit row.
+
+Generation-only preview required no database migration. Direct simulator delivery requires `20260922_003_create_midwest_simulator.sql` for the new `midwest_sim` schema and the temporary REST/X12 audit allowance. SFTP metadata requires `20260922_005_add_sftp_transport_metadata.sql`.

@@ -87,8 +87,10 @@ class Midwest990IngestionService:
     self,
     *,
     raw_body: bytes,
-    authorization_header: str | None,
+    authorization_header: str | None = None,
     correlation_id: str,
+    transport: Transport = Transport.REST,
+    raw_payload_location: str | None = None,
   ) -> Midwest990IngestionResult:
     received_at = datetime.now(timezone.utc)
     partner = self.freightbridge_repository.fetch_trading_partner_by_code(MIDWEST_PARTNER_CODE)
@@ -105,9 +107,10 @@ class Midwest990IngestionService:
         correlation_id=correlation_id,
         partner_id=partner['id'],
         direction=IntegrationDirection.INBOUND,
-        transport=Transport.REST,
+        transport=transport,
         message_format=MessageFormat.X12,
         document_type=MIDWEST_990_DOCUMENT_TYPE,
+        raw_payload_location=raw_payload_location,
         payload_hash=payload_sha256(raw_body),
         processing_status=ProcessingStatus.RECEIVED,
         processing_stage=ProcessingStage.RECEIVED,
@@ -117,7 +120,16 @@ class Midwest990IngestionService:
     self._log(transaction_id, ProcessingStage.RECEIVED, ProcessingStatus.RECEIVED, 'Midwest 990 received.')
 
     try:
-      self._authenticate(transaction_id, authorization_header)
+      if transport == Transport.REST:
+        self._authenticate(transaction_id, authorization_header)
+      else:
+        self._log(
+          transaction_id,
+          ProcessingStage.AUTHENTICATION,
+          ProcessingStatus.SUCCEEDED,
+          'Midwest SFTP authentication completed by SSH transport boundary.',
+          {'transport': transport.value},
+        )
       mapped = self._parse_validate_and_map(transaction_id, raw_body)
       self.integration_repository.update_x12_metadata(
         transaction_id,

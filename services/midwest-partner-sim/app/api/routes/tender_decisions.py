@@ -13,6 +13,7 @@ from app.repositories.loads import (
   MidwestLoadRepository,
   TenderAlreadyDecidedError,
 )
+from app.services.sftp_transport import MidwestSftpTenderResponseDispatchService
 
 router = APIRouter(prefix='/v1', tags=['tender decisions'])
 
@@ -118,6 +119,32 @@ def dispatch_tender_response_direct(
     ErrorCode.DEPENDENCY_ERROR,
     'FreightBridge rejected the Midwest 990.',
   )
+
+
+@router.post(
+  '/loads/{customer_shipment_number}/tender-response/dispatch-sftp',
+  status_code=status.HTTP_202_ACCEPTED,
+  dependencies=[Depends(require_write_access)],
+)
+def dispatch_tender_response_sftp(
+  customer_shipment_number: str,
+  repository: MidwestLoadRepository = Depends(get_load_repository),
+) -> dict[str, object]:
+  try:
+    result = MidwestSftpTenderResponseDispatchService(repository=repository).dispatch(customer_shipment_number)
+  except Exception as exc:
+    raise MidwestAPIError(
+      status.HTTP_503_SERVICE_UNAVAILABLE,
+      ErrorCode.DEPENDENCY_ERROR,
+      'Midwest 990 SFTP dispatch failed.',
+    ) from exc
+  if result is None:
+    raise MidwestAPIError(
+      status.HTTP_404_NOT_FOUND,
+      ErrorCode.TENDER_DECISION_NOT_FOUND,
+      f'No Midwest 990 is available for {customer_shipment_number}.',
+    )
+  return result
 
 
 def _safe_json(response: httpx.Response) -> dict[str, object]:

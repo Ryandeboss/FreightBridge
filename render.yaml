@@ -31,6 +31,16 @@ services:
         sync: false
       - key: APEX_SIM_BEARER_TOKEN
         sync: false
+      - key: MWCX_SFTP_HOST
+        sync: false
+      - key: MWCX_SFTP_PORT
+        sync: false
+      - key: MWCX_SFTP_USERNAME
+        sync: false
+      - key: MWCX_SFTP_PRIVATE_KEY_B64
+        sync: false
+      - key: MWCX_SFTP_HOST_KEY_SHA256
+        sync: false
   - type: web
     name: apex-partner-sim
     env: python
@@ -70,4 +80,14 @@ services:
       - key: FREIGHTBRIDGE_API_BASE_URL
         sync: false
       - key: FREIGHTBRIDGE_MIDWEST_BEARER_TOKEN
+        sync: false
+      - key: MWCX_SFTP_HOST
+        sync: false
+      - key: MWCX_SFTP_PORT
+        sync: false
+      - key: MWCX_SFTP_USERNAME
+        sync: false
+      - key: MWCX_SFTP_PRIVATE_KEY_B64
+        sync: false
+      - key: MWCX_SFTP_HOST_KEY_SHA256
         sync: false

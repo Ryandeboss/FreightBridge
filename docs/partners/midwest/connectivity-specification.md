@@ -1,6 +1,6 @@
 # Midwest Carrier Connectivity Specification
 
-This document describes the future SFTP integration for synthetic Midwest Carrier. Railway/SFTPGo must not be configured or activated during this milestone.
+This document describes the production-style SFTP integration for synthetic Midwest Carrier and the temporary REST harness that remains available for regression testing.
 
 Milestone 9 adds a temporary direct HTTPS endpoint on the Midwest simulator for development and integration testing:
 
@@ -15,17 +15,30 @@ POST /v1/loads/{customer_shipment_number}/tender-response/dispatch-direct
 POST /api/integrations/midwest/tender-responses
 ```
 
-These endpoints accept/send raw X12 over HTTP so FreightBridge can exercise an end-to-end 204/990 tender flow before SFTP exists. They are not the final Midwest production transport contract.
+These endpoints accept/send raw X12 over HTTP so FreightBridge can exercise the end-to-end 204/990 tender flow without SFTP. They are test harness endpoints, not the production-style Midwest transport contract.
+
+Milestone 11 adds SFTP:
+
+```text
+POST /api/integrations/midwest/load-tenders/{shipment_number}/dispatch-sftp
+POST /v1/sftp/inbound/poll
+POST /v1/loads/{customer_shipment_number}/tender-response/dispatch-sftp
+POST /api/integrations/midwest/sftp/outbound/poll
+```
 
 ## Transport
 
 - Protocol: SFTP
 - Authentication: SSH key
 - Transport encryption: SSH
-- Future deployment: Railway-hosted SFTPGo
-- Host placeholder: `sftp.midwest-carrier.example.com`
-- Port placeholder: `22`
+- Deployment: Railway-hosted SFTPGo
+- SFTPGo image: `ghcr.io/drakkan/sftpgo:2.7.x`
+- Internal SFTP port: `2022`
+- Web Admin port: `8080`
+- External host/port: Railway TCP proxy values
 - Username placeholder: `mwcx_freightbridge`
+- Host-key verification: required SHA256 fingerprint match
+- Client policy: no trust-on-first-use and no Paramiko `AutoAddPolicy`
 
 No real hosts, IP addresses, passwords, ports, private keys, or credentials are included in this repository.
 
@@ -38,7 +51,8 @@ Temporary test harness:
 - Midwest outbound 990 endpoint: `POST /v1/loads/{customer_shipment_number}/tender-response/dispatch-direct`
 - FreightBridge inbound 990 endpoint: `POST /api/integrations/midwest/tender-responses`
 - Payload format: raw `application/edi-x12`
-- Replacement target: future SFTP delivery
+- SFTP equivalent: use the `/dispatch-sftp` and `/sftp/.../poll` endpoints
+- Status: retained for regression and smoke testing
 
 ## Directory Perspective
 
@@ -70,12 +84,12 @@ Examples:
 ## Duplicate Handling
 
 - File names should be unique per transaction/control number.
-- Duplicate file names should not be overwritten.
-- Duplicate business identifiers inside new files should be handled by future transaction-processing logic, not by SFTP alone.
+- Duplicate file names are not overwritten; upload conflict is treated as deterministic duplicate protection.
+- Duplicate business identifiers inside new files are handled by parser/repository validation and return/load audit state.
 
 ## Archive Expectations
 
-- A file successfully consumed from `/inbound` should be moved or copied to `/archive`.
+- A file successfully consumed from `/inbound` or `/outbound` is moved to `/archive`.
 - Archive retention is a future operational policy.
 - Archive files must not contain real freight data in this portfolio lab.
 
@@ -87,6 +101,13 @@ Examples:
 
 ## Retry Expectations
 
-- Transport retries are future implementation behavior.
-- Conceptually, retries should use bounded attempts and avoid duplicate processing.
-- Midwest outbound files should remain available until FreightBridge confirms pickup in a future milestone.
+- Manual poll endpoints process currently available files.
+- Transient transport failures leave files in place for retry after configuration or network repair.
+- Deterministic syntax, envelope, business validation, and duplicate failures move files to `/error`.
+- Background polling and automated retry scheduling are explicitly deferred.
+
+## Operational Runbook
+
+Railway/SFTPGo setup and manual LOAD502 acceptance steps are documented in:
+
+- [SFTPGo Railway runbook](../../operations/sftpgo-railway-runbook.md)

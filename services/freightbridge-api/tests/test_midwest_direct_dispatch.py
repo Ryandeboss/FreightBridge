@@ -11,6 +11,14 @@ from app.integrations.midwest.transport import (
   MidwestDeliveryError,
   MidwestDeliveryResult,
   MidwestOutboundTransport,
+  MidwestSftpTransport,
+)
+from app.integrations.midwest.sftp_client import (
+  MidwestSftpAuthenticationError,
+  MidwestSftpConfigurationError,
+  MidwestSftpError,
+  MidwestSftpFileConflictError,
+  MidwestSftpHostKeyError,
 )
 from app.main import app
 
@@ -37,6 +45,69 @@ def test_direct_dispatch_service_records_successful_outbound_audit() -> None:
   assert integration_repository.transaction.processing_status == ProcessingStatus.PROCESSING
   assert integration_repository.marked_succeeded is True
   assert integration_repository.failed_stage is None
+
+
+def test_sftp_dispatch_uploads_204_atomically_and_records_remote_audit() -> None:
+  integration_repository = FakeIntegrationRepository()
+  fake_client = FakeSftpClient()
+  service = MidwestDirectDispatchService(
+    audit_connection=object(),
+    business_connection=object(),
+    freightbridge_repository=FakeFreightBridgeRepository(),
+    integration_repository=integration_repository,
+    generation_service=FakeGenerationService(),
+    transport=MidwestSftpTransport(client_factory=lambda: fake_client),
+  )
+
+  result = service.dispatch(shipment_number='LOAD500', correlation_id='corr-sftp')
+
+  assert result.status == 'DELIVERED_TO_MIDWEST_SFTP'
+  assert result.transport == 'SFTP'
+  assert result.midwest['fileName'] == 'APEX_MWCX_204_000000905.edi'
+  assert result.midwest['remotePath'] == '/inbound/APEX_MWCX_204_000000905.edi'
+  assert fake_client.uploads == [
+    ('/inbound/APEX_MWCX_204_000000905.edi.part', generated_result().serialized_x12.encode('utf-8')),
+    ('rename', '/inbound/APEX_MWCX_204_000000905.edi.part', '/inbound/APEX_MWCX_204_000000905.edi'),
+  ]
+  assert integration_repository.transaction.transport.value == 'SFTP'
+  assert integration_repository.raw_payload_location == '/inbound/APEX_MWCX_204_000000905.edi'
+
+
+@pytest.mark.parametrize(
+  ('sftp_error', 'expected_status', 'expected_code', 'retryable'),
+  [
+    (MidwestSftpFileConflictError('exists'), 409, 'SFTP_FILE_CONFLICT', False),
+    (MidwestSftpHostKeyError('mismatch'), 503, 'SFTP_HOST_KEY_MISMATCH', False),
+    (MidwestSftpAuthenticationError('denied'), 503, 'SFTP_AUTHENTICATION_FAILED', False),
+    (MidwestSftpConfigurationError('missing'), 503, 'DEPENDENCY_ERROR', True),
+    (MidwestSftpError('failed'), 503, 'DEPENDENCY_ERROR', True),
+  ],
+)
+def test_sftp_dispatch_maps_transport_failures(
+  sftp_error: MidwestSftpError,
+  expected_status: int,
+  expected_code: str,
+  retryable: bool,
+) -> None:
+  integration_repository = FakeIntegrationRepository()
+  service = MidwestDirectDispatchService(
+    audit_connection=object(),
+    business_connection=object(),
+    freightbridge_repository=FakeFreightBridgeRepository(),
+    integration_repository=integration_repository,
+    generation_service=FakeGenerationService(),
+    transport=MidwestSftpTransport(client_factory=lambda: FailingSftpClient(sftp_error)),
+  )
+
+  with pytest.raises(MidwestDeliveryError) as exc_info:
+    service.dispatch(shipment_number='LOAD500', correlation_id='corr-sftp-fail')
+
+  assert exc_info.value.status_code == expected_status
+  assert exc_info.value.code == expected_code
+  assert integration_repository.transaction.transport.value == 'SFTP'
+  assert integration_repository.failed_stage == ProcessingStage.DELIVERY
+  assert integration_repository.error['error_code'] == expected_code
+  assert integration_repository.error['retryable'] is retryable
 
 
 @pytest.mark.parametrize(
@@ -187,6 +258,7 @@ class FakeIntegrationRepository:
     self.failed_stage = None
     self.error = None
     self.last_state = None
+    self.raw_payload_location = None
 
   def create_transaction(self, transaction):
     self.transaction = transaction
@@ -210,6 +282,9 @@ class FakeIntegrationRepository:
   def append_log(self, log):
     return uuid4()
 
+  def update_raw_payload_location(self, transaction_id, raw_payload_location):
+    self.raw_payload_location = raw_payload_location
+
 
 class FakeRouteDispatchService:
   def __init__(self, error: MidwestDeliveryError | None = None) -> None:
@@ -232,3 +307,36 @@ class FakeRouteDispatchService:
         }
       },
     )()
+
+
+class FakeSftpClient:
+  def __init__(self) -> None:
+    self.files = {}
+    self.uploads = []
+
+  def __enter__(self):
+    return self
+
+  def __exit__(self, exc_type, exc, traceback):
+    return None
+
+  def exists(self, path: str) -> bool:
+    return path in self.files
+
+  def upload_bytes_atomic(self, remote_directory: str, final_filename: str, payload: bytes) -> str:
+    final_path = remote_directory.rstrip('/') + '/' + final_filename
+    temp_path = final_path + '.part'
+    self.uploads.append((temp_path, payload))
+    self.files[temp_path] = payload
+    self.uploads.append(('rename', temp_path, final_path))
+    self.files[final_path] = self.files.pop(temp_path)
+    return final_path
+
+
+class FailingSftpClient(FakeSftpClient):
+  def __init__(self, error: MidwestSftpError) -> None:
+    super().__init__()
+    self.error = error
+
+  def upload_bytes_atomic(self, remote_directory: str, final_filename: str, payload: bytes) -> str:
+    raise self.error

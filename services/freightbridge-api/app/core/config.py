@@ -23,6 +23,11 @@ class Settings(BaseSettings):
   midwest_inbound_bearer_token: str | None = Field(default=None, alias='MIDWEST_INBOUND_BEARER_TOKEN')
   apex_sim_base_url: str | None = Field(default=None, alias='APEX_SIM_BASE_URL')
   apex_sim_bearer_token: str | None = Field(default=None, alias='APEX_SIM_BEARER_TOKEN')
+  mwcx_sftp_host: str | None = Field(default=None, alias='MWCX_SFTP_HOST')
+  mwcx_sftp_port: int = Field(default=2022, alias='MWCX_SFTP_PORT')
+  mwcx_sftp_username: str | None = Field(default=None, alias='MWCX_SFTP_USERNAME')
+  mwcx_sftp_private_key_b64: str | None = Field(default=None, alias='MWCX_SFTP_PRIVATE_KEY_B64')
+  mwcx_sftp_host_key_sha256: str | None = Field(default=None, alias='MWCX_SFTP_HOST_KEY_SHA256')
 
   model_config = SettingsConfigDict(
     env_file='.env',

@@ -9,8 +9,8 @@ type LoadState = 'loading' | 'ready' | 'error';
 const pipelineSteps = [
   {
     label: 'Apex Partner',
-    detail: 'Future REST/JSON shipment source',
-    status: 'Planned',
+    detail: 'REST/JSON shipment source',
+    status: 'Active',
   },
   {
     label: 'FreightBridge API',
@@ -19,15 +19,15 @@ const pipelineSteps = [
   },
   {
     label: 'Midwest Carrier',
-    detail: 'Future X12/SFTP trading partner',
-    status: 'Planned',
+    detail: 'X12/SFTP trading partner',
+    status: 'SFTP active',
   },
 ];
 
 const environmentItems = [
   ['API base URL', apiBaseUrl],
   ['Application environment', appEnv],
-  ['Railway/SFTPGo', 'Provisioned / reserved for later milestone'],
+  ['Railway/SFTPGo', 'Midwest SFTP exchange active'],
 ];
 
 function App() {
@@ -82,8 +82,8 @@ function App() {
           <p className="eyebrow">Logistics integration lab</p>
           <h1>FreightBridge</h1>
           <p className="lede">
-            Cloud foundation for proving the Vercel, Render, and Supabase path
-            before any logistics business workflows begin.
+            EDI/API logistics lab connecting Apex REST load tenders, FreightBridge
+            canonical processing, and Midwest X12 SFTP exchange.
           </p>
         </div>
         <div className="status-panel" aria-label="Service status">

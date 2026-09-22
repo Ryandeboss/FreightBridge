@@ -1,10 +1,10 @@
 # FreightBridge
 
-FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current state includes the FreightBridge foundation, independent Apex and Midwest simulators, Apex-to-FreightBridge canonical shipment ingestion, a generic X12 structural foundation, Midwest 204 generation/direct delivery, and Midwest 990 tender-response return processing over a temporary REST test harness; SFTP workflows and 214/997 processing remain intentionally deferred.
+FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current state includes the FreightBridge foundation, independent Apex and Midwest simulators, Apex-to-FreightBridge canonical shipment ingestion, a generic X12 structural foundation, Midwest 204 generation/direct delivery, Midwest 990 tender-response return processing, and a real Railway/SFTPGo SFTP exchange path for Midwest 204/990 files; 214/997 processing remains intentionally deferred.
 
 ## Planned Architecture
 
-FreightBridge connects an analyst-facing React UI, a FastAPI integration API, and Supabase PostgreSQL. Railway/SFTPGo is provisioned and reserved for a later SFTP milestone, but it is not part of the active application path yet.
+FreightBridge connects an analyst-facing React UI, a FastAPI integration API, Supabase PostgreSQL, partner simulators, and a Railway/SFTPGo server for Midwest-style file exchange.
 
 Current verified cloud path:
 
@@ -20,7 +20,7 @@ Browser
 Current partner state:
 
 - Apex Logistics: implemented synthetic freight broker / 3PL simulator using HTTPS REST and JSON, with explicit dispatch to FreightBridge.
-- Midwest Carrier: synthetic motor carrier using X12 004010 over a temporary REST test harness before future SFTP.
+- Midwest Carrier: synthetic motor carrier using X12 004010 over Railway/SFTPGo SFTP, with a temporary REST test harness retained for regression testing.
 - FreightBridge: implemented canonical foundation with Apex load tender ingestion, Midwest 204 outbound generation, and Midwest 990 inbound tender-response processing.
 
 ```text
@@ -32,12 +32,12 @@ Apex Simulator
 FreightBridge
   [implemented canonical ingestion + 204 outbound + 990 return flow]
       |
-      | temporary REST test harness carrying X12 204
+      | SFTP /inbound carrying X12 204
       v
 Midwest
   [implemented simulator]
       |
-      | temporary REST test harness carrying X12 990
+      | SFTP /outbound carrying X12 990
       v
 FreightBridge
   [forwards canonical tender response to Apex]
@@ -51,7 +51,7 @@ See [docs/architecture/initial-architecture.md](docs/architecture/initial-archit
 - Backend: Python, FastAPI, pytest, deployed to Render.
 - Database: Supabase PostgreSQL.
 - Storage: Supabase Storage later for raw EDI payloads and documents if needed.
-- SFTP: Railway-hosted SFTPGo later, with public TCP proxying.
+- SFTP: Railway-hosted SFTPGo with public TCP proxying.
 - Source control and CI: GitHub and GitHub Actions.
 
 ## Repository Structure
@@ -147,6 +147,11 @@ Backend preferred:
 - `MIDWEST_INBOUND_BEARER_TOKEN`
 - `APEX_SIM_BASE_URL`
 - `APEX_SIM_BEARER_TOKEN`
+- `MWCX_SFTP_HOST`
+- `MWCX_SFTP_PORT`
+- `MWCX_SFTP_USERNAME`
+- `MWCX_SFTP_PRIVATE_KEY_B64`
+- `MWCX_SFTP_HOST_KEY_SHA256`
 
 Backend legacy names temporarily accepted:
 
@@ -172,19 +177,24 @@ Midwest simulator:
 - `MIDWEST_API_READONLY_TOKEN`
 - `FREIGHTBRIDGE_API_BASE_URL`
 - `FREIGHTBRIDGE_MIDWEST_BEARER_TOKEN`
+- `MWCX_SFTP_HOST`
+- `MWCX_SFTP_PORT`
+- `MWCX_SFTP_USERNAME`
+- `MWCX_SFTP_PRIVATE_KEY_B64`
+- `MWCX_SFTP_HOST_KEY_SHA256`
 
 FreightBridge Midwest direct test harness:
 
 - `MIDWEST_SIM_BASE_URL`
 - `MIDWEST_SIM_BEARER_TOKEN`
 
-Railway/SFTP placeholders:
+Railway/SFTPGo service:
 
-- `SFTP_PUBLIC_HOST`
-- `SFTP_PUBLIC_PORT`
-- `SFTP_USERNAME`
-- `SFTP_SSH_PRIVATE_KEY_PATH`
-- `SFTP_SSH_PUBLIC_KEY`
+- Container image: `ghcr.io/drakkan/sftpgo:2.7.x`
+- Internal SFTP port: `2022`
+- Web Admin port: `8080`
+- Persistent volume: `/var/lib/sftpgo`
+- Runbook: [SFTPGo Railway runbook](docs/operations/sftpgo-railway-runbook.md)
 
 ## Secret Boundaries
 
@@ -223,6 +233,7 @@ Major Milestone 3 contract files:
 - [Milestone 8 Midwest 204 generation acceptance](docs/testing/milestone-8-midwest-204-generation.md)
 - [Milestone 9 Midwest simulator acceptance](docs/testing/milestone-9-midwest-simulator.md)
 - [Milestone 10 Midwest 990 return flow acceptance](docs/testing/milestone-10-midwest-990-return-flow.md)
+- [Milestone 11 Midwest SFTP transport acceptance](docs/testing/milestone-11-sftp-transport.md)
 
 Sample contract fixtures:
 
@@ -235,7 +246,7 @@ Sample contract fixtures:
 - Render: `services/freightbridge-api`
 - Render: `services/apex-partner-sim`
 - Supabase: PostgreSQL and later Storage
-- Railway: SFTPGo provisioned / reserved for later SFTP milestone
+- Railway: SFTPGo for Midwest SFTP exchange
 
 ## Current Milestone
 
@@ -256,6 +267,7 @@ Implemented:
 - Midwest-specific canonical shipment -> X12 204 generation preview endpoint.
 - Independent Midwest Carrier simulator with temporary direct REST/X12 delivery harness.
 - Midwest tender decision endpoint, independent X12 990 generation, FreightBridge inbound 990 processing, and Apex tender-status readback.
+- Railway/SFTPGo-backed Midwest 204 and 990 file exchange with manual poll endpoints, archive/error routing, host-key verification, and atomic upload protection.
 
 Specified:
 
@@ -267,7 +279,6 @@ Specified:
 Planned:
 
 - Generic/configurable mapping engine.
-- SFTP exchange.
 - 214 and 997 processing.
 - Shipment persistence and analyst workflow features.
 

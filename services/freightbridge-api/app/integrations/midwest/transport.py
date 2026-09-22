@@ -3,8 +3,16 @@ from dataclasses import dataclass
 import httpx
 
 from app.core.config import get_settings
-from app.domain import ErrorCategory, ProcessingStage
+from app.domain import ErrorCategory, ProcessingStage, Transport
 from app.integrations.midwest.models import Midwest204GenerationResult
+from app.integrations.midwest.sftp_client import (
+  MidwestSftpAuthenticationError,
+  MidwestSftpClient,
+  MidwestSftpConfigurationError,
+  MidwestSftpError,
+  MidwestSftpFileConflictError,
+  MidwestSftpHostKeyError,
+)
 
 
 @dataclass(frozen=True)
@@ -27,6 +35,7 @@ class MidwestDeliveryError(Exception):
 
 class MidwestOutboundTransport:
   transport_name = 'REST_TEST_HARNESS'
+  integration_transport = Transport.REST
 
   def deliver_204(
     self,
@@ -39,6 +48,7 @@ class MidwestOutboundTransport:
 
 class MidwestHttpTestTransport(MidwestOutboundTransport):
   transport_name = 'REST_TEST_HARNESS'
+  integration_transport = Transport.REST
 
   def __init__(
     self,
@@ -127,6 +137,89 @@ class MidwestHttpTestTransport(MidwestOutboundTransport):
       retryable=True,
       response_body=body,
     )
+
+
+class MidwestSftpTransport(MidwestOutboundTransport):
+  transport_name = 'SFTP'
+  integration_transport = Transport.SFTP
+
+  def __init__(
+    self,
+    *,
+    client_factory=MidwestSftpClient,
+    remote_directory: str = '/inbound',
+  ) -> None:
+    self.client_factory = client_factory
+    self.remote_directory = remote_directory
+
+  def deliver_204(
+    self,
+    *,
+    generated: Midwest204GenerationResult,
+    correlation_id: str,
+  ) -> MidwestDeliveryResult:
+    filename = sftp_204_filename(generated.interchange_control_number)
+    try:
+      with self.client_factory() as client:
+        remote_path = client.upload_bytes_atomic(
+          self.remote_directory,
+          filename,
+          generated.serialized_x12.encode('utf-8'),
+        )
+    except MidwestSftpFileConflictError as exc:
+      raise MidwestDeliveryError(
+        status_code=409,
+        code='SFTP_FILE_CONFLICT',
+        message='SFTP destination file already exists.',
+        category=ErrorCategory.DUPLICATE_TRANSACTION,
+      ) from exc
+    except MidwestSftpHostKeyError as exc:
+      raise MidwestDeliveryError(
+        status_code=503,
+        code='SFTP_HOST_KEY_MISMATCH',
+        message='Midwest SFTP host-key verification failed.',
+        category=ErrorCategory.AUTHENTICATION_ERROR,
+      ) from exc
+    except MidwestSftpAuthenticationError as exc:
+      raise MidwestDeliveryError(
+        status_code=503,
+        code='SFTP_AUTHENTICATION_FAILED',
+        message='Midwest SFTP authentication failed.',
+        category=ErrorCategory.AUTHENTICATION_ERROR,
+      ) from exc
+    except MidwestSftpConfigurationError as exc:
+      raise MidwestDeliveryError(
+        status_code=503,
+        code='DEPENDENCY_ERROR',
+        message='Midwest SFTP dispatch configuration is incomplete.',
+        category=ErrorCategory.DOWNSTREAM_ERROR,
+        retryable=True,
+      ) from exc
+    except MidwestSftpError as exc:
+      raise MidwestDeliveryError(
+        status_code=503,
+        code='DEPENDENCY_ERROR',
+        message='Midwest SFTP delivery failed.',
+        category=ErrorCategory.TRANSPORT_ERROR,
+        retryable=True,
+      ) from exc
+
+    return MidwestDeliveryResult(
+      status='DELIVERED',
+      status_code=202,
+      response_body={
+        'status': 'DELIVERED',
+        'transport': self.transport_name,
+        'remotePath': remote_path,
+        'fileName': filename,
+        'customerShipmentNumber': generated.shipment_number,
+        'documentType': generated.document_type,
+      },
+    )
+
+
+def sftp_204_filename(interchange_control_number: str) -> str:
+  return f'APEX_MWCX_204_{interchange_control_number}.edi'
 
 
 def _safe_json(response: httpx.Response) -> dict[str, object]:

@@ -151,6 +151,58 @@
       }
     },
     {
+      "name": "FreightBridge SFTP Readiness",
+      "request": {
+        "method": "GET",
+        "url": "{{freightbridgeBaseUrl}}/api/integrations/midwest/sftp/readiness"
+      }
+    },
+    {
+      "name": "Midwest SFTP Readiness",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{midwestBearerToken}}" }
+        ],
+        "url": "{{midwestBaseUrl}}/v1/sftp/readiness"
+      }
+    },
+    {
+      "name": "FreightBridge Dispatch SFTP LOAD502",
+      "request": {
+        "method": "POST",
+        "url": "{{freightbridgeBaseUrl}}/api/integrations/midwest/load-tenders/LOAD502/dispatch-sftp"
+      }
+    },
+    {
+      "name": "Midwest Poll SFTP Inbound",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{midwestBearerToken}}" }
+        ],
+        "url": "{{midwestBaseUrl}}/v1/sftp/inbound/poll"
+      }
+    },
+    {
+      "name": "Midwest Dispatch 990 SFTP LOAD502",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{midwestBearerToken}}" },
+          { "key": "X-Correlation-ID", "value": "postman-midwest-sftp-990-LOAD502" }
+        ],
+        "url": "{{midwestBaseUrl}}/v1/loads/LOAD502/tender-response/dispatch-sftp"
+      }
+    },
+    {
+      "name": "FreightBridge Poll Midwest SFTP Outbound",
+      "request": {
+        "method": "POST",
+        "url": "{{freightbridgeBaseUrl}}/api/integrations/midwest/sftp/outbound/poll"
+      }
+    },
+    {
       "name": "FreightBridge Receive Midwest 990 Accepted",
       "request": {
         "method": "POST",

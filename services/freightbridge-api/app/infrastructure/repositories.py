@@ -463,6 +463,18 @@ class IntegrationRepository:
         ),
       )
 
+  def update_raw_payload_location(self, transaction_id: UUID, raw_payload_location: str) -> None:
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        """
+          UPDATE integration_transactions
+          SET raw_payload_location = %s,
+              updated_at = now()
+          WHERE id = %s
+        """,
+        (raw_payload_location, transaction_id),
+      )
+
   def update_processing_state(
     self,
     transaction_id: UUID,

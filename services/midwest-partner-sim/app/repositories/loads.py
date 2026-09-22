@@ -39,6 +39,9 @@ class MidwestLoadRepository:
     status: str = 'RECEIVED',
     error_code: str | None = None,
     safe_error_message: str | None = None,
+    transport: str = 'REST',
+    source_filename: str | None = None,
+    source_path: str | None = None,
   ) -> UUID:
     with self.connection.cursor() as cursor:
       cursor.execute(
@@ -55,9 +58,12 @@ class MidwestLoadRepository:
           processing_status,
           error_code,
           safe_error_message,
+          transport,
+          source_filename,
+          source_path,
           processed_at
         )
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         returning id
         """,
         (
@@ -72,12 +78,15 @@ class MidwestLoadRepository:
           status,
           error_code,
           safe_error_message,
+          transport,
+          source_filename,
+          source_path,
           datetime.now(timezone.utc) if status in ('ACCEPTED', 'REJECTED') else None,
         ),
       )
       return cursor.fetchone()['id']
 
-  def mark_document_accepted(self, document_id: UUID, parsed: Parsed204) -> None:
+  def mark_document_accepted(self, document_id: UUID, parsed: Parsed204, *, archive_path: str | None = None) -> None:
     with self.connection.cursor() as cursor:
       cursor.execute(
         """
@@ -88,6 +97,7 @@ class MidwestLoadRepository:
             transaction_control_number = %s,
             customer_shipment_number = %s,
             processing_status = 'ACCEPTED',
+            archive_path = coalesce(%s, archive_path),
             processed_at = now(),
             updated_at = now()
         where id = %s
@@ -98,6 +108,7 @@ class MidwestLoadRepository:
           parsed.group_control_number,
           parsed.transaction_control_number,
           parsed.cust_ship_no,
+          archive_path,
           document_id,
         ),
       )
@@ -109,6 +120,7 @@ class MidwestLoadRepository:
     error_code: str,
     safe_error_message: str,
     parsed: Parsed204 | None = None,
+    error_path: str | None = None,
   ) -> None:
     with self.connection.cursor() as cursor:
       cursor.execute(
@@ -122,6 +134,7 @@ class MidwestLoadRepository:
             processing_status = 'REJECTED',
             error_code = %s,
             safe_error_message = %s,
+            error_path = coalesce(%s, error_path),
             processed_at = now(),
             updated_at = now()
         where id = %s
@@ -134,6 +147,7 @@ class MidwestLoadRepository:
           parsed.cust_ship_no if parsed else None,
           error_code,
           safe_error_message,
+          error_path,
           document_id,
         ),
       )
@@ -373,31 +387,42 @@ class MidwestLoadRepository:
       )
       return cursor.fetchone()
 
-  def mark_outbound_delivering(self, document_id: UUID) -> None:
+  def mark_outbound_delivering(self, document_id: UUID, *, transport: str | None = None) -> None:
     with self.connection.cursor() as cursor:
       cursor.execute(
         """
         update midwest_sim.outbound_edi_documents
         set processing_status = 'DELIVERING',
+            transport = coalesce(%s, transport),
             attempt_count = attempt_count + 1,
             last_attempt_at = now(),
             updated_at = now()
         where id = %s
         """,
-        (document_id,),
+        (transport, document_id),
       )
 
-  def mark_outbound_delivered(self, document_id: UUID) -> None:
+  def mark_outbound_delivered(
+    self,
+    document_id: UUID,
+    *,
+    transport: str | None = None,
+    remote_filename: str | None = None,
+    remote_path: str | None = None,
+  ) -> None:
     with self.connection.cursor() as cursor:
       cursor.execute(
         """
         update midwest_sim.outbound_edi_documents
         set processing_status = 'DELIVERED',
+            transport = coalesce(%s, transport),
+            remote_filename = coalesce(%s, remote_filename),
+            remote_path = coalesce(%s, remote_path),
             delivered_at = now(),
             updated_at = now()
         where id = %s
         """,
-        (document_id,),
+        (transport, remote_filename, remote_path, document_id),
       )
 
   def mark_outbound_failed(self, document_id: UUID, error_code: str, message: str) -> None:

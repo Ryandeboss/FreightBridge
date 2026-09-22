@@ -16,6 +16,7 @@ from app.integrations.apex.tender_response_client import (
 from app.integrations.common.errors import IntegrationAPIError
 from app.integrations.midwest.inbound_990_service import Midwest990IngestionService
 from app.integrations.midwest.mapping_990 import Midwest990MappingError, map_midwest_990
+from app.integrations.midwest.sftp_poll_service import MidwestSftpOutboundPollService
 from app.integrations.x12 import parse_x12, validate_x12_envelopes
 from app.main import app
 
@@ -163,6 +164,60 @@ def test_midwest_990_endpoint_returns_202_with_raw_x12_body() -> None:
   assert response.json()['shipmentNumber'] == 'LOAD500'
 
 
+def test_sftp_outbound_poll_archives_valid_990_and_ignores_part_files() -> None:
+  fake_sftp = FakeSftpClient({
+    '/outbound/MWCX_APEX_990_000000906.edi': MIDWEST_990_ACCEPTED.encode('utf-8'),
+    '/outbound/MWCX_APEX_990_000000906.edi.part': b'partial',
+  })
+  service = MidwestSftpOutboundPollService(
+    audit_connection=DummyConnection(),
+    business_connection=DummyConnection(),
+    client_factory=lambda: fake_sftp,
+    freightbridge_repository=FakeFreightBridgeRepository(),
+    integration_repository=FakeIntegrationRepository(),
+    ingestion_service=Midwest990IngestionService(
+      audit_connection=DummyConnection(),
+      business_connection=DummyConnection(),
+      freightbridge_repository=FakeFreightBridgeRepository(),
+      integration_repository=FakeIntegrationRepository(),
+      apex_client=FakeApexClient(),
+    ),
+  )
+
+  result = service.poll(correlation_id='corr-sftp')
+
+  assert result.processed[0].status == 'ARCHIVED'
+  assert result.processed[0].destination_path == '/archive/MWCX_APEX_990_000000906.edi'
+  assert result.ignored == ['MWCX_APEX_990_000000906.edi.part']
+  assert '/archive/MWCX_APEX_990_000000906.edi' in fake_sftp.files
+  assert '/outbound/MWCX_APEX_990_000000906.edi' not in fake_sftp.files
+
+
+def test_sftp_outbound_poll_moves_deterministic_invalid_990_to_error() -> None:
+  invalid = MIDWEST_990_ACCEPTED.replace('ST*990*0001', 'ST*204*0001').encode('utf-8')
+  fake_sftp = FakeSftpClient({'/outbound/MWCX_APEX_990_000000906.edi': invalid})
+  service = MidwestSftpOutboundPollService(
+    audit_connection=DummyConnection(),
+    business_connection=DummyConnection(),
+    client_factory=lambda: fake_sftp,
+    freightbridge_repository=FakeFreightBridgeRepository(),
+    integration_repository=FakeIntegrationRepository(),
+    ingestion_service=Midwest990IngestionService(
+      audit_connection=DummyConnection(),
+      business_connection=DummyConnection(),
+      freightbridge_repository=FakeFreightBridgeRepository(),
+      integration_repository=FakeIntegrationRepository(),
+      apex_client=FakeApexClient(),
+    ),
+  )
+
+  result = service.poll(correlation_id='corr-sftp-bad')
+
+  assert result.processed[0].status == 'MOVED_TO_ERROR'
+  assert result.processed[0].destination_path == '/error/MWCX_APEX_990_000000906.edi'
+  assert '/error/MWCX_APEX_990_000000906.edi' in fake_sftp.files
+
+
 def _map(payload: str):
   interchange = parse_x12(payload)
   validate_x12_envelopes(interchange)
@@ -271,3 +326,27 @@ class FakeRouteIngestionService:
         },
       },
     )()
+
+
+class FakeSftpClient:
+  def __init__(self, files: dict[str, bytes]) -> None:
+    self.files = dict(files)
+
+  def __enter__(self):
+    return self
+
+  def __exit__(self, exc_type, exc, traceback):
+    return None
+
+  def listdir(self, path: str) -> list[str]:
+    prefix = path.rstrip('/') + '/'
+    return [file_path.removeprefix(prefix) for file_path in self.files if file_path.startswith(prefix)]
+
+  def download_bytes(self, remote_path: str) -> bytes:
+    return self.files[remote_path]
+
+  def exists(self, remote_path: str) -> bool:
+    return remote_path in self.files or any(path.startswith(remote_path.rstrip('/') + '/') for path in self.files)
+
+  def rename(self, source_path: str, destination_path: str) -> None:
+    self.files[destination_path] = self.files.pop(source_path)

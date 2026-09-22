@@ -12,7 +12,6 @@ from app.domain import (
   ProcessingLog,
   ProcessingStage,
   ProcessingStatus,
-  Transport,
 )
 from app.infrastructure.repositories import FreightBridgeRepository, IntegrationRepository
 from app.integrations.common.ingestion import payload_sha256
@@ -34,7 +33,7 @@ class MidwestDirectDispatchResult:
   midwest: dict[str, object]
 
   def response_body(self) -> dict[str, object]:
-    return {
+    body: dict[str, object] = {
       'status': self.status,
       'shipmentNumber': self.shipment_number,
       'documentType': self.document_type,
@@ -42,6 +41,11 @@ class MidwestDirectDispatchResult:
       'transactionId': str(self.transaction_id),
       'midwest': self.midwest,
     }
+    if isinstance(self.midwest.get('remotePath'), str):
+      body['remotePath'] = self.midwest['remotePath']
+    if isinstance(self.midwest.get('fileName'), str):
+      body['fileName'] = self.midwest['fileName']
+    return body
 
 
 class MidwestDirectDispatchService:
@@ -85,7 +89,7 @@ class MidwestDirectDispatchService:
         correlation_id=correlation_id,
         partner_id=partner['id'],
         direction=IntegrationDirection.OUTBOUND,
-        transport=Transport.REST,
+        transport=self.transport.integration_transport,
         message_format=MessageFormat.X12,
         document_type=generated.document_type,
         business_identifier=generated.shipment_number,
@@ -100,7 +104,12 @@ class MidwestDirectDispatchService:
       )
     )
     self._log(transaction_id, ProcessingStage.MAPPING, ProcessingStatus.SUCCEEDED, 'Midwest 204 generated.')
-    self._log(transaction_id, ProcessingStage.ROUTING, ProcessingStatus.SUCCEEDED, 'Midwest REST test harness selected.')
+    self._log(
+      transaction_id,
+      ProcessingStage.ROUTING,
+      ProcessingStatus.SUCCEEDED,
+      f'Midwest {self.transport.transport_name} transport selected.',
+    )
 
     try:
       self.integration_repository.update_processing_state(
@@ -112,6 +121,9 @@ class MidwestDirectDispatchService:
         generated=generated,
         correlation_id=correlation_id,
       )
+      remote_path = delivery.response_body.get('remotePath')
+      if isinstance(remote_path, str):
+        self.integration_repository.update_raw_payload_location(transaction_id, remote_path)
     except MidwestDeliveryError as exc:
       self._record_failure(transaction_id, exc)
       raise
@@ -131,11 +143,11 @@ class MidwestDirectDispatchService:
       transaction_id,
       ProcessingStage.COMPLETED,
       ProcessingStatus.SUCCEEDED,
-      'Midwest simulator accepted the X12 204 for processing.',
+      'Midwest X12 204 delivered.',
       {'transport': self.transport.transport_name},
     )
     return MidwestDirectDispatchResult(
-      status='DELIVERED_TO_MIDWEST_TEST_GATEWAY',
+      status='DELIVERED_TO_MIDWEST_TEST_GATEWAY' if self.transport.transport_name == 'REST_TEST_HARNESS' else 'DELIVERED_TO_MIDWEST_SFTP',
       shipment_number=generated.shipment_number,
       document_type=generated.document_type,
       transport=self.transport.transport_name,

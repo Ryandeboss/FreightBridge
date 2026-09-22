@@ -10,10 +10,12 @@ from app.api.routes import readiness
 from app.core.config import get_settings
 from app.edi.generator_990 import ControlNumbers, Midwest990Source, generate_990
 from app.edi import parse_midwest_204
+from app.infrastructure.sftp_client import MidwestSftpFileConflictError
 from app.infrastructure import database
 from app.main import app
 from app.repositories.loads import DuplicateLoadError
 from app.repositories.loads import LoadNotFoundError, TenderAlreadyDecidedError
+from app.services.sftp_transport import MidwestSftpInboundPollService, MidwestSftpTenderResponseDispatchService
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -255,6 +257,88 @@ def test_dispatch_tender_response_direct_delivers_generated_990(monkeypatch) -> 
   assert repository.outbound_statuses == ['DELIVERING', 'DELIVERED']
 
 
+def test_sftp_inbound_poll_processes_204_and_archives_file() -> None:
+  repository = FakeRepository()
+  fake_sftp = FakeSftpClient({
+    '/inbound/APEX_MWCX_204_000000905.edi': MIDWEST_204.encode('utf-8'),
+    '/inbound/APEX_MWCX_204_000000905.edi.part': b'partial',
+  })
+
+  result = MidwestSftpInboundPollService(
+    repository=repository,
+    client_factory=lambda: fake_sftp,
+  ).poll()
+
+  assert result.processed[0].status == 'ARCHIVED'
+  assert result.processed[0].destination_path == '/archive/APEX_MWCX_204_000000905.edi'
+  assert result.ignored == ['APEX_MWCX_204_000000905.edi.part']
+  assert repository.load.cust_ship_no == 'LOAD500'
+  assert repository.accepted_documents == 1
+  assert '/archive/APEX_MWCX_204_000000905.edi' in fake_sftp.files
+
+
+def test_sftp_inbound_poll_moves_bad_204_to_error() -> None:
+  repository = FakeRepository()
+  fake_sftp = FakeSftpClient({'/inbound/APEX_MWCX_204_000000905.edi': b'ISA*bad~'})
+
+  result = MidwestSftpInboundPollService(
+    repository=repository,
+    client_factory=lambda: fake_sftp,
+  ).poll()
+
+  assert result.processed[0].status == 'MOVED_TO_ERROR'
+  assert result.processed[0].destination_path == '/error/APEX_MWCX_204_000000905.edi'
+  assert repository.rejected_documents == 1
+  assert '/error/APEX_MWCX_204_000000905.edi' in fake_sftp.files
+
+
+def test_sftp_dispatch_tender_response_uploads_990_atomically() -> None:
+  repository = FakeRepository()
+  repository.create_load_from_204(parse_midwest_204(MIDWEST_204))
+  repository.create_tender_decision(
+    'LOAD500',
+    type('Decision', (), {'decision': type('Value', (), {'value': 'ACCEPTED'})(), 'reason_code': None, 'message': None})(),
+  )
+  fake_sftp = FakeSftpClient({})
+
+  result = MidwestSftpTenderResponseDispatchService(
+    repository=repository,
+    client_factory=lambda: fake_sftp,
+  ).dispatch('LOAD500')
+
+  assert result['transport'] == 'SFTP'
+  assert result['fileName'] == 'MWCX_APEX_990_000000906.edi'
+  assert result['remotePath'] == '/outbound/MWCX_APEX_990_000000906.edi'
+  assert fake_sftp.uploads[0][0] == '/outbound/MWCX_APEX_990_000000906.edi.part'
+  assert fake_sftp.uploads[1] == (
+    'rename',
+    '/outbound/MWCX_APEX_990_000000906.edi.part',
+    '/outbound/MWCX_APEX_990_000000906.edi',
+  )
+  assert repository.outbound_statuses == ['DELIVERING:SFTP', 'DELIVERED:SFTP:/outbound/MWCX_APEX_990_000000906.edi']
+
+
+def test_sftp_dispatch_tender_response_marks_failed_on_file_conflict() -> None:
+  repository = FakeRepository()
+  repository.create_load_from_204(parse_midwest_204(MIDWEST_204))
+  repository.create_tender_decision(
+    'LOAD500',
+    type('Decision', (), {'decision': type('Value', (), {'value': 'ACCEPTED'})(), 'reason_code': None, 'message': None})(),
+  )
+  fake_sftp = FakeSftpClient({'/outbound/MWCX_APEX_990_000000906.edi': b'existing'})
+
+  with pytest.raises(MidwestSftpFileConflictError):
+    MidwestSftpTenderResponseDispatchService(
+      repository=repository,
+      client_factory=lambda: fake_sftp,
+    ).dispatch('LOAD500')
+
+  assert repository.outbound_statuses == [
+    'DELIVERING:SFTP',
+    'FAILED:SFTP_FILE_CONFLICT',
+  ]
+
+
 @pytest.mark.parametrize(
   ('payload', 'expected_code'),
   [
@@ -318,7 +402,7 @@ class FakeRepository:
   def create_inbound_document(self, **kwargs):
     return uuid4()
 
-  def mark_document_accepted(self, document_id, parsed) -> None:
+  def mark_document_accepted(self, document_id, parsed, *, archive_path=None) -> None:
     self.accepted_documents += 1
 
   def mark_document_rejected(self, document_id, **kwargs) -> None:
@@ -352,7 +436,11 @@ class FakeRepository:
       ),
       ControlNumbers('000000906', '906', '0001'),
     )
-    self.outbound = {'id': uuid4(), 'raw_x12': raw_x12}
+    self.outbound = {
+      'id': uuid4(),
+      'raw_x12': raw_x12,
+      'interchange_control_number': '000000906',
+    }
     return {
       'customer_shipment_number': cust_ship_no,
       'decision': decision,
@@ -368,14 +456,17 @@ class FakeRepository:
       return None
     return self.outbound
 
-  def mark_outbound_delivering(self, document_id) -> None:
-    self.outbound_statuses.append('DELIVERING')
+  def mark_outbound_delivering(self, document_id, *, transport=None) -> None:
+    self.outbound_statuses.append(f"DELIVERING:{transport}" if transport else 'DELIVERING')
 
-  def mark_outbound_delivered(self, document_id) -> None:
-    self.outbound_statuses.append('DELIVERED')
+  def mark_outbound_delivered(self, document_id, *, transport=None, remote_filename=None, remote_path=None) -> None:
+    if transport:
+      self.outbound_statuses.append(f'DELIVERED:{transport}:{remote_path}')
+    else:
+      self.outbound_statuses.append('DELIVERED')
 
   def mark_outbound_failed(self, document_id, error_code, message) -> None:
-    self.outbound_statuses.append('FAILED')
+    self.outbound_statuses.append(f'FAILED:{error_code}')
 
   def fetch_load(self, cust_ship_no):
     if self.load is None or self.load.cust_ship_no != cust_ship_no:
@@ -412,3 +503,39 @@ class FakeRepository:
 
 def _compact_x12(payload: str) -> str:
   return payload.replace('\r', '').replace('\n', '').strip()
+
+
+class FakeSftpClient:
+  def __init__(self, files: dict[str, bytes]) -> None:
+    self.files = dict(files)
+    self.uploads = []
+
+  def __enter__(self):
+    return self
+
+  def __exit__(self, exc_type, exc, traceback):
+    return None
+
+  def listdir(self, path: str) -> list[str]:
+    prefix = path.rstrip('/') + '/'
+    return [file_path.removeprefix(prefix) for file_path in self.files if file_path.startswith(prefix)]
+
+  def download_bytes(self, remote_path: str) -> bytes:
+    return self.files[remote_path]
+
+  def exists(self, remote_path: str) -> bool:
+    return remote_path in self.files
+
+  def rename(self, source_path: str, destination_path: str) -> None:
+    self.files[destination_path] = self.files.pop(source_path)
+
+  def upload_bytes_atomic(self, remote_directory: str, final_filename: str, payload: bytes) -> str:
+    final_path = remote_directory.rstrip('/') + '/' + final_filename
+    temp_path = final_path + '.part'
+    if final_path in self.files or temp_path in self.files:
+      raise MidwestSftpFileConflictError('exists')
+    self.uploads.append((temp_path, payload))
+    self.files[temp_path] = payload
+    self.uploads.append(('rename', temp_path, final_path))
+    self.files[final_path] = self.files.pop(temp_path)
+    return final_path
