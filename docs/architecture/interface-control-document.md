@@ -1,6 +1,6 @@
 # Interface Control Document
 
-This document defines the planned relationship between synthetic Apex Logistics, FreightBridge, and synthetic Midwest Carrier. It is documentation only; no canonical model, mapping engine, EDI parser, SFTP client, simulator, or transaction processing is implemented in this milestone.
+This document defines the planned relationship between synthetic Apex Logistics, FreightBridge, and synthetic Midwest Carrier. FreightBridge now has canonical persistence, Apex ingestion, generic X12 structure handling, and Midwest 204 generation preview. SFTP delivery, Midwest simulator behavior, 990 processing, 214 processing, and 997 processing remain future work.
 
 ```text
 Apex Logistics
@@ -21,7 +21,7 @@ Midwest Carrier
 | System | Boundary |
 | --- | --- |
 | Apex Logistics | Owns Apex REST/JSON contract and broker/TMS identifiers |
-| FreightBridge | Owns future canonical representation, transformation, routing, correlation, and operational visibility |
+| FreightBridge | Owns canonical representation, transformation, future routing, correlation, and operational visibility |
 | Midwest Carrier | Owns Midwest X12 4010 profile, future SFTP directories, and carrier/TMS identifiers |
 
 ## Responsibility Matrix
@@ -29,8 +29,8 @@ Midwest Carrier
 | Responsibility | Apex | FreightBridge | Midwest |
 | --- | --- | --- | --- |
 | REST JSON contract | Owns Apex `/v1` endpoints and outbound ApexLoad payload | Owns future inbound Apex integration endpoint and produces future Apex callbacks | Not applicable |
-| Canonical model | Not applicable | Future owner | Not applicable |
-| X12 204 generation | Not applicable | Future owner | Receives/validates |
+| Canonical model | Not applicable | Owner | Not applicable |
+| X12 204 generation | Not applicable | Implemented as generation preview; future owner of delivery | Receives/validates in future simulator |
 | X12 990 generation | Receives transformed result | Future transform owner | Produces |
 | X12 214 generation | Receives transformed result | Future transform owner | Produces |
 | X12 997 handling | Not applicable | Future processing owner | Produces for received 204 |
@@ -40,7 +40,7 @@ Midwest Carrier
 ## Transport Boundaries
 
 - Apex boundary: HTTPS REST with JSON payloads and bearer-token authentication.
-- FreightBridge boundary: API, future canonical transformation layer, future EDI processing layer.
+- FreightBridge boundary: API, canonical transformation layer, Midwest 204 generation preview, future EDI transport layer.
 - Midwest boundary: Future SFTP file exchange using X12 004010 files.
 
 ## Security Boundaries
@@ -52,16 +52,20 @@ Midwest Carrier
 
 ## Expected Message Flows
 
-Initial future flow:
+Current implemented preview flow:
 
 1. Apex creates/tenders a load using its REST/JSON representation.
-2. Apex sends the ApexLoad JSON payload to a future FreightBridge-owned inbound endpoint.
-3. FreightBridge eventually transforms through a canonical representation.
-4. FreightBridge sends a Midwest-specific X12 204 file.
-5. Midwest validates receipt and returns a 997.
-6. Midwest processes the tender and returns a 990.
-7. FreightBridge transforms the tender decision.
-8. Apex receives the tender decision as JSON.
+2. Apex sends the ApexLoad JSON payload to the FreightBridge-owned inbound endpoint.
+3. FreightBridge transforms and persists a canonical shipment.
+4. FreightBridge can generate a Midwest-specific X12 204 preview from that canonical shipment.
+
+Future delivery flow:
+
+1. FreightBridge sends the Midwest-specific X12 204 over future SFTP.
+2. Midwest validates receipt and returns a 997.
+3. Midwest processes the tender and returns a 990.
+4. FreightBridge transforms the tender decision.
+5. Apex receives the tender decision as JSON.
 
 Later MVP flow:
 
@@ -103,8 +107,8 @@ Future implementation should correlate:
 | --- | --- | --- |
 | REST transport | Caller and Apex | Timeout, 401, 503 |
 | JSON validation | Apex/FreightBridge contract boundary | Missing destination |
-| Canonical transformation | FreightBridge future layer | Mapping cannot represent a required value |
-| X12 generation/parsing | FreightBridge future layer | Missing required segment |
+| Canonical transformation | FreightBridge | Mapping cannot represent a required value |
+| X12 generation/parsing | FreightBridge | Missing required segment |
 | SFTP transport | FreightBridge and Midwest future boundary | File upload failure |
 | Midwest processing | Midwest | Tender declined, load rejected |
 
@@ -124,9 +128,10 @@ sequenceDiagram
   participant FB as FreightBridge
   participant Midwest as Midwest Carrier
 
-  Apex->>FB: Send ApexLoad JSON to future FreightBridge endpoint (LOAD500)
-  FB->>FB: Future canonical transform
-  FB->>Midwest: Send X12 204 over future SFTP
+  Apex->>FB: Send ApexLoad JSON to FreightBridge endpoint (LOAD500)
+  FB->>FB: Canonical transform and persistence
+  FB->>FB: Generate Midwest X12 204 preview
+  FB->>Midwest: Future send X12 204 over SFTP
   Midwest->>Midwest: Validate X12 envelope/profile
   Midwest->>FB: Send X12 997 technical acknowledgment
   Midwest->>Midwest: Process tender in carrier TMS

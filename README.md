@@ -1,6 +1,6 @@
 # FreightBridge
 
-FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current state includes the FreightBridge foundation, an independent Apex REST/JSON simulator, the first Apex-to-FreightBridge canonical shipment ingestion path, and a generic X12 structural parsing foundation; generic mapping, Midwest business behavior, SFTP workflows, and end-to-end carrier workflows remain intentionally deferred.
+FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current state includes the FreightBridge foundation, an independent Apex REST/JSON simulator, the first Apex-to-FreightBridge canonical shipment ingestion path, a generic X12 structural foundation, and Midwest 204 generation from canonical shipments; SFTP workflows, Midwest simulator behavior, 990/214/997 processing, and end-to-end carrier workflows remain intentionally deferred.
 
 ## Planned Architecture
 
@@ -30,12 +30,12 @@ Apex Simulator
       | HTTPS REST/JSON + bearer
       v
 FreightBridge
-  [implemented canonical ingestion]
+  [implemented canonical ingestion + 204 generation preview]
       |
-      | future X12/SFTP
+      | generated X12 204, future SFTP
       v
 Midwest
-  [contract only]
+  [contract + future simulator]
 ```
 
 See [docs/architecture/initial-architecture.md](docs/architecture/initial-architecture.md) for the first architecture diagram.
@@ -180,11 +180,14 @@ Major Milestone 3 contract files:
 - [Canonical data model](docs/architecture/canonical-data-model.md)
 - [Database schema](docs/architecture/database-schema.md)
 - [Generic X12 foundation](docs/architecture/x12-foundation.md)
+- [Midwest 204 generation architecture](docs/architecture/midwest-204-generation.md)
 - [Milestone 4 database acceptance](docs/testing/milestone-4-database-acceptance.md)
 - [Milestone 5 Apex acceptance](docs/testing/milestone-5-apex-acceptance.md)
 - [Apex load tender mapping](docs/mappings/apex-load-tender-to-canonical.md)
+- [Canonical shipment to Midwest 204 mapping](docs/mappings/canonical-to-midwest-204.md)
 - [Milestone 6 Apex -> FreightBridge acceptance](docs/testing/milestone-6-apex-freightbridge-integration.md)
 - [Milestone 7 Generic X12 foundation acceptance](docs/testing/milestone-7-x12-foundation.md)
+- [Milestone 8 Midwest 204 generation acceptance](docs/testing/milestone-8-midwest-204-generation.md)
 
 Sample contract fixtures:
 
@@ -215,11 +218,13 @@ Implemented:
 - Apex -> canonical shipment mapping.
 - Integration transaction, processing log, and integration error audit for Apex ingestion.
 - Generic X12 parsing, envelope validation, and serialization foundation.
+- Midwest-specific canonical shipment -> X12 204 generation preview endpoint.
 
 Specified:
 
 - Apex Logistics REST/JSON contract.
 - Midwest Carrier X12/SFTP contract.
+- Midwest 204 mapping requirements.
 - Partner comparison, interface control, error categories, and synthetic fixtures.
 
 Planned:
@@ -227,6 +232,7 @@ Planned:
 - Generic/configurable mapping engine.
 - SFTP exchange.
 - Midwest simulator.
+- 990, 214, and 997 processing.
 - Shipment persistence and analyst workflow features.
 
 Do not begin FreightBridge product features from this milestone.

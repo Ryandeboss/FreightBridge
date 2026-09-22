@@ -3,5 +3,6 @@
 This folder holds executable mapping requirements and future mapping notes.
 
 - [Apex load tender to canonical shipment](apex-load-tender-to-canonical.md)
+- [Canonical shipment to Midwest 204](canonical-to-midwest-204.md)
 
-EDI parsing, X12 generation, and generic configurable mapping are intentionally out of scope for the current milestone.
+Generic configurable mapping remains intentionally out of scope. Implemented mappings stay partner-specific and explicit.

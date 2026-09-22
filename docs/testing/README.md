@@ -8,6 +8,7 @@ Current test coverage:
 - Apex simulator model, auth, business endpoint, status progression, error envelope, and readiness tests.
 - Apex -> FreightBridge ingestion, mapping, audit, dispatch, and transaction-persistence regression tests.
 - Generic X12 parsing, envelope validation, serializer, and structural fixture tests.
+- Midwest 204 generation tests, including LOAD500 fixture reproduction and business validation failures.
 - GitHub Actions workflow for frontend and backend checks.
 
 Future milestones should add API contract tests, simulator tests, database tests, and integration pipeline tests.

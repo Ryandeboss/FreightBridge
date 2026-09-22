@@ -1,0 +1,73 @@
+from collections.abc import Iterator
+
+import psycopg
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
+
+from app.infrastructure.database import DatabaseConnectivityError, connect
+from app.integrations.midwest.errors import Midwest204MappingError, MidwestShipmentNotFoundError
+from app.integrations.midwest.service import Midwest204DependencyError, Midwest204GenerationService
+
+router = APIRouter(prefix='/api/integrations/midwest', tags=['midwest integrations'])
+
+
+def get_midwest_204_generation_service() -> Iterator[Midwest204GenerationService]:
+  try:
+    with connect() as connection:
+      yield Midwest204GenerationService(connection=connection)
+  except DatabaseConnectivityError as exc:
+    raise HTTPException(
+      status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+      detail={
+        'error': {
+          'code': 'DEPENDENCY_ERROR',
+          'message': 'A downstream dependency failed while generating the Midwest 204.',
+        }
+      },
+    ) from exc
+
+
+@router.post('/load-tenders/{shipment_number}/generate', status_code=status.HTTP_200_OK)
+def generate_midwest_load_tender_preview(
+  shipment_number: str,
+  service: Midwest204GenerationService = Depends(get_midwest_204_generation_service),
+) -> JSONResponse:
+  try:
+    result = service.generate_for_shipment_number(shipment_number)
+  except MidwestShipmentNotFoundError:
+    return JSONResponse(
+      status_code=status.HTTP_404_NOT_FOUND,
+      content={
+        'error': {
+          'code': 'SHIPMENT_NOT_FOUND',
+          'message': 'Canonical shipment was not found.',
+        }
+      },
+    )
+  except Midwest204MappingError as exc:
+    return JSONResponse(
+      status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+      content={
+        'error': {
+          'code': 'MIDWEST_204_MAPPING_ERROR',
+          'message': exc.message,
+          'detailCode': exc.code.value,
+          'field': exc.field,
+        }
+      },
+    )
+  except (DatabaseConnectivityError, Midwest204DependencyError, psycopg.Error):
+    return JSONResponse(
+      status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+      content={
+        'error': {
+          'code': 'DEPENDENCY_ERROR',
+          'message': 'A downstream dependency failed while generating the Midwest 204.',
+        }
+      },
+    )
+
+  return JSONResponse(
+    status_code=status.HTTP_200_OK,
+    content=result.response_body(),
+  )

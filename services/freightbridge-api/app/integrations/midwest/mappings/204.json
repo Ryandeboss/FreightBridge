@@ -1,0 +1,179 @@
+{
+  "mappingId": "canonical-to-midwest-204",
+  "version": "2026-09-22",
+  "description": "FreightBridge canonical shipment to synthetic Midwest X12 004010 204 load tender mapping.",
+  "profile": {
+    "sender": "FREIGHTBRIDGE",
+    "receiver": "MWCX",
+    "functionalIdentifier": "SM",
+    "transactionSet": "204",
+    "x12Version": "004010",
+    "isaControlVersion": "00401"
+  },
+  "timestampPolicy": {
+    "source": "canonical timezone-aware datetime",
+    "transformation": "format canonical timestamp in UTC as YYYYMMDD and HHMM; do not infer local time from city/state"
+  },
+  "rules": [
+    {
+      "source": "shipment_number",
+      "destinationSegment": "B2",
+      "destinationElement": "B2-04",
+      "transformation": "direct",
+      "required": true,
+      "qualifierOrCondition": "B2-02 = MWCX; B2-06 = PP",
+      "failureCode": "MISSING_SHIPMENT_NUMBER",
+      "example": "LOAD500"
+    },
+    {
+      "source": "references[reference_type == BOL].reference_value",
+      "destinationSegment": "L11",
+      "destinationElement": "L11-01",
+      "transformation": "direct",
+      "required": true,
+      "qualifierOrCondition": "L11-02 = BM",
+      "failureCode": "MISSING_BOL_REFERENCE",
+      "example": "BOL900"
+    },
+    {
+      "source": "references[reference_type == PO].reference_value",
+      "destinationSegment": "L11",
+      "destinationElement": "L11-01",
+      "transformation": "direct",
+      "required": false,
+      "qualifierOrCondition": "L11-02 = PO; omit when absent",
+      "failureCode": null,
+      "example": "PO111"
+    },
+    {
+      "source": "references[reference_type == CUSTOMER_REFERENCE]",
+      "destinationSegment": null,
+      "destinationElement": null,
+      "transformation": "intentionally not emitted",
+      "required": false,
+      "qualifierOrCondition": "Current Midwest 204 subset has no configured destination qualifier",
+      "failureCode": null,
+      "example": "CUST-REF-500 ignored"
+    },
+    {
+      "source": "origin.scheduled_at",
+      "destinationSegment": "G62",
+      "destinationElement": "G62-02 and G62-04",
+      "transformation": "UTC YYYYMMDD and HHMM",
+      "required": true,
+      "qualifierOrCondition": "G62-01 = 37; G62-03 = I",
+      "failureCode": "MISSING_PICKUP_APPOINTMENT",
+      "example": "G62*37*20261001*I*1400"
+    },
+    {
+      "source": "destination.scheduled_at",
+      "destinationSegment": "G62",
+      "destinationElement": "G62-02 and G62-04",
+      "transformation": "UTC YYYYMMDD and HHMM",
+      "required": true,
+      "qualifierOrCondition": "G62-01 = 38; G62-03 = K",
+      "failureCode": "MISSING_DELIVERY_APPOINTMENT",
+      "example": "G62*38*20261002*K*1800"
+    },
+    {
+      "source": "origin.facility_name",
+      "destinationSegment": "N1",
+      "destinationElement": "N1-02",
+      "transformation": "direct",
+      "required": true,
+      "qualifierOrCondition": "S5*1*LD loop; N1-01 = SH",
+      "failureCode": "MISSING_ORIGIN_ADDRESS",
+      "example": "ABC Factory"
+    },
+    {
+      "source": "origin.address_line_1",
+      "destinationSegment": "N3",
+      "destinationElement": "N3-01",
+      "transformation": "direct",
+      "required": true,
+      "qualifierOrCondition": "S5*1*LD loop",
+      "failureCode": "MISSING_ORIGIN_ADDRESS",
+      "example": "200 Industrial Rd"
+    },
+    {
+      "source": "origin.city, origin.state, origin.postal_code",
+      "destinationSegment": "N4",
+      "destinationElement": "N4-01, N4-02, N4-03",
+      "transformation": "direct",
+      "required": true,
+      "qualifierOrCondition": "S5*1*LD loop",
+      "failureCode": "MISSING_ORIGIN_ADDRESS",
+      "example": "N4*Aurora*IL*60505"
+    },
+    {
+      "source": "destination.facility_name",
+      "destinationSegment": "N1",
+      "destinationElement": "N1-02",
+      "transformation": "direct",
+      "required": true,
+      "qualifierOrCondition": "S5*2*UL loop; N1-01 = CN",
+      "failureCode": "MISSING_DESTINATION_ADDRESS",
+      "example": "XYZ Warehouse"
+    },
+    {
+      "source": "destination.address_line_1",
+      "destinationSegment": "N3",
+      "destinationElement": "N3-01",
+      "transformation": "direct",
+      "required": true,
+      "qualifierOrCondition": "S5*2*UL loop",
+      "failureCode": "MISSING_DESTINATION_ADDRESS",
+      "example": "900 Commerce St"
+    },
+    {
+      "source": "destination.city, destination.state, destination.postal_code",
+      "destinationSegment": "N4",
+      "destinationElement": "N4-01, N4-02, N4-03",
+      "transformation": "direct",
+      "required": true,
+      "qualifierOrCondition": "S5*2*UL loop",
+      "failureCode": "MISSING_DESTINATION_ADDRESS",
+      "example": "N4*Detroit*MI*48201"
+    },
+    {
+      "source": "weight_lbs",
+      "destinationSegment": "L3",
+      "destinationElement": "L3-01",
+      "transformation": "decimal to X12 numeric text",
+      "required": true,
+      "qualifierOrCondition": "L3-02 = G",
+      "failureCode": "MISSING_WEIGHT",
+      "example": "42000"
+    },
+    {
+      "source": "pieces",
+      "destinationSegment": "L3",
+      "destinationElement": "L3-05",
+      "transformation": "integer text",
+      "required": true,
+      "qualifierOrCondition": "Current fixture profile requires pieces; do not fabricate when absent",
+      "failureCode": "MISSING_PIECES",
+      "example": "22"
+    },
+    {
+      "source": "equipment_type",
+      "destinationSegment": null,
+      "destinationElement": null,
+      "transformation": "intentionally not emitted",
+      "required": false,
+      "qualifierOrCondition": "Existing Midwest 204 subset does not define an equipment destination segment",
+      "failureCode": null,
+      "example": "DRY_VAN_53 ignored for current subset"
+    },
+    {
+      "source": "origin.address_line_2, destination.address_line_2",
+      "destinationSegment": null,
+      "destinationElement": null,
+      "transformation": "intentionally not emitted",
+      "required": false,
+      "qualifierOrCondition": "Existing Midwest fixture profile only emits N3-01",
+      "failureCode": null,
+      "example": "Dock 4 ignored"
+    }
+  ]
+}

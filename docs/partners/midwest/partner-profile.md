@@ -60,7 +60,7 @@ Midwest is responsible for:
 
 FreightBridge is responsible for:
 
-- Generating Midwest-specific X12 files from a future canonical model.
+- Generating Midwest-specific X12 204 previews from the canonical model.
 - Picking up future Midwest outbound EDI files.
 - Preserving control numbers and business identifiers for correlation.
 - Keeping SFTP credentials and SSH keys out of source control.
@@ -76,4 +76,4 @@ FreightBridge is responsible for:
 
 - The EDI profile is deliberately constrained for FreightBridge and is not a complete ANSI X12 implementation guide.
 - 210 freight invoice is explicitly future/stretch and is not part of the MVP implementation contract.
-- Midwest simulator behavior, SFTP client code, EDI parsing, and business processing are deferred.
+- Midwest simulator behavior, SFTP client code, 990/214/997 processing, and Midwest-side business processing are deferred.
