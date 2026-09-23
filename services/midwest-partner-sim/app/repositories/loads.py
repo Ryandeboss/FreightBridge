@@ -597,18 +597,22 @@ class MidwestLoadRepository:
           oed.inbound_document_id,
           oed.document_type,
           case
-            when oed.raw_x12 like '%AK5*A~%AK9*A*1*1*1~%' then 'ACCEPTED'
-            when oed.raw_x12 like '%AK5*R~%AK9*R*1*1*0~%' then 'REJECTED'
+            when position('AK5*A~' in oed.raw_x12) > 0
+             and position('AK9*A*1*1*1~' in oed.raw_x12) > 0
+              then 'ACCEPTED'
+            when position('AK5*R~' in oed.raw_x12) > 0
+             and position('AK9*R*1*1*0~' in oed.raw_x12) > 0
+              then 'REJECTED'
             else 'UNKNOWN'
           end as acknowledgment_status,
           case
-            when oed.raw_x12 like '%AK5*A~%' then 'A'
-            when oed.raw_x12 like '%AK5*R~%' then 'R'
+            when position('AK5*A~' in oed.raw_x12) > 0 then 'A'
+            when position('AK5*R~' in oed.raw_x12) > 0 then 'R'
             else null
           end as transaction_ack_code,
           case
-            when oed.raw_x12 like '%AK9*A*%' then 'A'
-            when oed.raw_x12 like '%AK9*R*%' then 'R'
+            when position('AK9*A*' in oed.raw_x12) > 0 then 'A'
+            when position('AK9*R*' in oed.raw_x12) > 0 then 'R'
             else null
           end as group_ack_code,
           ied.group_control_number as acknowledged_group_control_number,

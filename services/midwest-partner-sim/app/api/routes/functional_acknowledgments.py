@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
+from psycopg import Error as PsycopgError
 
 from app.api.dependencies import get_load_repository
 from app.core.security import require_read_access, require_write_access
@@ -19,7 +20,14 @@ def list_functional_acknowledgments(
   customer_shipment_number: str,
   repository: MidwestLoadRepository = Depends(get_load_repository),
 ) -> dict[str, object]:
-  acknowledgments = repository.fetch_functional_acknowledgments(customer_shipment_number)
+  try:
+    acknowledgments = repository.fetch_functional_acknowledgments(customer_shipment_number)
+  except PsycopgError as exc:
+    raise MidwestAPIError(
+      status.HTTP_503_SERVICE_UNAVAILABLE,
+      ErrorCode.DEPENDENCY_ERROR,
+      'Midwest functional acknowledgment readback is temporarily unavailable.',
+    ) from exc
   if acknowledgments is None:
     raise MidwestAPIError(
       status.HTTP_404_NOT_FOUND,

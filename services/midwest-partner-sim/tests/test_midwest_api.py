@@ -4,6 +4,8 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from psycopg import OperationalError
+from psycopg._queries import _split_query
 
 from app.api.dependencies import get_load_repository
 from app.api.routes import readiness
@@ -559,6 +561,68 @@ def test_functional_acknowledgment_readback_endpoint() -> None:
   assert body['groupAckCode'] == 'A'
 
 
+def test_functional_acknowledgment_readback_uses_psycopg_safe_sql() -> None:
+  outbound_document_id = uuid4()
+  inbound_document_id = uuid4()
+  generated_at = datetime(2026, 9, 23, 14, 30, tzinfo=timezone.utc)
+  connection = PsycopgParsingConnection([
+    [{'id': uuid4()}],
+    [{
+      'outbound_document_id': outbound_document_id,
+      'inbound_document_id': inbound_document_id,
+      'document_type': '997',
+      'acknowledgment_status': 'ACCEPTED',
+      'transaction_ack_code': 'A',
+      'group_ack_code': 'A',
+      'acknowledged_group_control_number': '905',
+      'acknowledged_transaction_control_number': '0001',
+      'processing_status': 'GENERATED',
+      'transport': None,
+      'remote_path': None,
+      'generated_at': generated_at,
+      'delivered_at': None,
+    }],
+  ])
+
+  acknowledgments = database_repository(connection).fetch_functional_acknowledgments('LOAD500')
+
+  assert acknowledgments == [{
+    'outbound_document_id': outbound_document_id,
+    'inbound_document_id': inbound_document_id,
+    'document_type': '997',
+    'acknowledgment_status': 'ACCEPTED',
+    'transaction_ack_code': 'A',
+    'group_ack_code': 'A',
+    'acknowledged_group_control_number': '905',
+    'acknowledged_transaction_control_number': '0001',
+    'processing_status': 'GENERATED',
+    'transport': None,
+    'remote_path': None,
+    'generated_at': generated_at,
+    'delivered_at': None,
+  }]
+  readback_sql = connection.executed_queries[1]
+  assert 'raw_x12 like' not in readback_sql.lower()
+  assert "position('AK5*A~' in oed.raw_x12) > 0" in readback_sql
+  assert "position('AK9*A*1*1*1~' in oed.raw_x12) > 0" in readback_sql
+  assert "position('AK5*R~' in oed.raw_x12) > 0" in readback_sql
+  assert "position('AK9*R*1*1*0~' in oed.raw_x12) > 0" in readback_sql
+
+
+def test_functional_acknowledgment_readback_database_error_returns_safe_503() -> None:
+  repository = FailingFunctionalAcknowledgmentRepository()
+  app.dependency_overrides[get_load_repository] = lambda: repository
+
+  response = TestClient(app).get(
+    '/v1/loads/LOAD500/functional-acknowledgments',
+    headers={'Authorization': 'Bearer read-token'},
+  )
+
+  assert response.status_code == 503
+  assert response.json()['error']['code'] == 'DEPENDENCY_ERROR'
+  assert 'select broken_table' not in response.text
+
+
 @pytest.mark.parametrize(
   ('payload', 'expected_code'),
   [
@@ -854,6 +918,50 @@ class FakeRepository:
       tenderStatus=self.load_tender_status,
       carrierLoadNumber=self.carrier_load_number,
     )
+
+
+class FailingFunctionalAcknowledgmentRepository:
+  def fetch_functional_acknowledgments(self, cust_ship_no):
+    raise OperationalError('select broken_table with secret detail')
+
+
+class PsycopgParsingConnection:
+  def __init__(self, results: list[list[dict[str, object]]]) -> None:
+    self.results = list(results)
+    self.executed_queries: list[str] = []
+
+  def cursor(self):
+    return PsycopgParsingCursor(self)
+
+
+class PsycopgParsingCursor:
+  def __init__(self, connection: PsycopgParsingConnection) -> None:
+    self.connection = connection
+    self.rows: list[dict[str, object]] = []
+
+  def __enter__(self):
+    return self
+
+  def __exit__(self, exc_type, exc, traceback):
+    return None
+
+  def execute(self, query: str, params=None) -> None:
+    if params is not None:
+      _split_query(query.encode('utf-8'), 'utf-8')
+    self.connection.executed_queries.append(query)
+    self.rows = self.connection.results.pop(0)
+
+  def fetchone(self):
+    return self.rows[0] if self.rows else None
+
+  def fetchall(self):
+    return self.rows
+
+
+def database_repository(connection):
+  from app.repositories.loads import MidwestLoadRepository
+
+  return MidwestLoadRepository(connection)
 
 
 def _compact_x12(payload: str) -> str:
