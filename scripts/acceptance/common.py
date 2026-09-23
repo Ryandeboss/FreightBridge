@@ -391,5 +391,11 @@ def print_required_env() -> None:
   ):
     print(f'  {name}')
   print('Optional environment variables:')
-  for name in ('APEX_READONLY_TOKEN', 'MIDWEST_READONLY_TOKEN', 'OPERATIONS_API_BEARER_TOKEN', 'DATABASE_URL'):
+  for name in (
+    'APEX_READONLY_TOKEN',
+    'MIDWEST_READONLY_TOKEN',
+    'OPERATIONS_API_BEARER_TOKEN',
+    'ANALYST_UI_BASE_URL',
+    'DATABASE_URL',
+  ):
     print(f'  {name}')

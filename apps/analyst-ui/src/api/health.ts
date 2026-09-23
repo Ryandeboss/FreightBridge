@@ -1,77 +1,36 @@
-export interface HealthResponse {
-  status: 'ok';
-  service: 'freightbridge-api';
-}
+import { requestJson } from './client';
 
-export interface ReadinessResponse {
-  status: 'ready' | 'not_ready';
-  service: 'freightbridge-api';
-  environment?: string;
-  dependencies: {
-    configuration?: 'ok' | 'error';
-    database?: 'ok' | 'error';
-    domain_schema?: 'ok' | 'error';
-  };
-}
-
-interface ReadinessErrorResponse {
-  detail?: ReadinessResponse;
-}
-
-export interface SystemStatus {
+export type SystemStatus = {
   api: 'online' | 'unreachable';
   database: 'connected' | 'unavailable';
   domainSchema: 'ready' | 'unavailable';
   environment: string;
-}
+};
 
-async function requestJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, {
-    headers: {
-      Accept: 'application/json',
-    },
-  });
+type ReadinessResponse = {
+  status: string;
+  environment?: string;
+  dependencies?: {
+    database?: string;
+    domain_schema?: string;
+  };
+};
 
-  const payload = (await response.json()) as T;
-
-  if (!response.ok) {
-    throw Object.assign(new Error('Request failed'), {
-      response,
-      payload,
-    });
-  }
-
-  return payload;
-}
-
-function buildUrl(apiBaseUrl: string, path: string): string {
-  return `${apiBaseUrl.replace(/\/$/, '')}${path}`;
-}
-
-export async function fetchSystemStatus(apiBaseUrl: string): Promise<SystemStatus> {
-  const health = await requestJson<HealthResponse>(buildUrl(apiBaseUrl, '/health'));
-  const apiOnline = health.status === 'ok' && health.service === 'freightbridge-api';
-
+export async function fetchSystemStatus(): Promise<SystemStatus> {
   try {
-    const readiness = await requestJson<ReadinessResponse>(
-      buildUrl(apiBaseUrl, '/readiness'),
-    );
-
+    const readiness = await requestJson<ReadinessResponse>('/readiness');
     return {
-      api: apiOnline ? 'online' : 'unreachable',
-      database: readiness.dependencies.database === 'ok' ? 'connected' : 'unavailable',
-      domainSchema: readiness.dependencies.domain_schema === 'ok' ? 'ready' : 'unavailable',
-      environment: readiness.environment || 'unknown',
+      api: readiness.status === 'ready' ? 'online' : 'unreachable',
+      database: readiness.dependencies?.database === 'ok' ? 'connected' : 'unavailable',
+      domainSchema: readiness.dependencies?.domain_schema === 'ok' ? 'ready' : 'unavailable',
+      environment: readiness.environment ?? import.meta.env.VITE_APP_ENV ?? 'unknown',
     };
-  } catch (error) {
-    const payload = (error as { payload?: ReadinessErrorResponse }).payload;
-    const readiness = payload?.detail;
-
+  } catch {
     return {
-      api: apiOnline ? 'online' : 'unreachable',
-      database: readiness?.dependencies.database === 'ok' ? 'connected' : 'unavailable',
-      domainSchema: readiness?.dependencies.domain_schema === 'ok' ? 'ready' : 'unavailable',
-      environment: readiness?.environment || 'unknown',
+      api: 'unreachable',
+      database: 'unavailable',
+      domainSchema: 'unavailable',
+      environment: import.meta.env.VITE_APP_ENV ?? 'unknown',
     };
   }
 }

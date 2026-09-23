@@ -55,6 +55,8 @@ Authorization: Bearer <OPERATIONS_API_BEARER_TOKEN>
 
 This is a distinct trust boundary from Apex and Midwest partner tokens. Missing or invalid tokens return `401`.
 
+The Analyst Console is a browser client for these endpoints. Operators enter the token at runtime; it is stored only in session storage and cleared by `Lock Console` or any protected-request `401`. See [Analyst Console](analyst-console.md).
+
 ## Safe Metadata
 
 Processing log metadata may include safe operational fields:

@@ -2,7 +2,7 @@
 
 Current test coverage:
 
-- Frontend lint and production build.
+- Frontend lint, Vitest console-flow tests, and production build.
 - Backend `/health` endpoint test with pytest.
 - FreightBridge domain model, repository, and readiness tests.
 - Apex simulator model, auth, business endpoint, status progression, error envelope, and readiness tests.
@@ -16,10 +16,11 @@ Current test coverage:
 - Midwest 997 functional-acknowledgment generation, SFTP dispatch/poll routing, AK1/AK2 correlation to outbound 204, technical acknowledgment persistence, and 997-vs-990 regression tests.
 - Operations API authentication, transaction search/detail, business trace, correlation lookup, error queue, resolve/reopen, summary, and safe redaction tests.
 - Milestone 15 idempotency, replay, SFTP archive collision, identical-file reconciliation, and manual retry architecture tests.
+- Milestone 16 Analyst Console token-gate, dashboard, transaction, failure, business-trace, lock, and deployed browser acceptance tests.
 - Offline unit tests for the deployed acceptance harness helpers.
 - GitHub Actions workflow for frontend and backend checks.
 - Manual-only GitHub Actions workflow for deployed acceptance.
 
-For full deployed milestone acceptance, prefer the Python harness documented in [deployed-acceptance-harness.md](deployed-acceptance-harness.md). Milestone-specific guides include [Milestone 12](milestone-12-midwest-214-status-flow.md), [Milestone 13](milestone-13-997-functional-acknowledgment.md), [Milestone 14](milestone-14-operational-observability.md), and [Milestone 15](milestone-15-idempotency-retry.md). The Postman collections remain useful for debugging individual routes.
+For full deployed milestone acceptance, prefer the Python harness documented in [deployed-acceptance-harness.md](deployed-acceptance-harness.md). Milestone-specific guides include [Milestone 12](milestone-12-midwest-214-status-flow.md), [Milestone 13](milestone-13-997-functional-acknowledgment.md), [Milestone 14](milestone-14-operational-observability.md), [Milestone 15](milestone-15-idempotency-retry.md), and [Milestone 16](milestone-16-analyst-console.md). The Postman collections remain useful for debugging individual routes.
 
 Future milestones should add API contract tests, simulator tests, database tests, integration pipeline tests, and deployed acceptance scripts that reuse `scripts/acceptance/common.py`.

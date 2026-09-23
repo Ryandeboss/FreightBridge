@@ -46,6 +46,8 @@ The endpoint is protected by `OPERATIONS_API_BEARER_TOKEN`.
 
 Successful retry creates a child transaction. The original transaction remains `FAILED`; its retryable error is resolved with `resolved_by_transaction_id` pointing at the successful retry child.
 
+The Analyst Console exposes this endpoint from transaction detail only when the selected transaction is failed and has an unresolved retryable error. The UI still follows the same backend guardrails and does not add automatic retry behavior.
+
 Example:
 
 - Transaction `T1`: outbound 204 delivery failed with retryable transport error.

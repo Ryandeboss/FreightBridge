@@ -1,6 +1,6 @@
 # FreightBridge
 
-FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current state includes the FreightBridge foundation, independent Apex and Midwest simulators, Apex-to-FreightBridge canonical shipment ingestion, a generic X12 structural foundation, Midwest 204 generation/direct delivery, Midwest 997 functional acknowledgment processing, Midwest 990 tender-response return processing, Midwest 214 shipment-status processing, operations transaction/error observability APIs, and a real Railway/SFTPGo SFTP exchange path for Midwest files.
+FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current state includes the FreightBridge foundation, independent Apex and Midwest simulators, Apex-to-FreightBridge canonical shipment ingestion, a generic X12 structural foundation, Midwest 204 generation/direct delivery, Midwest 997 functional acknowledgment processing, Midwest 990 tender-response return processing, Midwest 214 shipment-status processing, operations transaction/error observability APIs, a protected Analyst Console UI, and a real Railway/SFTPGo SFTP exchange path for Midwest files.
 
 ## Planned Architecture
 
@@ -43,7 +43,7 @@ FreightBridge
   [stores technical acks; forwards business tender/status updates to Apex]
 ```
 
-Operations support can inspect the same transaction/log/error records through secured `/api/operations` endpoints. See [Operational observability and failure queue](docs/operations/observability-and-failure-queue.md) and [Idempotency, replay, and manual retry](docs/operations/idempotency-and-retry.md).
+Operations support can inspect the same transaction/log/error records through secured `/api/operations` endpoints and the protected Analyst Console. See [Operational observability and failure queue](docs/operations/observability-and-failure-queue.md), [Idempotency, replay, and manual retry](docs/operations/idempotency-and-retry.md), and [Analyst Console](docs/operations/analyst-console.md).
 
 See [docs/architecture/initial-architecture.md](docs/architecture/initial-architecture.md) for the first architecture diagram.
 
@@ -60,7 +60,7 @@ See [docs/architecture/initial-architecture.md](docs/architecture/initial-archit
 
 ```text
 apps/
-  analyst-ui/             React + TypeScript analyst dashboard placeholder
+  analyst-ui/             React + TypeScript protected operations console
 services/
   freightbridge-api/      FastAPI integration API foundation
   apex-partner-sim/       FastAPI Apex REST/JSON partner simulator
@@ -89,6 +89,7 @@ Frontend:
 cd apps/analyst-ui
 npm install
 npm run lint
+npm run test
 npm run build
 npm run dev
 ```
@@ -218,7 +219,7 @@ Railway/SFTPGo service:
 
 Supabase secret keys, database URLs, private SSH keys, passwords, and Render/Railway/Vercel tokens belong only in secure platform secret stores. Browser-exposed frontend variables must use the `VITE_` prefix and should only contain values that are safe to expose publicly, such as a backend API URL and app environment label.
 
-Do not expose Supabase keys or database connection strings to Vercel frontend code.
+Do not expose Supabase keys, database connection strings, or `OPERATIONS_API_BEARER_TOKEN` to Vercel frontend code. The Analyst Console token is entered at runtime and stored only in browser session storage.
 
 ## Contract Documentation
 
@@ -257,6 +258,8 @@ Major Milestone 3 contract files:
 - [Deployed acceptance harness](docs/testing/deployed-acceptance-harness.md)
 - [Midwest 214 to canonical event mapping](docs/mappings/midwest-214-to-canonical-event.md)
 - [Midwest 997 functional acknowledgment mapping](docs/mappings/midwest-997-functional-acknowledgment.md)
+- [Analyst Console runbook](docs/operations/analyst-console.md)
+- [Milestone 16 Analyst Console acceptance](docs/testing/milestone-16-analyst-console.md)
 
 Sample contract fixtures:
 
@@ -277,7 +280,7 @@ Implemented:
 
 - Cloud foundation and deployment structure.
 - API liveness and database readiness checks.
-- Frontend status panel for API and Supabase readiness.
+- Protected Analyst Console with token gate, dashboard, transaction search/detail, failure queue/detail, business trace, and manual retry/resolve/reopen controls.
 - FreightBridge canonical domain models.
 - PostgreSQL domain schema once `infrastructure/supabase/migrations/20260920_001_create_freightbridge_domain.sql` is applied.
 - Apex Logistics REST/JSON simulator.
@@ -293,7 +296,7 @@ Implemented:
 - Railway/SFTPGo-backed Midwest 204 and 990 file exchange with manual poll endpoints, archive/error routing, host-key verification, and atomic upload protection.
 - Midwest X12 214 shipment-status event creation, SFTP dispatch, FreightBridge canonical event history/current-status handling, and Apex shipment-status readback.
 - Midwest X12 997 functional acknowledgment generation, SFTP dispatch, FreightBridge AK1/AK2 correlation to outbound 204, and technical acknowledgment audit.
-- Reusable deployed acceptance harness for Milestone 12 black-box testing against Apex, FreightBridge, Midwest, and SFTPGo through public HTTP endpoints.
+- Reusable deployed acceptance harness for black-box testing against Apex, FreightBridge, Midwest, SFTPGo, and the Analyst UI through public HTTP/browser paths.
 
 Specified:
 
@@ -305,7 +308,6 @@ Specified:
 Planned:
 
 - Generic/configurable mapping engine.
-- 997 processing.
-- Shipment persistence and analyst workflow features.
+- Expanded analyst workflow features beyond the Milestone 16 read/triage console.
 
 Do not begin FreightBridge product features from this milestone.
