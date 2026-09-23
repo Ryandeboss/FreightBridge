@@ -42,6 +42,7 @@ Optional:
 ```bash
 APEX_READONLY_TOKEN=
 MIDWEST_READONLY_TOKEN=
+OPERATIONS_API_BEARER_TOKEN=
 DATABASE_URL=
 ```
 
@@ -66,6 +67,14 @@ Run Milestone 13:
 ```bash
 python scripts/acceptance/milestone13.py
 ```
+
+Run Milestone 14:
+
+```bash
+python scripts/acceptance/milestone14.py
+```
+
+Milestone 14 requires `OPERATIONS_API_BEARER_TOKEN`. Milestones 12 and 13 do not.
 
 Useful options:
 
@@ -172,7 +181,7 @@ The workflow is `workflow_dispatch` only because it mutates shared deployed test
 
 Supported inputs:
 
-- `milestone`: `milestone12` or `milestone13`
+- `milestone`: `milestone12`, `milestone13`, or `milestone14`
 - `load_id`: optional, blank means generate a fresh load ID
 - `run_db_verification`: passes `DATABASE_URL` only when enabled
 - `verbose`: prints safe request progress
@@ -190,9 +199,10 @@ MIDWEST_BASE_URL
 MIDWEST_BEARER_TOKEN
 MIDWEST_READONLY_TOKEN
 DATABASE_URL
+OPERATIONS_API_BEARER_TOKEN
 ```
 
-`APEX_READONLY_TOKEN`, `MIDWEST_READONLY_TOKEN`, and `DATABASE_URL` are optional. Add `DATABASE_URL` only if you want GitHub to run direct SQL verification.
+`APEX_READONLY_TOKEN`, `MIDWEST_READONLY_TOKEN`, and `DATABASE_URL` are optional. `OPERATIONS_API_BEARER_TOKEN` is required only for Milestone 14. Add `DATABASE_URL` only if you want GitHub to run direct SQL verification.
 
 To create repository secrets:
 

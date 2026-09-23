@@ -54,6 +54,7 @@ class AcceptanceConfig:
   midwest_bearer_token: str
   apex_readonly_token: str | None = None
   midwest_readonly_token: str | None = None
+  operations_bearer_token: str | None = None
   database_url: str | None = None
 
   @classmethod
@@ -80,6 +81,7 @@ class AcceptanceConfig:
       midwest_base_url=os.environ['MIDWEST_BASE_URL'].rstrip('/'),
       midwest_bearer_token=os.environ['MIDWEST_BEARER_TOKEN'],
       midwest_readonly_token=os.environ.get('MIDWEST_READONLY_TOKEN') or os.environ['MIDWEST_BEARER_TOKEN'],
+      operations_bearer_token=os.environ.get('OPERATIONS_API_BEARER_TOKEN'),
       database_url=os.environ.get('DATABASE_URL'),
     )
 
@@ -378,5 +380,5 @@ def print_required_env() -> None:
   ):
     print(f'  {name}')
   print('Optional environment variables:')
-  for name in ('APEX_READONLY_TOKEN', 'MIDWEST_READONLY_TOKEN', 'DATABASE_URL'):
+  for name in ('APEX_READONLY_TOKEN', 'MIDWEST_READONLY_TOKEN', 'OPERATIONS_API_BEARER_TOKEN', 'DATABASE_URL'):
     print(f'  {name}')

@@ -21,6 +21,8 @@ services:
         sync: false
       - key: APEX_INBOUND_BEARER_TOKEN
         sync: false
+      - key: OPERATIONS_API_BEARER_TOKEN
+        sync: false
       - key: MIDWEST_SIM_BASE_URL
         sync: false
       - key: MIDWEST_SIM_BEARER_TOKEN

@@ -1,6 +1,6 @@
 # FreightBridge
 
-FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current state includes the FreightBridge foundation, independent Apex and Midwest simulators, Apex-to-FreightBridge canonical shipment ingestion, a generic X12 structural foundation, Midwest 204 generation/direct delivery, Midwest 997 functional acknowledgment processing, Midwest 990 tender-response return processing, Midwest 214 shipment-status processing, and a real Railway/SFTPGo SFTP exchange path for Midwest files.
+FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current state includes the FreightBridge foundation, independent Apex and Midwest simulators, Apex-to-FreightBridge canonical shipment ingestion, a generic X12 structural foundation, Midwest 204 generation/direct delivery, Midwest 997 functional acknowledgment processing, Midwest 990 tender-response return processing, Midwest 214 shipment-status processing, operations transaction/error observability APIs, and a real Railway/SFTPGo SFTP exchange path for Midwest files.
 
 ## Planned Architecture
 
@@ -42,6 +42,8 @@ Midwest
 FreightBridge
   [stores technical acks; forwards business tender/status updates to Apex]
 ```
+
+Operations support can inspect the same transaction/log/error records through secured `/api/operations` endpoints. See [Operational observability and failure queue](docs/operations/observability-and-failure-queue.md).
 
 See [docs/architecture/initial-architecture.md](docs/architecture/initial-architecture.md) for the first architecture diagram.
 
@@ -133,6 +135,12 @@ python -m pip install -r scripts/acceptance/requirements.txt
 python scripts/acceptance/milestone12.py
 ```
 
+Milestone 14 acceptance verifies the operations failure queue with a real duplicate-shipment failure:
+
+```bash
+python scripts/acceptance/milestone14.py
+```
+
 See [deployed acceptance harness](docs/testing/deployed-acceptance-harness.md) for required environment variables, GitHub Actions secrets, optional DB verification, and failure reporting. Postman collections remain available for individual route debugging.
 
 ## Environment Variables
@@ -153,6 +161,7 @@ Backend preferred:
 - `SUPABASE_SECRET_KEY`
 - `DATABASE_URL`
 - `APEX_INBOUND_BEARER_TOKEN`
+- `OPERATIONS_API_BEARER_TOKEN`
 - `MIDWEST_INBOUND_BEARER_TOKEN`
 - `APEX_SIM_BASE_URL`
 - `APEX_SIM_BEARER_TOKEN`

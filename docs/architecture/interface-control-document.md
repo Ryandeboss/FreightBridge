@@ -48,7 +48,10 @@ Midwest Carrier
 - Apex bearer tokens are backend-only.
 - Midwest SSH keys are backend/SFTP infrastructure secrets only.
 - Supabase/database credentials remain backend-only.
+- FreightBridge operations APIs use `OPERATIONS_API_BEARER_TOKEN`, separate from partner tokens.
 - No partner credentials, private keys, or real connection strings belong in source control.
+
+Operations endpoints are exposed under `/api/operations`. They return safe transaction summaries, transaction details, business traces, correlation lookups, error queue records, error resolution/reopen actions, and operational summary counts. They do not return raw payload bodies or secrets.
 
 ## Expected Message Flows
 

@@ -1,5 +1,9 @@
 # Operations Notes
 
-This folder will hold future runbooks for deployments, incident response, data retention, and trading partner operations.
+This folder holds runbooks for deployments, incident response, data retention, and trading partner operations.
 
-The current milestone only defines hosting targets and environment-variable boundaries.
+Current notes:
+
+- [Deployment](deployment.md)
+- [SFTPGo Railway runbook](sftpgo-railway-runbook.md)
+- [Operational observability and failure queue](observability-and-failure-queue.md)

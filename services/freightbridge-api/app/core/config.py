@@ -18,6 +18,7 @@ class Settings(BaseSettings):
   )
   database_url: str | None = Field(default=None, alias='DATABASE_URL')
   apex_inbound_bearer_token: str | None = Field(default=None, alias='APEX_INBOUND_BEARER_TOKEN')
+  operations_api_bearer_token: str | None = Field(default=None, alias='OPERATIONS_API_BEARER_TOKEN')
   midwest_sim_base_url: str | None = Field(default=None, alias='MIDWEST_SIM_BASE_URL')
   midwest_sim_bearer_token: str | None = Field(default=None, alias='MIDWEST_SIM_BEARER_TOKEN')
   midwest_inbound_bearer_token: str | None = Field(default=None, alias='MIDWEST_INBOUND_BEARER_TOKEN')

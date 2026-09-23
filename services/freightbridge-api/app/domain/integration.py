@@ -72,5 +72,6 @@ class IntegrationError(BaseModel):
   stage: ProcessingStage
   retryable: bool = False
   resolved: bool = False
+  resolution_note: str | None = Field(default=None, max_length=500)
   created_at: AwareDatetime | None = None
   resolved_at: AwareDatetime | None = None

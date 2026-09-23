@@ -50,3 +50,9 @@ EDI rejection and acknowledgment behavior depends on where the failure occurs:
 | Business processing | Future business-level rejection, such as 990 decline or processing error, separate from 997 |
 
 997 is implemented only for the constrained Midwest 204 acknowledgment profile. TA1, 999, AS2 MDN, and broad failure-injection acknowledgment handling remain out of scope.
+
+## Operational Resolution
+
+Resolving an `integration_errors` row means a support user reviewed or closed the queue item. It does not change the associated transaction, retry the message, repair shipment/tender state, or imply partner delivery. Resolved failed transactions remain historically `FAILED`.
+
+Milestone 14 adds optional `resolution_note` for this support action. Notes are capped at 500 characters and must not contain secrets or raw payloads.
