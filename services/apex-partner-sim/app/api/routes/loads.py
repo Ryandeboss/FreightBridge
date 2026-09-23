@@ -86,15 +86,19 @@ def dispatch_load_tender(
 
   correlation_id = getattr(request.state, 'correlation_id', f'apex-{uuid4()}')
   url = settings.freightbridge_api_base_url.rstrip('/') + '/api/integrations/apex/load-tenders'
+  outbound_headers = {
+    'Authorization': f'Bearer {settings.freightbridge_apex_bearer_token}',
+    'Content-Type': 'application/json',
+    'X-Correlation-ID': correlation_id,
+  }
+  idempotency_key = request.headers.get('Idempotency-Key')
+  if idempotency_key:
+    outbound_headers['Idempotency-Key'] = idempotency_key
   try:
     response = httpx.post(
       url,
       json=load.model_dump(mode='json', by_alias=True),
-      headers={
-        'Authorization': f'Bearer {settings.freightbridge_apex_bearer_token}',
-        'Content-Type': 'application/json',
-        'X-Correlation-ID': correlation_id,
-      },
+      headers=outbound_headers,
       timeout=10.0,
     )
   except httpx.TimeoutException as exc:

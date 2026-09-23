@@ -297,8 +297,37 @@ def test_dispatch_load_posts_to_freightbridge_and_propagates_correlation(
   assert captured['url'] == 'https://freightbridge.example.test/api/integrations/apex/load-tenders'
   assert captured['headers']['Authorization'] == 'Bearer outbound-secret-token'
   assert captured['headers']['X-Correlation-ID'] == 'corr-dispatch-001'
+  assert 'Idempotency-Key' not in captured['headers']
   assert captured['json']['loadId'] == 'LOAD500'
   assert 'outbound-secret-token' not in response.text
+
+
+def test_dispatch_forwards_explicit_idempotency_key(
+  client: TestClient,
+  fake_repository: FakeApexRepository,
+  monkeypatch,
+) -> None:
+  seed_load(fake_repository)
+  monkeypatch.setenv('FREIGHTBRIDGE_API_BASE_URL', 'https://freightbridge.example.test')
+  monkeypatch.setenv('FREIGHTBRIDGE_APEX_BEARER_TOKEN', 'outbound-secret-token')
+  get_settings.cache_clear()
+  captured: dict[str, object] = {}
+
+  def fake_post(url: str, **kwargs):
+    captured.update(kwargs)
+    return httpx.Response(202, json={'status': 'ACCEPTED'})
+
+  import httpx
+
+  monkeypatch.setattr('app.api.routes.loads.httpx.post', fake_post)
+
+  response = client.post(
+    '/v1/load-tenders/LOAD500/dispatch',
+    headers={**auth_headers(correlation_id='corr-dispatch-001'), 'Idempotency-Key': 'load-500-once'},
+  )
+
+  assert response.status_code == 202
+  assert captured['headers']['Idempotency-Key'] == 'load-500-once'
 
 
 def test_dispatch_unknown_load_returns_404(client: TestClient, monkeypatch) -> None:

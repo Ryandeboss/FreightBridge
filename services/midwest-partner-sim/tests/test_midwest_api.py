@@ -672,6 +672,39 @@ def test_duplicate_load_returns_409_and_preserves_original() -> None:
   assert repository.rejected_documents == 1
 
 
+def test_exact_204_replay_does_not_create_second_load_or_997() -> None:
+  repository = ReplayAwareFakeRepository()
+  first = repository.create_inbound_document(payload_hash='hash', raw_x12=MIDWEST_204)
+  parsed = parse_midwest_204(MIDWEST_204)
+  load_id = repository.create_load_from_204(parsed)
+  repository.mark_document_accepted(first, parsed)
+  repository.create_functional_acknowledgment_for_204(inbound_document_id=first, parsed=parsed)
+  service = __import__('app.services.inbound_204', fromlist=['Midwest204ReceiveService']).Midwest204ReceiveService(repository)
+
+  result = service.process(raw_body=MIDWEST_204.encode('utf-8'))
+
+  assert result.response_body()['status'] == 'REPLAY_ACCEPTED'
+  assert result.midwest_load_id == load_id
+  assert repository.load_create_count == 1
+  assert repository.functional_ack_count == 1
+  assert repository.replay_documents == 1
+
+
+def test_204_control_reuse_with_changed_payload_rejects_without_side_effects() -> None:
+  repository = ReplayAwareFakeRepository(existing_payload_hash='different-hash')
+  service = __import__('app.services.inbound_204', fromlist=['Midwest204ReceiveService', 'Midwest204ReceiveFailure']).Midwest204ReceiveService(repository)
+  failure_type = __import__('app.services.inbound_204', fromlist=['Midwest204ReceiveFailure']).Midwest204ReceiveFailure
+
+  with pytest.raises(failure_type) as exc_info:
+    service.process(raw_body=MIDWEST_204.encode('utf-8'))
+
+  assert exc_info.value.status_code == 409
+  assert exc_info.value.code.value == 'X12_CONTROL_NUMBER_REUSE'
+  assert repository.load_create_count == 0
+  assert repository.functional_ack_count == 0
+  assert repository.rejected_documents == 1
+
+
 class FakeRepository:
   def __init__(self, duplicate: bool = False) -> None:
     self.duplicate = duplicate
@@ -690,6 +723,12 @@ class FakeRepository:
   def create_inbound_document(self, **kwargs):
     self.inbound_document_id = uuid4()
     return self.inbound_document_id
+
+  def find_accepted_inbound_204_by_controls(self, parsed):
+    return None
+
+  def mark_document_replay(self, document_id, parsed, *, replay_of_document_id, archive_path=None) -> None:
+    self.accepted_documents += 1
 
   def mark_document_accepted(self, document_id, parsed, *, archive_path=None) -> None:
     self.accepted_documents += 1
@@ -918,6 +957,56 @@ class FakeRepository:
       tenderStatus=self.load_tender_status,
       carrierLoadNumber=self.carrier_load_number,
     )
+
+
+class ReplayAwareFakeRepository(FakeRepository):
+  def __init__(self, existing_payload_hash: str | None = None) -> None:
+    super().__init__()
+    self.existing_payload_hash = existing_payload_hash
+    self.accepted_inbound_document_id = None
+    self.accepted_load_id = None
+    self.load_create_count = 0
+    self.functional_ack_count = 0
+    self.replay_documents = 0
+
+  def create_inbound_document(self, **kwargs):
+    document_id = uuid4()
+    self.inbound_document_id = document_id
+    return document_id
+
+  def mark_document_accepted(self, document_id, parsed, *, archive_path=None) -> None:
+    super().mark_document_accepted(document_id, parsed, archive_path=archive_path)
+    self.accepted_inbound_document_id = document_id
+
+  def create_load_from_204(self, parsed):
+    self.load_create_count += 1
+    self.load = parsed
+    self.accepted_load_id = uuid4()
+    return self.accepted_load_id
+
+  def create_functional_acknowledgment_for_204(self, *, inbound_document_id, parsed, generated_at=None, control_numbers=None):
+    self.functional_ack_count += 1
+    return super().create_functional_acknowledgment_for_204(
+      inbound_document_id=inbound_document_id,
+      parsed=parsed,
+      generated_at=generated_at,
+      control_numbers=control_numbers,
+    )
+
+  def find_accepted_inbound_204_by_controls(self, parsed):
+    if self.accepted_inbound_document_id is None:
+      if self.existing_payload_hash is None:
+        return None
+      self.accepted_inbound_document_id = uuid4()
+      self.accepted_load_id = uuid4()
+    return {
+      'id': self.accepted_inbound_document_id,
+      'payload_hash': self.existing_payload_hash or __import__('hashlib').sha256(MIDWEST_204.encode('utf-8')).hexdigest(),
+      'load_id': self.accepted_load_id,
+    }
+
+  def mark_document_replay(self, document_id, parsed, *, replay_of_document_id, archive_path=None) -> None:
+    self.replay_documents += 1
 
 
 class FailingFunctionalAcknowledgmentRepository:

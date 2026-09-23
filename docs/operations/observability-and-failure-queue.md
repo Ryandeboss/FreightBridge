@@ -41,7 +41,9 @@ A transaction that failed remains historically `FAILED` after its error is resol
 
 Reopening an error sets `resolved = false` and clears `resolved_at`. FreightBridge preserves the previous `resolution_note` as audit context.
 
-`retryable` is informational in Milestone 14. There is no retry endpoint, requeue endpoint, retry worker, or automatic retry behavior.
+`retryable` means the failure class is eligible for operator-controlled retry. It does not mean FreightBridge will automatically retry it. Milestone 15 adds a manual retry endpoint for failed outbound SFTP X12 204 transactions only; there is still no retry worker, requeue daemon, or automatic retry behavior.
+
+Successful manual retry creates a child transaction. The original failed transaction remains historically `FAILED`, and its retryable error may be marked resolved with `resolved_by_transaction_id` pointing to the successful retry child.
 
 ## Operations API Security
 
@@ -73,6 +75,7 @@ Operations APIs do not return raw payload bodies. `rawPayloadLocation` may be re
 
 - `GET /api/operations/transactions`
 - `GET /api/operations/transactions/{transaction_id}`
+- `POST /api/operations/transactions/{transaction_id}/retry`
 - `GET /api/operations/business/{business_identifier}/trace`
 - `GET /api/operations/correlations/{correlation_id}`
 - `GET /api/operations/errors`

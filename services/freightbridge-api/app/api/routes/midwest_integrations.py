@@ -198,6 +198,7 @@ def dispatch_midwest_load_tender_direct(
     result = service.dispatch(
       shipment_number=shipment_number,
       correlation_id=correlation_id,
+      idempotency_key=request.headers.get('Idempotency-Key'),
     )
   except MidwestShipmentNotFoundError:
     return JSONResponse(
@@ -265,6 +266,7 @@ def dispatch_midwest_load_tender_sftp(
     result = service.dispatch(
       shipment_number=shipment_number,
       correlation_id=correlation_id,
+      idempotency_key=request.headers.get('Idempotency-Key'),
     )
   except MidwestShipmentNotFoundError:
     return JSONResponse(

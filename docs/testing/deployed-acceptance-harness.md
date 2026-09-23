@@ -74,7 +74,13 @@ Run Milestone 14:
 python scripts/acceptance/milestone14.py
 ```
 
-Milestone 14 requires `OPERATIONS_API_BEARER_TOKEN`. Milestones 12 and 13 do not.
+Run Milestone 15:
+
+```bash
+python scripts/acceptance/milestone15.py
+```
+
+Milestones 14 and 15 require `OPERATIONS_API_BEARER_TOKEN`. Milestones 12 and 13 do not.
 
 Useful options:
 
@@ -85,6 +91,8 @@ python scripts/acceptance/milestone12.py --skip-db
 python scripts/acceptance/milestone12.py --keep-going
 python scripts/acceptance/milestone12.py --print-env
 ```
+
+Milestone 15 also uses safe custom headers for `Idempotency-Key`; the shared HTTP client rejects custom `Authorization` overrides so bearer tokens are controlled only by the configured token arguments.
 
 When `--load-id` is omitted, the harness generates a fresh ID like:
 

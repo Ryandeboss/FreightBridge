@@ -22,6 +22,7 @@ from app.integrations.apex.mapper import ApexMappingError, map_apex_load_to_cano
 from app.integrations.apex.models import ApexInboundLoad
 from app.integrations.apex.security import apex_inbound_token_is_valid
 from app.integrations.common.errors import ClassifiedIntegrationFailure, IntegrationAPIError
+from app.integrations.common.idempotency import IdempotencyKeyError, normalize_idempotency_key, semantic_fingerprint
 from app.integrations.common.ingestion import payload_sha256
 
 
@@ -37,15 +38,21 @@ class ApexIngestionResult:
   transaction_id: UUID
   shipment_id: UUID
   shipment_number: str
+  idempotent_replay: bool = False
+  original_transaction_id: UUID | None = None
 
-  def response_body(self) -> dict[str, str]:
-    return {
+  def response_body(self) -> dict[str, object]:
+    body = {
       'status': self.status,
       'correlationId': self.correlation_id,
       'transactionId': str(self.transaction_id),
       'shipmentId': str(self.shipment_id),
       'shipmentNumber': self.shipment_number,
+      'idempotentReplay': self.idempotent_replay,
     }
+    if self.original_transaction_id is not None:
+      body['originalTransactionId'] = str(self.original_transaction_id)
+    return body
 
 
 class ApexLoadTenderIngestionService:
@@ -78,6 +85,7 @@ class ApexLoadTenderIngestionService:
     raw_body: bytes,
     authorization_header: str | None,
     correlation_id: str,
+    idempotency_key: str | None = None,
   ) -> ApexIngestionResult:
     received_at = datetime.now(timezone.utc)
     partner = self.freightbridge_repository.fetch_trading_partner_by_code(APEX_PARTNER_CODE)
@@ -111,19 +119,48 @@ class ApexLoadTenderIngestionService:
       {'partner_code': APEX_PARTNER_CODE},
     )
 
+    idempotency_record_id = None
     try:
+      normalized_idempotency_key = normalize_idempotency_key(idempotency_key)
       self._authenticate(transaction_id, authorization_header)
       parsed_payload = self._parse(transaction_id, raw_body)
       apex_load = self._validate(transaction_id, parsed_payload)
       self.integration_repository.update_business_identifier(transaction_id, apex_load.load_id)
+      if normalized_idempotency_key is not None:
+        idempotency_record_id, replay_result = self._handle_idempotency(
+          transaction_id=transaction_id,
+          partner_id=partner['id'],
+          idempotency_key=normalized_idempotency_key,
+          apex_load=apex_load,
+          correlation_id=correlation_id,
+        )
+        if replay_result is not None:
+          return replay_result
       mapping_result = self._map(transaction_id, apex_load, partner['id'])
       shipment_id = self._persist(transaction_id, mapping_result.shipment, apex_load.load_id)
     except ClassifiedIntegrationFailure as exc:
       self._record_failure(transaction_id, exc)
+      self._mark_idempotency_failed_if_present(idempotency_record_id, transaction_id)
       raise IntegrationAPIError(
         status_code=exc.status_code,
         code=exc.code,
         message=exc.message,
+        correlation_id=correlation_id,
+        transaction_id=str(transaction_id),
+      ) from exc
+    except IdempotencyKeyError as exc:
+      failure = ClassifiedIntegrationFailure(
+        status_code=400,
+        code='INVALID_IDEMPOTENCY_KEY',
+        message=str(exc),
+        category=ErrorCategory.BUSINESS_VALIDATION_ERROR,
+        stage=ProcessingStage.VALIDATION,
+      )
+      self._record_failure(transaction_id, failure)
+      raise IntegrationAPIError(
+        status_code=failure.status_code,
+        code=failure.code,
+        message=failure.message,
         correlation_id=correlation_id,
         transaction_id=str(transaction_id),
       ) from exc
@@ -137,6 +174,7 @@ class ApexLoadTenderIngestionService:
         retryable=True,
       )
       self._record_failure(transaction_id, failure)
+      self._mark_idempotency_failed_if_present(idempotency_record_id, transaction_id)
       raise IntegrationAPIError(
         status_code=failure.status_code,
         code=failure.code,
@@ -153,13 +191,105 @@ class ApexLoadTenderIngestionService:
       'Canonical shipment persisted successfully.',
       {'shipment_number': mapping_result.shipment.shipment_number},
     )
-    return ApexIngestionResult(
+    result = ApexIngestionResult(
       status='ACCEPTED',
       correlation_id=correlation_id,
       transaction_id=transaction_id,
       shipment_id=shipment_id,
       shipment_number=mapping_result.shipment.shipment_number,
     )
+    if normalized_idempotency_key is not None:
+      self.integration_repository.mark_idempotency_succeeded(
+        idempotency_record_id,
+        original_transaction_id=transaction_id,
+        business_identifier=apex_load.load_id,
+        response_snapshot=result.response_body(),
+      )
+    return result
+
+  def _handle_idempotency(
+    self,
+    *,
+    transaction_id: UUID,
+    partner_id: UUID,
+    idempotency_key: str,
+    apex_load: ApexInboundLoad,
+    correlation_id: str,
+  ) -> tuple[UUID, ApexIngestionResult | None]:
+    request_fingerprint = semantic_fingerprint(apex_load.model_dump(mode='json', by_alias=True))
+    record = self.integration_repository.acquire_idempotency_record(
+      partner_id=partner_id,
+      direction=IntegrationDirection.INBOUND,
+      document_type=APEX_DOCUMENT_TYPE,
+      operation='RECEIVE_LOAD_TENDER',
+      idempotency_key=idempotency_key,
+      request_fingerprint=request_fingerprint,
+      business_identifier=apex_load.load_id,
+    )
+    if record.get('acquired'):
+      return record['id'], None
+    if record['request_fingerprint'] != request_fingerprint:
+      raise ClassifiedIntegrationFailure(
+        status_code=409,
+        code='IDEMPOTENCY_KEY_REUSE',
+        message='Idempotency-Key was already used for a different Apex load tender.',
+        category=ErrorCategory.DUPLICATE_TRANSACTION,
+        stage=ProcessingStage.BUSINESS_VALIDATION,
+      )
+    if record['status'] == 'PROCESSING':
+      raise ClassifiedIntegrationFailure(
+        status_code=409,
+        code='IDEMPOTENCY_IN_PROGRESS',
+        message='An operation with this Idempotency-Key is still processing.',
+        category=ErrorCategory.DUPLICATE_TRANSACTION,
+        stage=ProcessingStage.BUSINESS_VALIDATION,
+      )
+    if record['status'] == 'FAILED':
+      raise ClassifiedIntegrationFailure(
+        status_code=409,
+        code='IDEMPOTENCY_PREVIOUS_FAILURE',
+        message='An operation with this Idempotency-Key previously failed.',
+        category=ErrorCategory.DUPLICATE_TRANSACTION,
+        stage=ProcessingStage.BUSINESS_VALIDATION,
+      )
+    snapshot = record.get('response_snapshot') or {}
+    original_transaction_id = record.get('original_transaction_id')
+    original_shipment_id = snapshot.get('shipmentId')
+    if original_transaction_id is None or original_shipment_id is None:
+      raise ClassifiedIntegrationFailure(
+        status_code=409,
+        code='IDEMPOTENCY_PREVIOUS_FAILURE',
+        message='The previous idempotent operation does not have a replayable response.',
+        category=ErrorCategory.DUPLICATE_TRANSACTION,
+        stage=ProcessingStage.BUSINESS_VALIDATION,
+      )
+    self.integration_repository.record_idempotent_replay(record['id'])
+    self.integration_repository.mark_replay(
+      transaction_id,
+      original_transaction_id=original_transaction_id,
+      business_identifier=apex_load.load_id,
+    )
+    self.integration_repository.mark_succeeded(transaction_id)
+    self._log(
+      transaction_id,
+      ProcessingStage.COMPLETED,
+      ProcessingStatus.SUCCEEDED,
+      'Idempotent Apex request replay returned the original successful result.',
+      {'original_transaction_id': str(original_transaction_id)},
+    )
+    return record['id'], ApexIngestionResult(
+      status='ACCEPTED',
+      correlation_id=correlation_id,
+      transaction_id=transaction_id,
+      shipment_id=UUID(str(original_shipment_id)),
+      shipment_number=str(snapshot.get('shipmentNumber', apex_load.load_id)),
+      idempotent_replay=True,
+      original_transaction_id=original_transaction_id,
+    )
+
+  def _mark_idempotency_failed_if_present(self, record_id: UUID | None, transaction_id: UUID) -> None:
+    if record_id is not None and hasattr(self.integration_repository, 'mark_idempotency_failed'):
+      self.integration_repository.mark_idempotency_failed(record_id, original_transaction_id=transaction_id)
 
   def _authenticate(self, transaction_id: UUID, authorization_header: str | None) -> None:
     self.integration_repository.update_processing_state(

@@ -11,12 +11,16 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from app.core.config import get_settings
 from app.infrastructure.database import DatabaseConnectivityError, connect
 from app.infrastructure.operations_repository import OperationsRepository
+from app.integrations.midwest.retry_service import Midwest204ManualRetryService, RetryNotFoundError, RetryRejectedError
+from app.integrations.midwest.transport import MidwestDeliveryError
 from app.models.operations import (
   BusinessTraceResponse,
   CorrelationLookupResponse,
   ErrorDetailResponse,
   ErrorQueueResponse,
   OperationalSummary,
+  RetryTransactionRequest,
+  RetryTransactionResponse,
   ResolveErrorRequest,
   TransactionDetailResponse,
   TransactionSearchResponse,
@@ -55,6 +59,14 @@ def get_operations_repository() -> Iterator[OperationsRepository]:
       yield OperationsRepository(connection)
   except DatabaseConnectivityError as exc:
     raise dependency_error('Operations database is temporarily unavailable.') from exc
+
+
+def get_retry_service() -> Iterator[Midwest204ManualRetryService]:
+  try:
+    with connect() as connection:
+      yield Midwest204ManualRetryService(repository=OperationsRepository(connection))
+  except DatabaseConnectivityError as exc:
+    raise dependency_error('Operations retry database is temporarily unavailable.') from exc
 
 
 def dependency_error(message: str) -> HTTPException:
@@ -117,6 +129,32 @@ def get_transaction_detail(
       detail={'error': {'code': 'TRANSACTION_NOT_FOUND', 'message': 'Transaction was not found.'}},
     )
   return TransactionDetailResponse.model_validate(result).model_dump(mode='json', by_alias=True)
+
+
+@router.post('/transactions/{transaction_id}/retry', dependencies=[Depends(require_operations_access)])
+def retry_transaction(
+  transaction_id: UUID,
+  request: RetryTransactionRequest,
+  service: Midwest204ManualRetryService = Depends(get_retry_service),
+) -> dict[str, object]:
+  try:
+    result = service.retry(transaction_id, note=request.note)
+  except RetryNotFoundError:
+    raise HTTPException(
+      status_code=status.HTTP_404_NOT_FOUND,
+      detail={'error': {'code': 'TRANSACTION_NOT_FOUND', 'message': 'Transaction was not found.'}},
+    )
+  except RetryRejectedError as exc:
+    raise HTTPException(
+      status_code=exc.status_code,
+      detail={'error': {'code': exc.code, 'message': 'Transaction is not currently retryable.'}},
+    )
+  except MidwestDeliveryError as exc:
+    raise HTTPException(
+      status_code=exc.status_code,
+      detail={'error': {'code': exc.code, 'message': exc.message}},
+    )
+  return RetryTransactionResponse.model_validate(result).model_dump(mode='json', by_alias=True)
 
 
 @router.get('/business/{business_identifier}/trace', dependencies=[Depends(require_operations_access)])

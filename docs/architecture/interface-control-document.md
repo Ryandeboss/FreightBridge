@@ -92,10 +92,12 @@ Implementation correlates:
 
 ## Retry and Duplicate Expectations
 
-- Apex REST retries should use idempotent identifiers where possible.
-- Midwest file retries should not overwrite existing file names.
-- Future full idempotency work should consider both file name/control number and business identifiers.
-- Retry ownership depends on the failing layer: caller retries transport failures, FreightBridge handles transformation retries, and partner systems own their processing queues.
+- Apex REST retries use explicit `Idempotency-Key`; no-key duplicates remain business duplicate errors.
+- Midwest file replays are recognized by partner/document/ISA13/GS06/ST02 and payload hash.
+- Reusing X12 controls with altered payload bytes is rejected as a control-number conflict.
+- Midwest SFTP archive moves use replay-safe names when the original archive file already exists.
+- Manual retry is limited to failed outbound SFTP X12 204 transactions with exact stored payload snapshots.
+- Retry ownership is explicit: FreightBridge does not run automatic retry workers in the current milestone.
 
 ## Failure Responsibility by Layer
 

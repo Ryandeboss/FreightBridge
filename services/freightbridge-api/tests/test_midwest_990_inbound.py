@@ -23,6 +23,7 @@ from app.integrations.apex.tender_response_client import (
   ApexTenderResponseDeliveryResult,
 )
 from app.integrations.common.errors import IntegrationAPIError
+from app.integrations.common.ingestion import payload_sha256
 from app.integrations.midwest.inbound_214_service import Midwest214IngestionService
 from app.integrations.midwest.mapping_214 import Midwest214MappingError, map_midwest_214
 from app.integrations.midwest.inbound_990_service import Midwest990IngestionService
@@ -519,6 +520,137 @@ def test_midwest_990_apex_failure_keeps_parent_successful_and_child_failed() -> 
   assert integration_repository.errors[0]['error_code'] == 'DEPENDENCY_ERROR'
 
 
+def test_midwest_990_exact_replay_skips_tender_response_and_apex_forward() -> None:
+  freightbridge_repository = FakeFreightBridgeRepository()
+  original_id = uuid4()
+  integration_repository = FakeReplayIntegrationRepository(
+    document_type='990',
+    payload_hash=payload_sha256(MIDWEST_990_ACCEPTED.encode('utf-8')),
+    original_transaction_id=original_id,
+    business_identifier='LOAD500',
+  )
+  apex_client = FakeApexClient()
+
+  result = Midwest990IngestionService(
+    audit_connection=DummyConnection(),
+    business_connection=DummyConnection(),
+    freightbridge_repository=freightbridge_repository,
+    integration_repository=integration_repository,
+    apex_client=apex_client,
+  ).ingest(
+    raw_body=MIDWEST_990_ACCEPTED.encode('utf-8'),
+    authorization_header='Bearer midwest-inbound-token',
+    correlation_id='corr-990-replay',
+  )
+
+  assert result.status == 'REPLAY_ACCEPTED'
+  assert freightbridge_repository.tender_response is None
+  assert apex_client.delivered_payload is None
+  assert integration_repository.replay_updates == [(integration_repository.transaction_ids[0], original_id, 'LOAD500')]
+
+
+def test_midwest_214_exact_replay_skips_event_and_apex_forward() -> None:
+  payload = midwest_214().encode('utf-8')
+  freightbridge_repository = FakeFreightBridgeRepository()
+  integration_repository = FakeReplayIntegrationRepository(
+    document_type='214',
+    payload_hash=payload_sha256(payload),
+    original_transaction_id=uuid4(),
+    business_identifier='LOAD500',
+  )
+  apex_client = FakeApexShipmentStatusClient()
+
+  result = Midwest214IngestionService(
+    audit_connection=DummyConnection(),
+    business_connection=DummyConnection(),
+    freightbridge_repository=freightbridge_repository,
+    integration_repository=integration_repository,
+    apex_client=apex_client,
+  ).ingest(raw_body=payload, correlation_id='corr-214-replay')
+
+  assert result.status == 'REPLAY_ACCEPTED'
+  assert freightbridge_repository.shipment_events == []
+  assert apex_client.delivered_payload is None
+
+
+def test_midwest_997_exact_replay_skips_second_functional_acknowledgment() -> None:
+  original_204_id = uuid4()
+  integration_repository = FakeReplayIntegrationRepository(
+    document_type='997',
+    payload_hash=payload_sha256(MIDWEST_997_ACCEPTED.encode('utf-8')),
+    original_transaction_id=uuid4(),
+    business_identifier='LOAD500',
+    parent_transaction_id=original_204_id,
+  )
+
+  result = Midwest997IngestionService(
+    audit_connection=DummyConnection(),
+    business_connection=DummyConnection(),
+    freightbridge_repository=FakeFreightBridgeRepository(),
+    integration_repository=integration_repository,
+  ).ingest(raw_body=MIDWEST_997_ACCEPTED.encode('utf-8'), correlation_id='corr-997-replay')
+
+  assert result.status == 'REPLAY_ACCEPTED'
+  assert result.acknowledged_transaction_id == original_204_id
+  assert integration_repository.functional_acknowledgments == []
+
+
+@pytest.mark.parametrize(
+  ('service_factory', 'invoke', 'payload'),
+  [
+    (
+      lambda freightbridge_repository, integration_repository: Midwest990IngestionService(
+        audit_connection=DummyConnection(),
+        business_connection=DummyConnection(),
+        freightbridge_repository=freightbridge_repository,
+        integration_repository=integration_repository,
+        apex_client=FakeApexClient(),
+      ),
+      lambda service, payload: service.ingest(
+        raw_body=payload,
+        authorization_header='Bearer midwest-inbound-token',
+        correlation_id='corr-conflict',
+      ),
+      MIDWEST_990_ACCEPTED.encode('utf-8'),
+    ),
+    (
+      lambda freightbridge_repository, integration_repository: Midwest214IngestionService(
+        audit_connection=DummyConnection(),
+        business_connection=DummyConnection(),
+        freightbridge_repository=freightbridge_repository,
+        integration_repository=integration_repository,
+        apex_client=FakeApexShipmentStatusClient(),
+      ),
+      lambda service, payload: service.ingest(raw_body=payload, correlation_id='corr-conflict'),
+      midwest_214().encode('utf-8'),
+    ),
+    (
+      lambda freightbridge_repository, integration_repository: Midwest997IngestionService(
+        audit_connection=DummyConnection(),
+        business_connection=DummyConnection(),
+        freightbridge_repository=freightbridge_repository,
+        integration_repository=integration_repository,
+      ),
+      lambda service, payload: service.ingest(raw_body=payload, correlation_id='corr-conflict'),
+      MIDWEST_997_ACCEPTED.encode('utf-8'),
+    ),
+  ],
+)
+def test_midwest_x12_control_reuse_with_changed_payload_rejects(service_factory, invoke, payload: bytes) -> None:
+  integration_repository = FakeReplayIntegrationRepository(
+    document_type='990',
+    payload_hash='different-hash',
+    original_transaction_id=uuid4(),
+    business_identifier='LOAD500',
+  )
+
+  with pytest.raises(IntegrationAPIError) as exc_info:
+    invoke(service_factory(FakeFreightBridgeRepository(), integration_repository), payload)
+
+  assert exc_info.value.status_code == 409
+  assert exc_info.value.code == 'X12_CONTROL_NUMBER_REUSE'
+
+
 def test_midwest_990_endpoint_returns_202_with_raw_x12_body() -> None:
   app.dependency_overrides[get_midwest_990_ingestion_service] = lambda: FakeRouteIngestionService()
 
@@ -560,6 +692,28 @@ def test_sftp_outbound_poll_archives_valid_990_and_ignores_part_files() -> None:
   assert result.ignored == ['MWCX_APEX_990_000000906.edi.part']
   assert '/archive/MWCX_APEX_990_000000906.edi' in fake_sftp.files
   assert '/outbound/MWCX_APEX_990_000000906.edi' not in fake_sftp.files
+
+
+def test_sftp_outbound_poll_archives_replay_without_overwriting_original_archive() -> None:
+  original_archive = b'original archived bytes'
+  replay_payload = MIDWEST_990_ACCEPTED.encode('utf-8')
+  fake_sftp = FakeSftpClient({
+    '/archive/MWCX_APEX_990_000000906.edi': original_archive,
+    '/outbound/MWCX_APEX_990_000000906.edi': replay_payload,
+  })
+  service = MidwestSftpOutboundPollService(
+    audit_connection=DummyConnection(),
+    business_connection=DummyConnection(),
+    client_factory=lambda: fake_sftp,
+    ingestion_service=FakeTypedIngestionService('990'),
+  )
+
+  result = service.poll(correlation_id='corr-sftp-replay')
+
+  assert result.processed[0].status == 'ARCHIVED'
+  assert result.processed[0].destination_path.startswith('/archive/MWCX_APEX_990_000000906__replay_')
+  assert fake_sftp.files['/archive/MWCX_APEX_990_000000906.edi'] == original_archive
+  assert result.processed[0].destination_path in fake_sftp.files
 
 
 def test_sftp_outbound_poll_moves_deterministic_invalid_990_to_error() -> None:
@@ -730,6 +884,12 @@ class FakeIntegrationRepository:
     self.transactions.append(transaction)
     return transaction_id
 
+  def find_x12_control_replay(self, **kwargs):
+    return None
+
+  def mark_replay(self, transaction_id, *, original_transaction_id, business_identifier) -> None:
+    self.parent_updates.append((transaction_id, original_transaction_id, business_identifier))
+
   def update_x12_metadata(self, transaction_id, **kwargs) -> None:
     self.x12_metadata = kwargs
 
@@ -773,6 +933,37 @@ class FakeIntegrationRepository:
   def append_log(self, log):
     self.logs.append(log)
     return uuid4()
+
+
+class FakeReplayIntegrationRepository(FakeIntegrationRepository):
+  def __init__(
+    self,
+    *,
+    document_type: str,
+    payload_hash: str,
+    original_transaction_id: UUID,
+    business_identifier: str,
+    parent_transaction_id: UUID | None = None,
+  ) -> None:
+    super().__init__(acknowledged_transaction_id=parent_transaction_id)
+    self.document_type = document_type
+    self.replay_payload_hash = payload_hash
+    self.original_transaction_id = original_transaction_id
+    self.replay_business_identifier = business_identifier
+    self.replay_parent_transaction_id = parent_transaction_id
+    self.replay_updates = []
+
+  def find_x12_control_replay(self, **kwargs):
+    return {
+      'id': self.original_transaction_id,
+      'business_identifier': self.replay_business_identifier,
+      'payload_hash': self.replay_payload_hash,
+      'processing_status': 'SUCCEEDED',
+      'parent_transaction_id': self.replay_parent_transaction_id,
+    }
+
+  def mark_replay(self, transaction_id, *, original_transaction_id, business_identifier) -> None:
+    self.replay_updates.append((transaction_id, original_transaction_id, business_identifier))
 
 
 class FakeApexClient:

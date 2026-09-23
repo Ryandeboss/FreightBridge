@@ -14,8 +14,10 @@ from app.domain import ErrorCategory, ProcessingStage, ProcessingStatus
 from app.api.routes.apex_integrations import get_apex_ingestion_service
 from app.main import app
 from app.integrations.apex.mapper import ApexMappingError
+from app.integrations.apex.models import ApexInboundLoad
 from app.integrations.apex.service import ApexLoadTenderIngestionService
 from app.integrations.common.errors import ClassifiedIntegrationFailure, IntegrationAPIError
+from app.integrations.common.idempotency import semantic_fingerprint
 from app.integrations.common.ingestion import payload_sha256
 
 
@@ -70,6 +72,7 @@ class FakeState:
   errors: list[dict[str, object]] = field(default_factory=list)
   fail_error_insert: bool = False
   fail_failure_log_insert: bool = False
+  idempotency_records: dict[tuple[object, str, str, str, str], dict[str, object]] = field(default_factory=dict)
 
 
 class FakeTransaction(AbstractContextManager):
@@ -174,6 +177,58 @@ class FakeIntegrationRepository:
       raise psycopg.OperationalError('error insert unavailable')
     self.state.errors.append(kwargs)
     return uuid4()
+
+  def acquire_idempotency_record(self, **kwargs) -> dict[str, object]:
+    key = (
+      kwargs['partner_id'],
+      kwargs['direction'].value,
+      kwargs['document_type'],
+      kwargs['operation'],
+      kwargs['idempotency_key'],
+    )
+    if key in self.state.idempotency_records:
+      return {**self.state.idempotency_records[key], 'acquired': False}
+    record = {
+      'id': uuid4(),
+      'partner_id': kwargs['partner_id'],
+      'direction': kwargs['direction'].value,
+      'document_type': kwargs['document_type'],
+      'operation': kwargs['operation'],
+      'idempotency_key': kwargs['idempotency_key'],
+      'request_fingerprint': kwargs['request_fingerprint'],
+      'business_identifier': kwargs['business_identifier'],
+      'status': 'PROCESSING',
+      'original_transaction_id': None,
+      'response_snapshot': None,
+      'replay_count': 0,
+    }
+    self.state.idempotency_records[key] = record
+    return {**record, 'acquired': True}
+
+  def mark_idempotency_succeeded(self, record_id, *, original_transaction_id, business_identifier, response_snapshot) -> None:
+    for record in self.state.idempotency_records.values():
+      if record['id'] == record_id:
+        record.update({
+          'status': 'SUCCEEDED',
+          'original_transaction_id': original_transaction_id,
+          'business_identifier': business_identifier,
+          'response_snapshot': response_snapshot,
+        })
+
+  def mark_idempotency_failed(self, record_id, *, original_transaction_id=None) -> None:
+    for record in self.state.idempotency_records.values():
+      if record['id'] == record_id:
+        record['status'] = 'FAILED'
+        record['original_transaction_id'] = original_transaction_id
+
+  def record_idempotent_replay(self, record_id) -> None:
+    for record in self.state.idempotency_records.values():
+      if record['id'] == record_id:
+        record['replay_count'] += 1
+
+  def mark_replay(self, transaction_id, *, original_transaction_id, business_identifier) -> None:
+    self.state.transactions[transaction_id]['replay_of_transaction_id'] = original_transaction_id
+    self.state.transactions[transaction_id]['business_identifier'] = business_identifier
 
 
 @pytest.fixture(autouse=True)
@@ -463,3 +518,85 @@ def test_direct_freightbridge_duplicate_route_returns_409_and_failed_audit() -> 
   assert transaction['processed_at'] is not None
   assert state.errors[0]['category'] == ErrorCategory.DUPLICATE_TRANSACTION
   assert len(state.shipments) == 1
+
+
+def test_keyed_apex_replay_returns_original_result_without_second_shipment() -> None:
+  state = FakeState()
+  service, _, _ = build_service(state)
+
+  first = service.ingest(
+    raw_body=raw_payload(),
+    authorization_header=auth_header(),
+    correlation_id='corr-idem-1',
+    idempotency_key='apex-load-500',
+  )
+  second = service.ingest(
+    raw_body=json.dumps(apex_payload(), sort_keys=True, indent=2).encode('utf-8'),
+    authorization_header=auth_header(),
+    correlation_id='corr-idem-2',
+    idempotency_key='apex-load-500',
+  )
+
+  record = next(iter(state.idempotency_records.values()))
+  assert first.idempotent_replay is False
+  assert second.idempotent_replay is True
+  assert second.original_transaction_id == first.transaction_id
+  assert second.shipment_id == first.shipment_id
+  assert len(state.shipments) == 1
+  assert state.errors == []
+  assert record['replay_count'] == 1
+
+
+def test_keyed_apex_payload_conflict_returns_409_without_mutation() -> None:
+  state = FakeState()
+  service, _, _ = build_service(state)
+  service.ingest(
+    raw_body=raw_payload(),
+    authorization_header=auth_header(),
+    correlation_id='corr-idem-1',
+    idempotency_key='apex-load-500',
+  )
+  changed = apex_payload(loadId='LOAD501')
+
+  with pytest.raises(IntegrationAPIError) as exc_info:
+    service.ingest(
+      raw_body=raw_payload(changed),
+      authorization_header=auth_header(),
+      correlation_id='corr-idem-conflict',
+      idempotency_key='apex-load-500',
+    )
+
+  assert exc_info.value.status_code == 409
+  assert exc_info.value.code == 'IDEMPOTENCY_KEY_REUSE'
+  assert set(state.shipments) == {'LOAD500'}
+
+
+@pytest.mark.parametrize('status_code', ['PROCESSING', 'FAILED'])
+def test_keyed_apex_processing_or_failed_record_returns_deterministic_409(status_code: str) -> None:
+  state = FakeState()
+  apex_load = ApexInboundLoad.model_validate(apex_payload())
+  key = (state.partner_id, 'INBOUND', 'APEX_LOAD_TENDER', 'RECEIVE_LOAD_TENDER', 'apex-load-500')
+  state.idempotency_records[key] = {
+    'id': uuid4(),
+    'request_fingerprint': semantic_fingerprint(apex_load.model_dump(mode='json', by_alias=True)),
+    'business_identifier': 'LOAD500',
+    'status': status_code,
+    'original_transaction_id': None,
+    'response_snapshot': None,
+    'replay_count': 0,
+  }
+
+  with pytest.raises(IntegrationAPIError) as exc_info:
+    service, _, _ = build_service(state)
+    service.ingest(
+      raw_body=raw_payload(),
+      authorization_header=auth_header(),
+      correlation_id='corr-idem-pending',
+      idempotency_key='apex-load-500',
+    )
+
+  assert exc_info.value.status_code == 409
+  assert exc_info.value.code == (
+    'IDEMPOTENCY_IN_PROGRESS' if status_code == 'PROCESSING' else 'IDEMPOTENCY_PREVIOUS_FAILURE'
+  )
+  assert state.shipments == {}

@@ -465,10 +465,11 @@ class IntegrationRepository:
             processing_stage,
             retry_count,
             parent_transaction_id,
+            replay_of_transaction_id,
             received_at,
             processed_at
           )
-          VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+          VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
           RETURNING id
         """,
         (
@@ -489,11 +490,201 @@ class IntegrationRepository:
           transaction.processing_stage.value,
           transaction.retry_count,
           transaction.parent_transaction_id,
+          transaction.replay_of_transaction_id,
           transaction.received_at,
           transaction.processed_at,
         ),
       )
       return cursor.fetchone()['id']
+
+  def acquire_idempotency_record(
+    self,
+    *,
+    partner_id: UUID,
+    direction: IntegrationDirection,
+    document_type: str,
+    operation: str,
+    idempotency_key: str,
+    request_fingerprint: str,
+    business_identifier: str | None = None,
+  ) -> dict[str, object]:
+    with self.connection.cursor(row_factory=dict_row) as cursor:
+      cursor.execute(
+        """
+          INSERT INTO integration_idempotency_records (
+            partner_id,
+            direction,
+            document_type,
+            operation,
+            idempotency_key,
+            request_fingerprint,
+            business_identifier,
+            status
+          )
+          VALUES (%s, %s, %s, %s, %s, %s, %s, 'PROCESSING')
+          ON CONFLICT (
+            partner_id,
+            direction,
+            document_type,
+            operation,
+            idempotency_key
+          ) DO NOTHING
+          RETURNING *, true as acquired
+        """,
+        (
+          partner_id,
+          direction.value,
+          document_type,
+          operation,
+          idempotency_key,
+          request_fingerprint,
+          business_identifier,
+        ),
+      )
+      row = cursor.fetchone()
+      if row is not None:
+        return dict(row)
+      cursor.execute(
+        """
+          SELECT *, false as acquired
+          FROM integration_idempotency_records
+          WHERE partner_id = %s
+            AND direction = %s
+            AND document_type = %s
+            AND operation = %s
+            AND idempotency_key = %s
+          FOR UPDATE
+        """,
+        (partner_id, direction.value, document_type, operation, idempotency_key),
+      )
+      return dict(cursor.fetchone())
+
+  def mark_idempotency_succeeded(
+    self,
+    record_id: UUID,
+    *,
+    original_transaction_id: UUID,
+    business_identifier: str | None,
+    response_snapshot: dict[str, object],
+  ) -> None:
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        """
+          UPDATE integration_idempotency_records
+          SET status = 'SUCCEEDED',
+              original_transaction_id = %s,
+              business_identifier = %s,
+              response_snapshot = %s,
+              updated_at = now()
+          WHERE id = %s
+        """,
+        (original_transaction_id, business_identifier, Jsonb(response_snapshot), record_id),
+      )
+
+  def mark_idempotency_failed(self, record_id: UUID, *, original_transaction_id: UUID | None = None) -> None:
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        """
+          UPDATE integration_idempotency_records
+          SET status = 'FAILED',
+              original_transaction_id = coalesce(%s, original_transaction_id),
+              updated_at = now()
+          WHERE id = %s
+        """,
+        (original_transaction_id, record_id),
+      )
+
+  def record_idempotent_replay(self, record_id: UUID) -> None:
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        """
+          UPDATE integration_idempotency_records
+          SET replay_count = replay_count + 1,
+              last_replayed_at = now(),
+              updated_at = now()
+          WHERE id = %s
+        """,
+        (record_id,),
+      )
+
+  def store_message_payload(
+    self,
+    *,
+    transaction_id: UUID,
+    media_type: str,
+    payload_sha256: str,
+    payload_text: str,
+  ) -> None:
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        """
+          INSERT INTO integration_message_payloads (
+            transaction_id,
+            media_type,
+            payload_sha256,
+            payload_text
+          )
+          VALUES (%s, %s, %s, %s)
+          ON CONFLICT (transaction_id) DO UPDATE
+          SET media_type = excluded.media_type,
+              payload_sha256 = excluded.payload_sha256,
+              payload_text = excluded.payload_text
+        """,
+        (transaction_id, media_type, payload_sha256, payload_text),
+      )
+
+  def find_x12_control_replay(
+    self,
+    *,
+    partner_id: UUID,
+    direction: IntegrationDirection,
+    document_type: str,
+    interchange_control_number: str,
+    group_control_number: str,
+    transaction_control_number: str,
+    exclude_transaction_id: UUID,
+  ) -> dict[str, object] | None:
+    with self.connection.cursor(row_factory=dict_row) as cursor:
+      cursor.execute(
+        """
+          SELECT id, business_identifier, payload_hash, processing_status, parent_transaction_id
+          FROM integration_transactions
+          WHERE partner_id = %s
+            AND direction = %s
+            AND message_format = 'X12'
+            AND document_type = %s
+            AND interchange_control_number = %s
+            AND group_control_number = %s
+            AND transaction_control_number = %s
+            AND id <> %s
+          ORDER BY created_at asc, id asc
+          LIMIT 1
+        """,
+        (
+          partner_id,
+          direction.value,
+          document_type,
+          interchange_control_number,
+          group_control_number,
+          transaction_control_number,
+          exclude_transaction_id,
+        ),
+      )
+      row = cursor.fetchone()
+    return dict(row) if row else None
+
+  def mark_replay(self, transaction_id: UUID, *, original_transaction_id: UUID, business_identifier: str | None) -> None:
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        """
+          UPDATE integration_transactions
+          SET replay_of_transaction_id = %s,
+              business_identifier = coalesce(%s, business_identifier),
+              updated_at = now()
+          WHERE id = %s
+        """,
+        (original_transaction_id, business_identifier, transaction_id),
+      )
 
   def update_business_identifier(self, transaction_id: UUID, business_identifier: str) -> None:
     with self.connection.cursor() as cursor:

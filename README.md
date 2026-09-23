@@ -43,7 +43,7 @@ FreightBridge
   [stores technical acks; forwards business tender/status updates to Apex]
 ```
 
-Operations support can inspect the same transaction/log/error records through secured `/api/operations` endpoints. See [Operational observability and failure queue](docs/operations/observability-and-failure-queue.md).
+Operations support can inspect the same transaction/log/error records through secured `/api/operations` endpoints. See [Operational observability and failure queue](docs/operations/observability-and-failure-queue.md) and [Idempotency, replay, and manual retry](docs/operations/idempotency-and-retry.md).
 
 See [docs/architecture/initial-architecture.md](docs/architecture/initial-architecture.md) for the first architecture diagram.
 

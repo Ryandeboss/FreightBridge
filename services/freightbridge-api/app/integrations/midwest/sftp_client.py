@@ -36,6 +36,10 @@ class MidwestSftpFileConflictError(MidwestSftpError):
   safe_message = 'SFTP destination file already exists.'
 
 
+class MidwestSftpIdenticalFilePresent(MidwestSftpError):
+  safe_message = 'SFTP destination file already exists with identical bytes.'
+
+
 class MidwestSftpOperationError(MidwestSftpError):
   safe_message = 'SFTP file operation failed.'
 
@@ -154,6 +158,15 @@ class MidwestSftpClient:
     except OSError as exc:
       raise MidwestSftpOperationError() from exc
 
+  def upload_bytes_atomic_reconcile_identical(self, remote_directory: str, final_filename: str, payload: bytes) -> tuple[str, str]:
+    final_path = _join_remote(remote_directory, final_filename)
+    if self.exists(final_path):
+      if self.download_bytes(final_path) == payload:
+        return final_path, 'ALREADY_PRESENT_IDENTICAL'
+      raise MidwestSftpFileConflictError()
+    remote_path = self.upload_bytes_atomic(remote_directory, final_filename, payload)
+    return remote_path, 'UPLOADED'
+
   def download_bytes(self, remote_path: str) -> bytes:
     try:
       with self._require_sftp().open(remote_path, 'rb') as remote_file:
@@ -168,6 +181,23 @@ class MidwestSftpClient:
       self._require_sftp().rename(source_path, destination_path)
     except OSError as exc:
       raise MidwestSftpOperationError() from exc
+
+  def rename_to_unique_archive(self, source_path: str, destination_path: str, payload: bytes | None = None) -> str:
+    resolved = destination_path
+    if self.exists(resolved):
+      suffix = hashlib.sha256(payload if payload is not None else source_path.encode('utf-8')).hexdigest()[:10]
+      if '.' in destination_path.rsplit('/', 1)[-1]:
+        directory, filename = destination_path.rsplit('/', 1)
+        stem, extension = filename.rsplit('.', 1)
+        resolved = f'{directory}/{stem}__replay_{suffix}.{extension}'
+      else:
+        resolved = f'{destination_path}__replay_{suffix}'
+      attempt = 1
+      while self.exists(resolved):
+        resolved = f'{destination_path}__replay_{suffix}_{attempt}'
+        attempt += 1
+    self.rename(source_path, resolved)
+    return resolved
 
   def close(self) -> None:
     if self._sftp is not None:

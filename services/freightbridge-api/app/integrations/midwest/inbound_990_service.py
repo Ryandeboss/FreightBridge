@@ -139,6 +139,9 @@ class Midwest990IngestionService:
         group_control_number=mapped.group_control_number,
         transaction_control_number=mapped.transaction_control_number,
       )
+      replay_result = self._detect_replay(transaction_id, partner['id'], mapped, raw_body, correlation_id)
+      if replay_result is not None:
+        return replay_result
       tender_response = self._persist(transaction_id, mapped, partner['id'], received_at)
     except ClassifiedIntegrationFailure as exc:
       self._record_failure(transaction_id, exc)
@@ -188,6 +191,50 @@ class Midwest990IngestionService:
       shipment_number=mapped.shipment_number,
       decision=mapped.decision.value,
       apex_delivery_status=apex_delivery_status,
+    )
+
+  def _detect_replay(self, transaction_id: UUID, partner_id: UUID, mapped, raw_body: bytes, correlation_id: str) -> Midwest990IngestionResult | None:
+    existing = self.integration_repository.find_x12_control_replay(
+      partner_id=partner_id,
+      direction=IntegrationDirection.INBOUND,
+      document_type=MIDWEST_990_DOCUMENT_TYPE,
+      interchange_control_number=mapped.interchange_control_number,
+      group_control_number=mapped.group_control_number,
+      transaction_control_number=mapped.transaction_control_number,
+      exclude_transaction_id=transaction_id,
+    )
+    if existing is None:
+      return None
+    if existing['payload_hash'] != payload_sha256(raw_body):
+      raise ClassifiedIntegrationFailure(
+        status_code=409,
+        code='X12_CONTROL_NUMBER_REUSE',
+        message='Midwest reused X12 control numbers with different payload content.',
+        category=ErrorCategory.DUPLICATE_TRANSACTION,
+        stage=ProcessingStage.BUSINESS_VALIDATION,
+      )
+    if existing['processing_status'] != ProcessingStatus.SUCCEEDED.value:
+      return None
+    self.integration_repository.mark_replay(
+      transaction_id,
+      original_transaction_id=existing['id'],
+      business_identifier=str(existing.get('business_identifier') or mapped.shipment_number),
+    )
+    self.integration_repository.mark_succeeded(transaction_id)
+    self._log(
+      transaction_id,
+      ProcessingStage.COMPLETED,
+      ProcessingStatus.SUCCEEDED,
+      'Exact X12 replay detected; business side effects were skipped.',
+      {'original_transaction_id': str(existing['id'])},
+    )
+    return Midwest990IngestionResult(
+      status='REPLAY_ACCEPTED',
+      correlation_id=correlation_id,
+      transaction_id=transaction_id,
+      shipment_number=mapped.shipment_number,
+      decision=mapped.decision.value,
+      apex_delivery_status='SKIPPED_REPLAY',
     )
 
   def _authenticate(self, transaction_id: UUID, authorization_header: str | None) -> None:

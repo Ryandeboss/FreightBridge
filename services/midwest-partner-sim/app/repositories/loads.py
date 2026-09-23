@@ -21,6 +21,10 @@ class DuplicateLoadError(Exception):
   pass
 
 
+class X12ControlNumberReuseError(Exception):
+  pass
+
+
 class LoadNotFoundError(Exception):
   pass
 
@@ -167,6 +171,60 @@ class MidwestLoadRepository:
           error_code,
           safe_error_message,
           error_path,
+          document_id,
+        ),
+      )
+
+  def find_accepted_inbound_204_by_controls(self, parsed: Parsed204) -> dict[str, object] | None:
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        """
+        select ied.*, l.id as load_id
+        from midwest_sim.inbound_edi_documents ied
+        left join midwest_sim.loads l
+          on l.cust_ship_no = ied.customer_shipment_number
+        where ied.document_type = '204'
+          and ied.interchange_control_number = %s
+          and ied.group_control_number = %s
+          and ied.transaction_control_number = %s
+          and ied.processing_status = 'ACCEPTED'
+        order by ied.created_at asc
+        limit 1
+        """,
+        (
+          parsed.interchange_control_number,
+          parsed.group_control_number,
+          parsed.transaction_control_number,
+        ),
+      )
+      row = cursor.fetchone()
+    return dict(row) if row else None
+
+  def mark_document_replay(self, document_id: UUID, parsed: Parsed204, *, replay_of_document_id: UUID, archive_path: str | None = None) -> None:
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        """
+        update midwest_sim.inbound_edi_documents
+        set x12_version = %s,
+            interchange_control_number = %s,
+            group_control_number = %s,
+            transaction_control_number = %s,
+            customer_shipment_number = %s,
+            processing_status = 'ACCEPTED',
+            replay_of_document_id = %s,
+            archive_path = coalesce(%s, archive_path),
+            processed_at = now(),
+            updated_at = now()
+        where id = %s
+        """,
+        (
+          parsed.x12_version,
+          parsed.interchange_control_number,
+          parsed.group_control_number,
+          parsed.transaction_control_number,
+          parsed.cust_ship_no,
+          replay_of_document_id,
+          archive_path,
           document_id,
         ),
       )

@@ -34,6 +34,7 @@ class IntegrationTransaction(BaseModel):
   processing_stage: ProcessingStage = ProcessingStage.RECEIVED
   retry_count: int = Field(default=0, ge=0)
   parent_transaction_id: UUID | None = None
+  replay_of_transaction_id: UUID | None = None
   received_at: AwareDatetime | None = None
   processed_at: AwareDatetime | None = None
   created_at: AwareDatetime | None = None
@@ -73,5 +74,6 @@ class IntegrationError(BaseModel):
   retryable: bool = False
   resolved: bool = False
   resolution_note: str | None = Field(default=None, max_length=500)
+  resolved_by_transaction_id: UUID | None = None
   created_at: AwareDatetime | None = None
   resolved_at: AwareDatetime | None = None

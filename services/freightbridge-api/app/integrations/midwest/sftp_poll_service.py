@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+import hashlib
 
 from app.domain import Transport
 from app.infrastructure.repositories import FreightBridgeRepository, IntegrationRepository
@@ -108,8 +109,7 @@ class MidwestSftpOutboundPollService:
             transport=Transport.SFTP,
             raw_payload_location=source_path,
           )
-          destination_path = _join(ARCHIVE_DIR, file_name)
-          client.rename(source_path, destination_path)
+          destination_path = _safe_archive(client, source_path, _join(ARCHIVE_DIR, file_name), payload)
           processed.append(
             SftpPollFileResult(
               file_name=file_name,
@@ -129,8 +129,7 @@ class MidwestSftpOutboundPollService:
               )
             )
             continue
-          destination_path = _join(ERROR_DIR, file_name)
-          client.rename(source_path, destination_path)
+          destination_path = _safe_archive(client, source_path, _join(ERROR_DIR, file_name), payload)
           processed.append(
             SftpPollFileResult(
               file_name=file_name,
@@ -197,6 +196,17 @@ def _ignore_file(file_name: str) -> bool:
 
 def _join(directory: str, file_name: str) -> str:
   return directory.rstrip('/') + '/' + file_name
+
+
+def _safe_archive(client, source_path: str, destination_path: str, payload: bytes) -> str:
+  if hasattr(client, 'rename_to_unique_archive'):
+    return client.rename_to_unique_archive(source_path, destination_path, payload)
+  resolved = destination_path
+  if client.exists(resolved):
+    stem, extension = resolved.rsplit('.', 1)
+    resolved = f'{stem}__replay_{hashlib.sha256(payload).hexdigest()[:10]}.{extension}'
+  client.rename(source_path, resolved)
+  return resolved
 
 
 def _detect_transaction_type(payload: bytes, *, correlation_id: str) -> str:

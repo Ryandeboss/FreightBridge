@@ -35,6 +35,7 @@ async def receive_apex_load_tender(
       raw_body=raw_body,
       authorization_header=request.headers.get('Authorization'),
       correlation_id=correlation_id,
+      idempotency_key=request.headers.get('Idempotency-Key'),
     )
   except IntegrationAPIError as exc:
     return JSONResponse(

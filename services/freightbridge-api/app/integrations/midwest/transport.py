@@ -217,6 +217,56 @@ class MidwestSftpTransport(MidwestOutboundTransport):
       },
     )
 
+  def deliver_existing_204(
+    self,
+    *,
+    payload_text: str,
+    interchange_control_number: str,
+    shipment_number: str,
+  ) -> MidwestDeliveryResult:
+    filename = sftp_204_filename(interchange_control_number)
+    payload = payload_text.encode('utf-8')
+    try:
+      with self.client_factory() as client:
+        if hasattr(client, 'upload_bytes_atomic_reconcile_identical'):
+          remote_path, disposition = client.upload_bytes_atomic_reconcile_identical(
+            self.remote_directory,
+            filename,
+            payload,
+          )
+        else:
+          remote_path = client.upload_bytes_atomic(self.remote_directory, filename, payload)
+          disposition = 'UPLOADED'
+    except MidwestSftpFileConflictError as exc:
+      raise MidwestDeliveryError(
+        status_code=409,
+        code='SFTP_FILE_CONFLICT',
+        message='SFTP destination file already exists.',
+        category=ErrorCategory.DUPLICATE_TRANSACTION,
+      ) from exc
+    except MidwestSftpError as exc:
+      raise MidwestDeliveryError(
+        status_code=503,
+        code='DEPENDENCY_ERROR',
+        message='Midwest SFTP delivery failed.',
+        category=ErrorCategory.TRANSPORT_ERROR,
+        retryable=True,
+      ) from exc
+
+    return MidwestDeliveryResult(
+      status='DELIVERED',
+      status_code=202,
+      response_body={
+        'status': 'DELIVERED',
+        'transport': self.transport_name,
+        'remotePath': remote_path,
+        'fileName': filename,
+        'customerShipmentNumber': shipment_number,
+        'documentType': '204',
+        'deliveryDisposition': disposition,
+      },
+    )
+
 
 def sftp_204_filename(interchange_control_number: str) -> str:
   return f'APEX_MWCX_204_{interchange_control_number}.edi'

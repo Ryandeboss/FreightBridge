@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+import hashlib
 from uuid import UUID
 
 from app.infrastructure.sftp_client import MidwestSftpClient, MidwestSftpError, MidwestSftpFileConflictError
@@ -82,7 +83,7 @@ class MidwestSftpInboundPollService:
             archive_path=archive_path,
             error_path=error_path,
           )
-          client.rename(source_path, archive_path)
+          archive_path = _safe_archive(client, source_path, archive_path, payload)
           processed.append(
             SftpFileResult(
               file_name=file_name,
@@ -102,7 +103,7 @@ class MidwestSftpInboundPollService:
             )
           )
         except Midwest204ReceiveFailure as exc:
-          client.rename(source_path, error_path)
+          error_path = _safe_archive(client, source_path, error_path, payload)
           processed.append(
             SftpFileResult(
               file_name=file_name,
@@ -319,3 +320,14 @@ def _ignore_file(file_name: str) -> bool:
 
 def _join(directory: str, file_name: str) -> str:
   return directory.rstrip('/') + '/' + file_name
+
+
+def _safe_archive(client, source_path: str, destination_path: str, payload: bytes) -> str:
+  if hasattr(client, 'rename_to_unique_archive'):
+    return client.rename_to_unique_archive(source_path, destination_path, payload)
+  resolved = destination_path
+  if client.exists(resolved):
+    stem, extension = resolved.rsplit('.', 1)
+    resolved = f'{stem}__replay_{hashlib.sha256(payload).hexdigest()[:10]}.{extension}'
+  client.rename(source_path, resolved)
+  return resolved

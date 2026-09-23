@@ -124,6 +124,9 @@ class Midwest997IngestionService:
         group_control_number=mapped.group_control_number,
         transaction_control_number=mapped.transaction_control_number,
       )
+      replay_result = self._detect_replay(transaction_id, partner['id'], mapped, raw_body, correlation_id)
+      if replay_result is not None:
+        return replay_result
       original = self._correlate_original_204(transaction_id, partner['id'], mapped)
       shipment_number = str(original['business_identifier'])
       self.integration_repository.update_parent_transaction(transaction_id, original['id'], shipment_number)
@@ -193,6 +196,53 @@ class Midwest997IngestionService:
       transaction_ack_code=mapped.transaction_ack_code,
       group_ack_code=mapped.group_ack_code,
       acknowledged_transaction_id=original['id'],
+    )
+
+  def _detect_replay(self, transaction_id: UUID, partner_id: UUID, mapped, raw_body: bytes, correlation_id: str) -> Midwest997IngestionResult | None:
+    existing = self.integration_repository.find_x12_control_replay(
+      partner_id=partner_id,
+      direction=IntegrationDirection.INBOUND,
+      document_type=MIDWEST_997_DOCUMENT_TYPE,
+      interchange_control_number=mapped.interchange_control_number,
+      group_control_number=mapped.group_control_number,
+      transaction_control_number=mapped.transaction_control_number,
+      exclude_transaction_id=transaction_id,
+    )
+    if existing is None:
+      return None
+    if existing['payload_hash'] != payload_sha256(raw_body):
+      raise ClassifiedIntegrationFailure(
+        status_code=409,
+        code='X12_CONTROL_NUMBER_REUSE',
+        message='Midwest reused X12 control numbers with different payload content.',
+        category=ErrorCategory.DUPLICATE_TRANSACTION,
+        stage=ProcessingStage.BUSINESS_VALIDATION,
+      )
+    if existing['processing_status'] != ProcessingStatus.SUCCEEDED.value:
+      return None
+    self.integration_repository.mark_replay(
+      transaction_id,
+      original_transaction_id=existing['id'],
+      business_identifier=str(existing.get('business_identifier') or 'UNRESOLVED_997'),
+    )
+    self.integration_repository.mark_succeeded(transaction_id)
+    self._log(
+      transaction_id,
+      ProcessingStage.COMPLETED,
+      ProcessingStatus.SUCCEEDED,
+      'Exact X12 replay detected; business side effects were skipped.',
+      {'original_transaction_id': str(existing['id'])},
+    )
+    return Midwest997IngestionResult(
+      status='REPLAY_ACCEPTED',
+      correlation_id=correlation_id,
+      transaction_id=transaction_id,
+      shipment_number=str(existing.get('business_identifier') or 'UNRESOLVED_997'),
+      acknowledged_document_type='204',
+      acknowledgment_status=mapped.status,
+      transaction_ack_code=mapped.transaction_ack_code,
+      group_ack_code=mapped.group_ack_code,
+      acknowledged_transaction_id=UUID(str(existing.get('parent_transaction_id') or existing['id'])),
     )
 
   def _parse_validate_and_map(self, transaction_id: UUID, raw_body: bytes):

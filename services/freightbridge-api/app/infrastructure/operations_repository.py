@@ -55,6 +55,7 @@ class OperationsRepository:
       'transaction': self._transaction_detail(transaction),
       'parent': parent,
       'children': self._fetch_child_summaries(transaction_id),
+      'retry_attempts': self._fetch_retry_attempts(transaction_id),
       'logs': self._fetch_logs(transaction_id),
       'errors': self._fetch_errors_for_transaction(transaction_id),
     }
@@ -70,6 +71,14 @@ class OperationsRepository:
       for tx in transactions
       if tx.get('parent_transaction_id') is not None
     ]
+    links.extend(
+      {
+        'parent_transaction_id': tx['replay_of_transaction_id'],
+        'child_transaction_id': tx['id'],
+      }
+      for tx in transactions
+      if tx.get('replay_of_transaction_id') is not None
+    )
     failed = [tx for tx in transactions if tx['processing_status'] == 'FAILED']
     unresolved = self.search_errors(
       business_identifier=business_identifier,
@@ -126,7 +135,7 @@ class OperationsRepository:
         f"""
           SELECT
             e.id, e.transaction_id, e.category, e.error_code, e.safe_message,
-            e.stage, e.retryable, e.resolved, e.resolution_note, e.created_at, e.resolved_at,
+            e.stage, e.retryable, e.resolved, e.resolution_note, e.resolved_by_transaction_id, e.created_at, e.resolved_at,
             t.business_identifier, t.document_type, t.correlation_id,
             p.partner_code
           FROM integration_errors e
@@ -190,6 +199,229 @@ class OperationsRepository:
         (error_id,),
       )
     return self.get_error_detail(error_id)
+
+  def begin_retry_attempt(self, transaction_id: UUID, *, note: str | None = None, max_attempts: int = 3) -> dict[str, object] | None:
+    with self.connection.transaction():
+      with self.connection.cursor(row_factory=dict_row) as cursor:
+        cursor.execute(
+          """
+            SELECT *
+            FROM integration_transactions
+            WHERE id = %s
+            FOR UPDATE
+          """,
+          (transaction_id,),
+        )
+        original = cursor.fetchone()
+        if original is None:
+          return None
+        cursor.execute(
+          """
+            SELECT id
+            FROM integration_retry_attempts
+            WHERE original_transaction_id = %s
+              AND status = 'SUCCEEDED'
+            LIMIT 1
+          """,
+          (transaction_id,),
+        )
+        if cursor.fetchone() is not None:
+          return {'status': 'ALREADY_RECOVERED', 'original': dict(original)}
+        cursor.execute(
+          """
+            SELECT id
+            FROM integration_retry_attempts
+            WHERE original_transaction_id = %s
+              AND status = 'PROCESSING'
+            LIMIT 1
+          """,
+          (transaction_id,),
+        )
+        if cursor.fetchone() is not None:
+          return {'status': 'RETRY_IN_PROGRESS', 'original': dict(original)}
+        cursor.execute(
+          """
+            SELECT *
+            FROM integration_errors
+            WHERE transaction_id = %s
+              AND resolved = false
+              AND retryable = true
+            ORDER BY created_at desc
+            LIMIT 1
+          """,
+          (transaction_id,),
+        )
+        error = cursor.fetchone()
+        if not self._retryable_original(original, error):
+          return {'status': 'TRANSACTION_NOT_RETRYABLE', 'original': dict(original)}
+        if original['retry_count'] >= max_attempts:
+          return {'status': 'RETRY_LIMIT_EXCEEDED', 'original': dict(original)}
+        cursor.execute(
+          """
+            SELECT *
+            FROM integration_message_payloads
+            WHERE transaction_id = %s
+          """,
+          (transaction_id,),
+        )
+        payload = cursor.fetchone()
+        if payload is None:
+          return {'status': 'TRANSACTION_NOT_RETRYABLE', 'original': dict(original)}
+
+        attempt_number = int(original['retry_count']) + 1
+        cursor.execute(
+          """
+            UPDATE integration_transactions
+            SET retry_count = retry_count + 1,
+                updated_at = now()
+            WHERE id = %s
+          """,
+          (transaction_id,),
+        )
+        cursor.execute(
+          """
+            INSERT INTO integration_transactions (
+              correlation_id, partner_id, direction, transport, message_format,
+              document_type, business_identifier, x12_version,
+              interchange_control_number, group_control_number,
+              transaction_control_number, payload_hash, raw_payload_location,
+              processing_status, processing_stage, retry_count,
+              parent_transaction_id, received_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    'PROCESSING', 'DELIVERY', 0, %s, now())
+            RETURNING id
+          """,
+          (
+            original['correlation_id'],
+            original['partner_id'],
+            original['direction'],
+            original['transport'],
+            original['message_format'],
+            original['document_type'],
+            original['business_identifier'],
+            original['x12_version'],
+            original['interchange_control_number'],
+            original['group_control_number'],
+            original['transaction_control_number'],
+            original['payload_hash'],
+            original['raw_payload_location'],
+            transaction_id,
+          ),
+        )
+        retry_transaction_id = cursor.fetchone()['id']
+        cursor.execute(
+          """
+            INSERT INTO integration_retry_attempts (
+              original_transaction_id,
+              retry_transaction_id,
+              attempt_number,
+              status,
+              note
+            )
+            VALUES (%s, %s, %s, 'PROCESSING', %s)
+            RETURNING id
+          """,
+          (transaction_id, retry_transaction_id, attempt_number, note),
+        )
+        retry_attempt_id = cursor.fetchone()['id']
+        return {
+          'status': 'PROCESSING',
+          'original': dict(original),
+          'payload': dict(payload),
+          'retry_transaction_id': retry_transaction_id,
+          'retry_attempt_id': retry_attempt_id,
+          'attempt_number': attempt_number,
+        }
+
+  def complete_retry_success(
+    self,
+    *,
+    retry_attempt_id: UUID,
+    original_transaction_id: UUID,
+    retry_transaction_id: UUID,
+    remote_path: str | None,
+    delivery_disposition: str,
+  ) -> None:
+    with self.connection.transaction():
+      with self.connection.cursor() as cursor:
+        cursor.execute(
+          """
+            UPDATE integration_transactions
+            SET processing_status = 'SUCCEEDED',
+                processing_stage = 'COMPLETED',
+                raw_payload_location = coalesce(%s, raw_payload_location),
+                processed_at = now(),
+                updated_at = now()
+            WHERE id = %s
+          """,
+          (remote_path, retry_transaction_id),
+        )
+        cursor.execute(
+          """
+            UPDATE integration_retry_attempts
+            SET status = 'SUCCEEDED',
+                delivery_disposition = %s,
+                completed_at = now()
+            WHERE id = %s
+          """,
+          (delivery_disposition, retry_attempt_id),
+        )
+        cursor.execute(
+          """
+            UPDATE integration_errors
+            SET resolved = true,
+                resolved_at = now(),
+                resolved_by_transaction_id = %s,
+                resolution_note = coalesce(resolution_note, 'Resolved by controlled manual retry.')
+            WHERE transaction_id = %s
+              AND resolved = false
+              AND retryable = true
+          """,
+          (retry_transaction_id, original_transaction_id),
+        )
+
+  def complete_retry_failure(
+    self,
+    *,
+    retry_attempt_id: UUID,
+    retry_transaction_id: UUID,
+    error_code: str,
+    safe_message: str,
+  ) -> None:
+    with self.connection.transaction():
+      with self.connection.cursor() as cursor:
+        cursor.execute(
+          """
+            UPDATE integration_transactions
+            SET processing_status = 'FAILED',
+                processing_stage = 'DELIVERY',
+                processed_at = now(),
+                updated_at = now()
+            WHERE id = %s
+          """,
+          (retry_transaction_id,),
+        )
+        cursor.execute(
+          """
+            INSERT INTO integration_errors (
+              transaction_id, category, error_code, safe_message, stage, retryable
+            )
+            VALUES (%s, 'TRANSPORT_ERROR', %s, %s, 'DELIVERY', true)
+          """,
+          (retry_transaction_id, error_code, safe_message),
+        )
+        cursor.execute(
+          """
+            UPDATE integration_retry_attempts
+            SET status = 'FAILED',
+                error_code = %s,
+                safe_message = %s,
+                completed_at = now()
+            WHERE id = %s
+          """,
+          (error_code, safe_message, retry_attempt_id),
+        )
 
   def get_summary(self, *, hours: int, now: datetime) -> dict[str, object]:
     since = now - timedelta(hours=hours)
@@ -260,7 +492,7 @@ class OperationsRepository:
         t.direction, t.transport, t.message_format, t.document_type, t.business_identifier,
         t.x12_version, t.interchange_control_number, t.group_control_number,
         t.transaction_control_number, t.processing_status, t.processing_stage,
-        t.retry_count, t.parent_transaction_id, t.received_at, t.processed_at,
+        t.retry_count, t.parent_transaction_id, t.replay_of_transaction_id, t.received_at, t.processed_at,
         t.created_at, t.updated_at, count(e.id)::int as error_count
       FROM integration_transactions t
       JOIN trading_partners p ON p.id = t.partner_id
@@ -325,6 +557,31 @@ class OperationsRepository:
       cursor.execute(self._transaction_summary_query('WHERE t.parent_transaction_id = %s'), (transaction_id, 100, 0))
       return [self._transaction_summary(row) for row in cursor.fetchall()]
 
+  def _fetch_retry_attempts(self, transaction_id: UUID) -> list[dict[str, object]]:
+    with self.connection.cursor(row_factory=dict_row) as cursor:
+      cursor.execute(
+        """
+          SELECT
+            id,
+            original_transaction_id,
+            retry_transaction_id,
+            attempt_number,
+            status,
+            note,
+            delivery_disposition,
+            error_code,
+            safe_message,
+            created_at,
+            completed_at
+          FROM integration_retry_attempts
+          WHERE original_transaction_id = %s
+             OR retry_transaction_id = %s
+          ORDER BY attempt_number, created_at
+        """,
+        (transaction_id, transaction_id),
+      )
+      return [dict(row) for row in cursor.fetchall()]
+
   def _fetch_transaction_detail_row(self, transaction_id: UUID) -> dict[str, object] | None:
     with self.connection.cursor(row_factory=dict_row) as cursor:
       cursor.execute(
@@ -360,7 +617,7 @@ class OperationsRepository:
         """
           SELECT
             e.id, e.transaction_id, e.category, e.error_code, e.safe_message,
-            e.stage, e.retryable, e.resolved, e.resolution_note, e.created_at, e.resolved_at,
+            e.stage, e.retryable, e.resolved, e.resolution_note, e.resolved_by_transaction_id, e.created_at, e.resolved_at,
             t.business_identifier, t.document_type, t.correlation_id,
             p.partner_code
           FROM integration_errors e
@@ -379,7 +636,7 @@ class OperationsRepository:
         """
           SELECT
             e.id, e.transaction_id, e.category, e.error_code, e.safe_message,
-            e.stage, e.retryable, e.resolved, e.resolution_note, e.created_at, e.resolved_at,
+            e.stage, e.retryable, e.resolved, e.resolution_note, e.resolved_by_transaction_id, e.created_at, e.resolved_at,
             t.business_identifier, t.document_type, t.correlation_id,
             p.partner_code
           FROM integration_errors e
@@ -411,6 +668,7 @@ class OperationsRepository:
       'processing_stage': row['processing_stage'],
       'retry_count': row['retry_count'],
       'parent_transaction_id': row['parent_transaction_id'],
+      'replay_of_transaction_id': row.get('replay_of_transaction_id'),
       'received_at': row['received_at'],
       'processed_at': row['processed_at'],
       'created_at': row['created_at'],
@@ -444,10 +702,22 @@ class OperationsRepository:
       'retryable': row['retryable'],
       'resolved': row['resolved'],
       'resolution_note': row['resolution_note'],
+      'resolved_by_transaction_id': row.get('resolved_by_transaction_id'),
       'created_at': row['created_at'],
       'resolved_at': row['resolved_at'],
       'correlation_id': row['correlation_id'],
     }
+
+  def _retryable_original(self, original: dict[str, object], error: dict[str, object] | None) -> bool:
+    if error is None:
+      return False
+    return (
+      original['processing_status'] == 'FAILED'
+      and original['direction'] == 'OUTBOUND'
+      and original['transport'] == 'SFTP'
+      and original['message_format'] == 'X12'
+      and original['document_type'] == '204'
+    )
 
 
 def sanitize_raw_payload_location(value: object) -> str | None:

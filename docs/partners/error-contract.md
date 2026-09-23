@@ -56,3 +56,13 @@ EDI rejection and acknowledgment behavior depends on where the failure occurs:
 Resolving an `integration_errors` row means a support user reviewed or closed the queue item. It does not change the associated transaction, retry the message, repair shipment/tender state, or imply partner delivery. Resolved failed transactions remain historically `FAILED`.
 
 Milestone 14 adds optional `resolution_note` for this support action. Notes are capped at 500 characters and must not contain secrets or raw payloads.
+
+Milestone 15 adds distinct duplicate/replay/retry subcodes:
+
+- `IDEMPOTENCY_KEY_REUSE`: same REST idempotency key with different semantic request.
+- `IDEMPOTENCY_IN_PROGRESS`: same REST idempotency key while the original request is processing.
+- `IDEMPOTENCY_PREVIOUS_FAILURE`: same REST idempotency key after a failed attempt.
+- `X12_CONTROL_NUMBER_REUSE`: same partner/document/ISA13/GS06/ST02 with different payload bytes.
+- `TRANSACTION_NOT_RETRYABLE`, `RETRY_IN_PROGRESS`, and `RETRY_LIMIT_EXCEEDED`: operations retry guardrails.
+
+Exact idempotent replay and exact X12 replay are not errors; they are audited and skip repeated business side effects.

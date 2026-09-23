@@ -160,6 +160,7 @@ class SafeHttpClient:
     expected: tuple[int, ...] = (200,),
     step: str,
     correlation_id: str | None = None,
+    extra_headers: dict[str, str] | None = None,
     retry: bool = True,
   ) -> dict[str, Any]:
     return self._request(
@@ -169,6 +170,7 @@ class SafeHttpClient:
       expected=expected,
       step=step,
       correlation_id=correlation_id,
+      extra_headers=extra_headers,
       retry=retry,
     )
 
@@ -181,6 +183,7 @@ class SafeHttpClient:
     expected: tuple[int, ...] = (200, 202),
     step: str,
     correlation_id: str | None = None,
+    extra_headers: dict[str, str] | None = None,
   ) -> dict[str, Any]:
     return self._request(
       'POST',
@@ -190,6 +193,7 @@ class SafeHttpClient:
       expected=expected,
       step=step,
       correlation_id=correlation_id,
+      extra_headers=extra_headers,
       retry=False,
     )
 
@@ -201,6 +205,7 @@ class SafeHttpClient:
     expected: tuple[int, ...] = (200, 202),
     step: str,
     correlation_id: str | None = None,
+    extra_headers: dict[str, str] | None = None,
   ) -> dict[str, Any]:
     return self._request(
       'POST',
@@ -209,6 +214,7 @@ class SafeHttpClient:
       expected=expected,
       step=step,
       correlation_id=correlation_id,
+      extra_headers=extra_headers,
       retry=False,
     )
 
@@ -220,8 +226,9 @@ class SafeHttpClient:
     token: str | None,
     expected: tuple[int, ...],
     step: str,
-    correlation_id: str | None,
     retry: bool,
+    correlation_id: str | None,
+    extra_headers: dict[str, str] | None = None,
     json_payload: dict[str, Any] | None = None,
   ) -> dict[str, Any]:
     url = self.base_url + '/' + path.lstrip('/')
@@ -232,6 +239,10 @@ class SafeHttpClient:
       headers['X-Correlation-ID'] = correlation_id
     if json_payload is not None:
       headers['Content-Type'] = 'application/json'
+    for key, value in (extra_headers or {}).items():
+      if key.lower() == 'authorization':
+        raise AcceptanceFailure(step, 'extra_headers must not override Authorization.')
+      headers[key] = value
 
     attempts = self.safe_retries if retry else 1
     last_error: Exception | None = None

@@ -32,6 +32,7 @@ class TransactionSummary(OperationsModel):
   processing_stage: str = Field(alias='processingStage')
   retry_count: int = Field(alias='retryCount')
   parent_transaction_id: UUID | None = Field(alias='parentTransactionId')
+  replay_of_transaction_id: UUID | None = Field(default=None, alias='replayOfTransactionId')
   received_at: datetime | None = Field(alias='receivedAt')
   processed_at: datetime | None = Field(alias='processedAt')
   created_at: datetime = Field(alias='createdAt')
@@ -62,6 +63,7 @@ class IntegrationErrorView(OperationsModel):
   retryable: bool
   resolved: bool
   resolution_note: str | None = Field(alias='resolutionNote')
+  resolved_by_transaction_id: UUID | None = Field(default=None, alias='resolvedByTransactionId')
   created_at: datetime = Field(alias='createdAt')
   resolved_at: datetime | None = Field(alias='resolvedAt')
   correlation_id: str | None = Field(default=None, alias='correlationId')
@@ -86,16 +88,32 @@ class TransactionDetail(OperationsModel):
   processing_stage: str = Field(alias='processingStage')
   retry_count: int = Field(alias='retryCount')
   parent_transaction_id: UUID | None = Field(alias='parentTransactionId')
+  replay_of_transaction_id: UUID | None = Field(default=None, alias='replayOfTransactionId')
   received_at: datetime | None = Field(alias='receivedAt')
   processed_at: datetime | None = Field(alias='processedAt')
   created_at: datetime = Field(alias='createdAt')
   updated_at: datetime = Field(alias='updatedAt')
 
 
+class RetryAttemptView(OperationsModel):
+  id: UUID
+  original_transaction_id: UUID = Field(alias='originalTransactionId')
+  retry_transaction_id: UUID = Field(alias='retryTransactionId')
+  attempt_number: int = Field(alias='attemptNumber')
+  status: str
+  note: str | None
+  delivery_disposition: str | None = Field(alias='deliveryDisposition')
+  error_code: str | None = Field(alias='errorCode')
+  safe_message: str | None = Field(alias='safeMessage')
+  created_at: datetime = Field(alias='createdAt')
+  completed_at: datetime | None = Field(alias='completedAt')
+
+
 class TransactionDetailResponse(OperationsModel):
   transaction: TransactionDetail
   parent: TransactionSummary | None
   children: list[TransactionSummary]
+  retry_attempts: list[RetryAttemptView] = Field(default_factory=list, alias='retryAttempts')
   logs: list[ProcessingLogView]
   errors: list[IntegrationErrorView]
 
@@ -142,6 +160,23 @@ class ErrorDetailResponse(OperationsModel):
 
 class ResolveErrorRequest(OperationsModel):
   note: str | None = Field(default=None, max_length=500)
+
+
+class RetryTransactionRequest(OperationsModel):
+  note: str | None = Field(default=None, max_length=500)
+
+
+class RetryTransactionResponse(OperationsModel):
+  status: str
+  original_transaction_id: UUID = Field(alias='originalTransactionId')
+  retry_transaction_id: UUID | None = Field(default=None, alias='retryTransactionId')
+  attempt_number: int | None = Field(default=None, alias='attemptNumber')
+  document_type: str | None = Field(default=None, alias='documentType')
+  business_identifier: str | None = Field(default=None, alias='businessIdentifier')
+  transport: str | None = None
+  file_name: str | None = Field(default=None, alias='fileName')
+  remote_path: str | None = Field(default=None, alias='remotePath')
+  delivery_disposition: str | None = Field(default=None, alias='deliveryDisposition')
 
 
 class OperationalSummary(OperationsModel):

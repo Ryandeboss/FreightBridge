@@ -36,6 +36,15 @@ class Midwest204ReceiveResult:
     return body
 
 
+@dataclass(frozen=True)
+class Midwest204ReplayResult(Midwest204ReceiveResult):
+  def response_body(self) -> dict[str, object]:
+    body = super().response_body()
+    body['status'] = 'REPLAY_ACCEPTED'
+    body['functionalAcknowledgment'] = None
+    return body
+
+
 class Midwest204ReceiveFailure(Exception):
   def __init__(self, *, status_code: int, code: ErrorCode, message: str, deterministic: bool = True) -> None:
     self.status_code = status_code
@@ -72,6 +81,33 @@ class Midwest204ReceiveService:
     parsed = None
     try:
       parsed = parse_midwest_204(raw_body)
+      replay = self.repository.find_accepted_inbound_204_by_controls(parsed)
+      if replay is not None:
+        if replay['payload_hash'] != hashlib.sha256(raw_body).hexdigest():
+          self.repository.mark_document_rejected(
+            document_id,
+            error_code='X12_CONTROL_NUMBER_REUSE',
+            safe_error_message='X12 controls were reused with different payload content.',
+            parsed=parsed,
+            error_path=error_path,
+          )
+          raise Midwest204ReceiveFailure(
+            status_code=409,
+            code=ErrorCode.X12_CONTROL_NUMBER_REUSE,
+            message='X12 controls were reused with different payload content.',
+          )
+        self.repository.mark_document_replay(
+          document_id,
+          parsed,
+          replay_of_document_id=replay['id'],
+          archive_path=archive_path,
+        )
+        return Midwest204ReplayResult(
+          document_id=document_id,
+          midwest_load_id=replay['load_id'],
+          parsed=parsed,
+          functional_acknowledgment=None,
+        )
       midwest_load_id = self.repository.create_load_from_204(parsed)
       self.repository.mark_document_accepted(document_id, parsed, archive_path=archive_path)
       functional_acknowledgment = self.repository.create_functional_acknowledgment_for_204(
