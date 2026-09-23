@@ -76,7 +76,7 @@ infrastructure/
 sample-data/
   x12/                    Synthetic X12 payloads
   json/                   Future synthetic JSON payloads
-scripts/                  Future developer automation
+scripts/                  Developer and deployed acceptance automation
 ```
 
 ## Local Development
@@ -125,6 +125,15 @@ uvicorn app.main:app --reload
 ```
 
 The FreightBridge and Apex backends both expose `GET /health` and `GET /readiness`. Apex business endpoints require bearer-token authentication.
+
+Deployed Milestone 12 acceptance can be run without Postman once deployment environment variables are available:
+
+```bash
+python -m pip install -r scripts/acceptance/requirements.txt
+python scripts/acceptance/milestone12.py
+```
+
+See [deployed acceptance harness](docs/testing/deployed-acceptance-harness.md) for required environment variables, GitHub Actions secrets, optional DB verification, and failure reporting. Postman collections remain available for individual route debugging.
 
 ## Environment Variables
 
@@ -235,6 +244,7 @@ Major Milestone 3 contract files:
 - [Milestone 10 Midwest 990 return flow acceptance](docs/testing/milestone-10-midwest-990-return-flow.md)
 - [Milestone 11 Midwest SFTP transport acceptance](docs/testing/milestone-11-sftp-transport.md)
 - [Milestone 12 Midwest 214 status flow acceptance](docs/testing/milestone-12-midwest-214-status-flow.md)
+- [Deployed acceptance harness](docs/testing/deployed-acceptance-harness.md)
 - [Midwest 214 to canonical event mapping](docs/mappings/midwest-214-to-canonical-event.md)
 
 Sample contract fixtures:
@@ -271,6 +281,7 @@ Implemented:
 - Midwest tender decision endpoint, independent X12 990 generation, FreightBridge inbound 990 processing, and Apex tender-status readback.
 - Railway/SFTPGo-backed Midwest 204 and 990 file exchange with manual poll endpoints, archive/error routing, host-key verification, and atomic upload protection.
 - Midwest X12 214 shipment-status event creation, SFTP dispatch, FreightBridge canonical event history/current-status handling, and Apex shipment-status readback.
+- Reusable deployed acceptance harness for Milestone 12 black-box testing against Apex, FreightBridge, Midwest, and SFTPGo through public HTTP endpoints.
 
 Specified:
 

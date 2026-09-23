@@ -70,3 +70,6 @@ jobs:
       - name: Run Midwest simulator tests
         run: python -m pytest
         working-directory: services/midwest-partner-sim
+
+      - name: Run acceptance harness unit tests
+        run: python -m pytest scripts/acceptance/tests

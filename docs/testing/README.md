@@ -13,6 +13,10 @@ Current test coverage:
 - Midwest 990 tender-response generation, FreightBridge inbound persistence/audit, Apex forwarding, and Apex tender-status readback tests.
 - Midwest SFTP 204/990 dispatch and poll tests for atomic upload, archive/error moves, remote audit metadata, host-key/auth/config/file-conflict error mapping, and REST-harness compatibility.
 - Midwest 214 shipment-status generation, SFTP dispatch/poll routing, canonical event persistence, out-of-order current-status protection, Apex forwarding, and Apex status-history readback tests.
+- Offline unit tests for the deployed acceptance harness helpers.
 - GitHub Actions workflow for frontend and backend checks.
+- Manual-only GitHub Actions workflow for deployed acceptance.
 
-Future milestones should add API contract tests, simulator tests, database tests, and integration pipeline tests.
+For full deployed milestone acceptance, prefer the Python harness documented in [deployed-acceptance-harness.md](deployed-acceptance-harness.md). The Postman collections remain useful for debugging individual routes.
+
+Future milestones should add API contract tests, simulator tests, database tests, integration pipeline tests, and deployed acceptance scripts that reuse `scripts/acceptance/common.py`.
