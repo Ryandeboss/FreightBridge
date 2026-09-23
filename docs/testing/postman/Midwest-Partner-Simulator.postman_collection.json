@@ -196,10 +196,45 @@
       }
     },
     {
+      "name": "Midwest Create 214 Event LOAD503",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{midwestBearerToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"PICKED_UP\",\n  \"occurredAt\": \"2026-10-07T14:30:00Z\",\n  \"city\": \"Aurora\",\n  \"state\": \"IL\",\n  \"statusDescription\": \"Shipment departed pickup facility.\"\n}"
+        },
+        "url": "{{midwestBaseUrl}}/v1/loads/LOAD503/shipment-events"
+      }
+    },
+    {
+      "name": "Midwest Dispatch 214 SFTP LOAD503",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{midwestBearerToken}}" }
+        ],
+        "url": "{{midwestBaseUrl}}/v1/loads/LOAD503/shipment-events/{{midwestShipmentEventId}}/dispatch-sftp"
+      }
+    },
+    {
       "name": "FreightBridge Poll Midwest SFTP Outbound",
       "request": {
         "method": "POST",
         "url": "{{freightbridgeBaseUrl}}/api/integrations/midwest/sftp/outbound/poll"
+      }
+    },
+    {
+      "name": "Apex Get LOAD503 Shipment Statuses",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{apexReadonlyToken}}" }
+        ],
+        "url": "{{apexBaseUrl}}/v1/loads/LOAD503/shipment-statuses"
       }
     },
     {

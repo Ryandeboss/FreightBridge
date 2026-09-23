@@ -35,6 +35,10 @@ class TenderAlreadyDecidedError(Exception):
   pass
 
 
+class ShipmentNotFoundForEventError(Exception):
+  pass
+
+
 class FreightBridgeRepository:
   def __init__(self, connection: Connection):
     self.connection = connection
@@ -288,6 +292,78 @@ class FreightBridgeRepository:
         (next_snapshot.status.value, next_snapshot.occurred_at, event.shipment_id),
       )
       return True
+
+  def record_shipment_event(self, shipment_number: str, event: ShipmentEvent) -> dict[str, object]:
+    with self.connection.cursor(row_factory=dict_row) as cursor:
+      cursor.execute(
+        """
+          SELECT id, current_status, current_status_occurred_at
+          FROM shipments
+          WHERE shipment_number = %s
+          FOR UPDATE
+        """,
+        (shipment_number,),
+      )
+      shipment = cursor.fetchone()
+      if shipment is None:
+        raise ShipmentNotFoundForEventError(shipment_number)
+
+      resolved_event = event.model_copy(update={'shipment_id': shipment['id']})
+      cursor.execute(
+        """
+          INSERT INTO shipment_events (
+            shipment_id,
+            status,
+            occurred_at,
+            received_at,
+            city,
+            state,
+            source_partner_id,
+            source_transaction_id
+          )
+          VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+          RETURNING id
+        """,
+        (
+          resolved_event.shipment_id,
+          resolved_event.status.value,
+          resolved_event.occurred_at,
+          resolved_event.received_at,
+          resolved_event.city,
+          resolved_event.state,
+          resolved_event.source_partner_id,
+          resolved_event.source_transaction_id,
+        ),
+      )
+      event_id = cursor.fetchone()['id']
+
+      next_snapshot = apply_shipment_event(
+        current_status=ShipmentStatus(shipment['current_status']),
+        current_status_occurred_at=shipment['current_status_occurred_at'],
+        event=resolved_event,
+      )
+      advanced = not (
+        next_snapshot.status == ShipmentStatus(shipment['current_status'])
+        and next_snapshot.occurred_at == shipment['current_status_occurred_at']
+      )
+      if advanced:
+        cursor.execute(
+          """
+            UPDATE shipments
+            SET current_status = %s,
+                current_status_occurred_at = %s,
+                updated_at = now()
+            WHERE id = %s
+          """,
+          (next_snapshot.status.value, next_snapshot.occurred_at, shipment['id']),
+        )
+      return {
+        'event_id': event_id,
+        'shipment_id': shipment['id'],
+        'advanced': advanced,
+        'current_status': next_snapshot.status,
+        'current_status_occurred_at': next_snapshot.occurred_at,
+      }
 
   def record_tender_response(self, response: TenderResponse, shipment_number: str) -> dict[str, UUID]:
     with self.connection.cursor(row_factory=dict_row) as cursor:

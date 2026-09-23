@@ -1,6 +1,6 @@
 # FreightBridge
 
-FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current state includes the FreightBridge foundation, independent Apex and Midwest simulators, Apex-to-FreightBridge canonical shipment ingestion, a generic X12 structural foundation, Midwest 204 generation/direct delivery, Midwest 990 tender-response return processing, and a real Railway/SFTPGo SFTP exchange path for Midwest 204/990 files; 214/997 processing remains intentionally deferred.
+FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current state includes the FreightBridge foundation, independent Apex and Midwest simulators, Apex-to-FreightBridge canonical shipment ingestion, a generic X12 structural foundation, Midwest 204 generation/direct delivery, Midwest 990 tender-response return processing, Midwest 214 shipment-status processing, and a real Railway/SFTPGo SFTP exchange path for Midwest files; 997 processing remains intentionally deferred.
 
 ## Planned Architecture
 
@@ -30,14 +30,14 @@ Apex Simulator
       | HTTPS REST/JSON + bearer
       v
 FreightBridge
-  [implemented canonical ingestion + 204 outbound + 990 return flow]
+  [implemented canonical ingestion + 204 outbound + 990/214 return flow]
       |
       | SFTP /inbound carrying X12 204
       v
 Midwest
   [implemented simulator]
       |
-      | SFTP /outbound carrying X12 990
+      | SFTP /outbound carrying X12 990 and 214
       v
 FreightBridge
   [forwards canonical tender response to Apex]
@@ -70,7 +70,7 @@ docs/
   testing/                Testing strategy notes
   operations/             Deployment and runbook notes
 infrastructure/
-  railway/                Future SFTPGo/Railway planning
+  railway/                SFTPGo/Railway setup and runbook
   docker/                 Future container support
   supabase/migrations/    Empty database migration area
 sample-data/
@@ -234,6 +234,8 @@ Major Milestone 3 contract files:
 - [Milestone 9 Midwest simulator acceptance](docs/testing/milestone-9-midwest-simulator.md)
 - [Milestone 10 Midwest 990 return flow acceptance](docs/testing/milestone-10-midwest-990-return-flow.md)
 - [Milestone 11 Midwest SFTP transport acceptance](docs/testing/milestone-11-sftp-transport.md)
+- [Milestone 12 Midwest 214 status flow acceptance](docs/testing/milestone-12-midwest-214-status-flow.md)
+- [Midwest 214 to canonical event mapping](docs/mappings/midwest-214-to-canonical-event.md)
 
 Sample contract fixtures:
 
@@ -268,6 +270,7 @@ Implemented:
 - Independent Midwest Carrier simulator with temporary direct REST/X12 delivery harness.
 - Midwest tender decision endpoint, independent X12 990 generation, FreightBridge inbound 990 processing, and Apex tender-status readback.
 - Railway/SFTPGo-backed Midwest 204 and 990 file exchange with manual poll endpoints, archive/error routing, host-key verification, and atomic upload protection.
+- Midwest X12 214 shipment-status event creation, SFTP dispatch, FreightBridge canonical event history/current-status handling, and Apex shipment-status readback.
 
 Specified:
 
@@ -279,7 +282,7 @@ Specified:
 Planned:
 
 - Generic/configurable mapping engine.
-- 214 and 997 processing.
+- 997 processing.
 - Shipment persistence and analyst workflow features.
 
 Do not begin FreightBridge product features from this milestone.

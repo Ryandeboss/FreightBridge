@@ -8,11 +8,11 @@ All partners and examples are synthetic and created for the FreightBridge portfo
 | --- | --- | --- |
 | Business Role | Freight broker / 3PL | Motor carrier |
 | Backend Style | Modern TMS with REST API | Legacy-style dispatch TMS with EDI gateway |
-| Primary Transport | HTTPS | Future SFTP |
+| Primary Transport | HTTPS | SFTP |
 | Message Format | JSON | X12 EDI |
-| Authentication | Bearer token for MVP | Future SSH key authentication |
+| Authentication | Bearer token | SSH key authentication |
 | Versioning | REST `/v1` API | X12 004010 / 4010 profile |
-| Load Tender | ApexLoad JSON outbound to future FreightBridge endpoint | 204 Motor Carrier Load Tender |
+| Load Tender | ApexLoad JSON outbound to FreightBridge endpoint | 204 Motor Carrier Load Tender |
 | Tender Response | ApexTenderResponse JSON contract | 990 Response to Load Tender |
 | Shipment Status | ApexShipmentStatus JSON contract | 214 Shipment Status |
 | Acknowledgment | HTTP status and JSON error envelope | 997 Functional Acknowledgment |
@@ -22,14 +22,14 @@ All partners and examples are synthetic and created for the FreightBridge portfo
 
 | Business Event | Direction | Apex Side | FreightBridge | Midwest Side |
 | --- | --- | --- | --- | --- |
-| Create Load / Tender | Apex -> FreightBridge -> Midwest | Apex sends JSON ApexLoad, `LOAD500`, to future FreightBridge endpoint | Future transform through canonical model | X12 204 to Midwest `/inbound` |
+| Create Load / Tender | Apex -> FreightBridge -> Midwest | Apex sends JSON ApexLoad, `LOAD500`, to FreightBridge endpoint | Canonical shipment then Midwest 204 | X12 204 to Midwest `/inbound` |
 | Technical Ack | Midwest -> FreightBridge | N/A | Future EDI receipt processing | X12 997 for 204 receipt |
-| Accept Tender | Midwest -> FreightBridge -> Apex | JSON ApexTenderResponse | Future transform through canonical model | X12 990 with accepted decision |
-| Reject Tender | Midwest -> FreightBridge -> Apex | JSON ApexTenderResponse | Future transform through canonical model | X12 990 with rejected decision |
-| Shipment Pickup | Midwest -> FreightBridge -> Apex | JSON ApexShipmentStatus `PICKED_UP` | Future transform through canonical model | X12 214 with `AF` |
-| Shipment In Transit | Midwest -> FreightBridge -> Apex | JSON ApexShipmentStatus `IN_TRANSIT` | Future transform through canonical model | X12 214 with `X6` |
-| Shipment Arrived | Midwest -> FreightBridge -> Apex | JSON ApexShipmentStatus `ARRIVED` | Future transform through canonical model | X12 214 with `X1` |
-| Shipment Delivered | Midwest -> FreightBridge -> Apex | JSON ApexShipmentStatus `DELIVERED` | Future transform through canonical model | X12 214 with `D1` |
+| Accept Tender | Midwest -> FreightBridge -> Apex | JSON ApexTenderResponse | Canonical tender response | X12 990 with accepted decision |
+| Reject Tender | Midwest -> FreightBridge -> Apex | JSON ApexTenderResponse | Canonical tender response | X12 990 with rejected decision |
+| Shipment Pickup | Midwest -> FreightBridge -> Apex | JSON ApexShipmentStatus `PICKED_UP` | Canonical ShipmentEvent | X12 214 with `AF` |
+| Shipment In Transit | Midwest -> FreightBridge -> Apex | JSON ApexShipmentStatus `IN_TRANSIT` | Canonical ShipmentEvent | X12 214 with `X6` |
+| Shipment Arrived | Midwest -> FreightBridge -> Apex | JSON ApexShipmentStatus `ARRIVED` | Canonical ShipmentEvent | X12 214 with `X1` |
+| Shipment Delivered | Midwest -> FreightBridge -> Apex | JSON ApexShipmentStatus `DELIVERED` | Canonical ShipmentEvent | X12 214 with `D1` |
 | Freight Invoice | Future | Future contract | Future transform | Future 210 only |
 
 ## Shared Example Identifiers

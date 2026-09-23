@@ -52,7 +52,7 @@ Create these directories in that user home:
 Directory meaning:
 
 - `/inbound`: FreightBridge writes X12 204 files for Midwest.
-- `/outbound`: Midwest writes X12 990 files for FreightBridge.
+- `/outbound`: Midwest writes X12 990 and 214 files for FreightBridge.
 - `/archive`: Successfully consumed files.
 - `/error`: Deterministically rejected files.
 

@@ -9,9 +9,9 @@ Midwest Carrier is a synthetic trading partner created for the FreightBridge por
 - Business role: Motor carrier
 - Integration style: Legacy-style EDI gateway connected to an older carrier TMS
 - Source/target system: Midwest Dispatch TMS and EDI gateway, both fictitious
-- Supported protocols: Future SFTP
+- Supported protocols: Railway/SFTPGo SFTP plus temporary REST test harness endpoints
 - Supported formats: X12 EDI, version 004010 / 4010 for MVP
-- Future authentication: SSH key authentication through Railway-hosted SFTPGo
+- Authentication: SSH key authentication through Railway-hosted SFTPGo for SFTP; bearer tokens for temporary REST harness endpoints
 - Expected availability: Daily operating coverage with unattended EDI file exchange
 
 ## Message and Document Types
@@ -31,7 +31,7 @@ Future / stretch:
 
 | Environment | Purpose | Notes |
 | --- | --- | --- |
-| Sandbox | Synthetic file exchange testing | Future Railway/SFTPGo setup |
+| Sandbox | Synthetic file exchange testing | Railway/SFTPGo setup |
 | Staging | Pre-production validation | Future environment |
 | Production | Portfolio demo path | No real freight or credentials |
 
@@ -53,27 +53,27 @@ Technical contacts are represented by fictional roles only:
 
 Midwest is responsible for:
 
-- Receiving future X12 204 load tenders through its inbound SFTP directory.
+- Receiving X12 204 load tenders through its inbound SFTP directory.
 - Returning future 997 acknowledgments for technical EDI receipt.
-- Returning future 990 tender decisions and 214 shipment statuses.
+- Returning 990 tender decisions and 214 shipment statuses through SFTP outbound files.
 - Maintaining partner-specific EDI conventions documented for FreightBridge.
 
 FreightBridge is responsible for:
 
-- Generating Midwest-specific X12 204 previews from the canonical model.
-- Picking up future Midwest outbound EDI files.
+- Generating and dispatching Midwest-specific X12 204 files from the canonical model.
+- Picking up Midwest outbound 990 and 214 EDI files.
 - Preserving control numbers and business identifiers for correlation.
 - Keeping SFTP credentials and SSH keys out of source control.
 
 ## Assumptions
 
-- Midwest does not expose REST APIs for MVP.
+- Midwest exposes REST APIs only as simulator controls and temporary test harness endpoints.
 - Midwest represents freight using carrier/TMS concepts that differ from Apex JSON.
 - X12 4010 is used to mimic a legacy-style EDI integration.
-- SFTP connectivity is documented only in this milestone and is not activated here.
+- SFTP connectivity is active in the portfolio demo path.
 
 ## Known Limitations
 
 - The EDI profile is deliberately constrained for FreightBridge and is not a complete ANSI X12 implementation guide.
 - 210 freight invoice is explicitly future/stretch and is not part of the MVP implementation contract.
-- Midwest simulator behavior, SFTP client code, 990/214/997 processing, and Midwest-side business processing are deferred.
+- 997 processing and 210 freight invoice remain deferred.

@@ -4,9 +4,15 @@ from uuid import UUID
 
 from psycopg.errors import UniqueViolation
 
+from app.edi.generator_214 import Midwest214Source, generate_214
 from app.edi.generator_990 import ControlNumbers, Midwest990Source, generate_990
 from app.edi.parser import Parsed204
 from app.models.load import MidwestLoad, Party
+from app.models.shipment_event import (
+  DEFAULT_STATUS_DESCRIPTIONS,
+  STATUS_TO_AT7,
+  MidwestShipmentEventRequest,
+)
 from app.models.tender import MidwestTenderDecisionRequest, TenderDecisionValue
 
 
@@ -23,6 +29,14 @@ class TenderAlreadyDecidedError(Exception):
 
 
 class TenderDecisionNotFoundError(Exception):
+  pass
+
+
+class ShipmentEventNotAllowedError(Exception):
+  pass
+
+
+class ShipmentEventNotFoundError(Exception):
   pass
 
 
@@ -371,6 +385,141 @@ class MidwestLoadRepository:
       'message': request.message,
       'decided_at': decided_at,
     }
+
+  def create_shipment_event(
+    self,
+    cust_ship_no: str,
+    request: MidwestShipmentEventRequest,
+    *,
+    control_numbers: ControlNumbers | None = None,
+  ) -> dict[str, object]:
+    occurred_at = request.occurred_at.astimezone(timezone.utc)
+    at7_code = STATUS_TO_AT7[request.status]
+    status_description = request.status_description or DEFAULT_STATUS_DESCRIPTIONS[request.status]
+    with self.connection.transaction():
+      with self.connection.cursor() as cursor:
+        cursor.execute(
+          """
+          select *
+          from midwest_sim.loads
+          where cust_ship_no = %s
+          for update
+          """,
+          (cust_ship_no,),
+        )
+        load = cursor.fetchone()
+        if load is None:
+          raise LoadNotFoundError(cust_ship_no)
+        if load['tender_status'] != 'ACCEPTED':
+          raise ShipmentEventNotAllowedError(cust_ship_no)
+
+        cursor.execute(
+          """
+          insert into midwest_sim.shipment_events (
+            load_id, status, at7_code, status_description, occurred_at, city, state
+          )
+          values (%s, %s, %s, %s, %s, %s, %s)
+          returning id
+          """,
+          (
+            load['id'],
+            request.status.value,
+            at7_code,
+            status_description,
+            occurred_at,
+            request.city,
+            request.state,
+          ),
+        )
+        event_id = cursor.fetchone()['id']
+
+        controls = control_numbers or self.next_control_numbers()
+        raw_x12 = generate_214(
+          Midwest214Source(
+            cust_ship_no=load['cust_ship_no'],
+            carrier_load_no=load['carrier_load_no'],
+            bol_ref=load['bol_ref'],
+            po_ref=load['po_ref'],
+            at7_code=at7_code,
+            occurred_at=occurred_at,
+            city=request.city,
+            state=request.state,
+          ),
+          controls,
+        )
+        cursor.execute(
+          """
+          insert into midwest_sim.outbound_edi_documents (
+            shipment_event_id, document_type, customer_shipment_number,
+            x12_version, interchange_control_number, group_control_number,
+            transaction_control_number, payload_hash, raw_x12,
+            processing_status, generated_at
+          )
+          values (%s, '214', %s, '004010', %s, %s, %s, %s, %s, 'GENERATED', %s)
+          returning id
+          """,
+          (
+            event_id,
+            load['cust_ship_no'],
+            controls.interchange_control_number,
+            controls.group_control_number,
+            controls.transaction_control_number,
+            hashlib.sha256(raw_x12.encode('utf-8')).hexdigest(),
+            raw_x12,
+            occurred_at,
+          ),
+        )
+        document_id = cursor.fetchone()['id']
+
+    return {
+      'event_id': event_id,
+      'outbound_document_id': document_id,
+      'customer_shipment_number': cust_ship_no,
+      'status': request.status.value,
+      'at7_code': at7_code,
+      'status_description': status_description,
+      'occurred_at': occurred_at,
+      'city': request.city,
+      'state': request.state,
+    }
+
+  def fetch_shipment_events(self, cust_ship_no: str) -> list[dict[str, object]] | None:
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        'select id from midwest_sim.loads where cust_ship_no = %s',
+        (cust_ship_no,),
+      )
+      load = cursor.fetchone()
+      if load is None:
+        return None
+      cursor.execute(
+        """
+        select id, status, at7_code, status_description, occurred_at, city, state, created_at
+        from midwest_sim.shipment_events
+        where load_id = %s
+        order by occurred_at, created_at, id
+        """,
+        (load['id'],),
+      )
+      return cursor.fetchall()
+
+  def fetch_shipment_event_with_outbound_214(self, cust_ship_no: str, event_id: UUID) -> dict[str, object] | None:
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        """
+        select oed.*
+        from midwest_sim.outbound_edi_documents oed
+        join midwest_sim.shipment_events se on se.id = oed.shipment_event_id
+        join midwest_sim.loads l on l.id = se.load_id
+        where l.cust_ship_no = %s
+          and se.id = %s
+          and oed.document_type = '214'
+        order by oed.created_at desc
+        limit 1
+        """,
+        (cust_ship_no, event_id),
+      )
+      return cursor.fetchone()
 
   def fetch_outbound_990(self, cust_ship_no: str) -> dict[str, object] | None:
     with self.connection.cursor() as cursor:

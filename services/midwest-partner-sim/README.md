@@ -8,9 +8,13 @@ Implemented scope:
 - Protected direct test-harness endpoint for raw X12 204 receipt: `POST /v1/edi/inbound/204`.
 - Protected SFTP inbound poll endpoint: `POST /v1/sftp/inbound/poll`.
 - Protected SFTP 990 dispatch endpoint: `POST /v1/loads/{customer_shipment_number}/tender-response/dispatch-sftp`.
+- Protected shipment event creation endpoint: `POST /v1/loads/{customer_shipment_number}/shipment-events`.
+- Protected shipment event read endpoint: `GET /v1/loads/{customer_shipment_number}/shipment-events`.
+- Protected SFTP 214 dispatch endpoint: `POST /v1/loads/{customer_shipment_number}/shipment-events/{event_id}/dispatch-sftp`.
 - SFTP readiness endpoint: `GET /v1/sftp/readiness`.
 - Midwest-owned load read endpoint: `GET /v1/loads/{customer_shipment_number}`.
 - Independent Midwest-side X12 204 parsing and validation.
+- Independent Midwest-side X12 214 generation.
 - Persistence in the separate `midwest_sim` PostgreSQL schema.
 
 This service intentionally does not import FreightBridge domain models, FreightBridge X12 utilities, Apex simulator models, or FreightBridge repositories.

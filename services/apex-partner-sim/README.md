@@ -38,5 +38,6 @@ Copy `.env.example` to `.env` for local development.
 - `GET /v1/loads/{loadId}`
 - `POST /v1/tender-responses`
 - `POST /v1/shipment-statuses`
+- `GET /v1/loads/{loadId}/shipment-statuses`
 
-Apex can explicitly dispatch a stored load tender to FreightBridge over HTTP. No X12, Midwest, or SFTP behavior is implemented here.
+Apex can explicitly dispatch a stored load tender to FreightBridge over HTTP. It also receives tender responses and shipment statuses from FreightBridge as REST/JSON. No X12 or SFTP behavior is implemented inside Apex.

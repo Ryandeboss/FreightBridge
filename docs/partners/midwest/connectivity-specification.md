@@ -26,6 +26,15 @@ POST /v1/loads/{customer_shipment_number}/tender-response/dispatch-sftp
 POST /api/integrations/midwest/sftp/outbound/poll
 ```
 
+Milestone 12 extends `/outbound` polling to X12 214 shipment-status files:
+
+```text
+POST /v1/loads/{customer_shipment_number}/shipment-events
+POST /v1/loads/{customer_shipment_number}/shipment-events/{event_id}/dispatch-sftp
+GET /v1/loads/{customer_shipment_number}/shipment-events
+GET /v1/loads/{load_id}/shipment-statuses
+```
+
 ## Transport
 
 - Protocol: SFTP

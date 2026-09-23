@@ -77,6 +77,34 @@ class FakeApexRepository:
       )
     return uuid4()
 
+  def fetch_shipment_status_history(self, load_id: str):
+    if load_id not in self.loads:
+      return None
+    current = self.current_status.get(load_id)
+    ordered = sorted(
+      enumerate(self.status_history),
+      key=lambda item: (item[1].occurred_at, item[0]),
+    )
+    return {
+      'loadId': load_id,
+      'currentStatus': current[0].value if current else None,
+      'currentStatusOccurredAt': current[1].isoformat() if current else None,
+      'events': [
+        {
+          'eventId': str(uuid4()),
+          'statusCode': event.status_code.value,
+          'carrierCode': event.carrier_code,
+          'statusDescription': event.status_description,
+          'occurredAt': event.occurred_at.isoformat(),
+          'receivedAt': datetime.now(timezone.utc).isoformat(),
+          'city': event.city,
+          'state': event.state,
+        }
+        for _, event in ordered
+        if event.load_id == load_id
+      ],
+    }
+
 
 @pytest.fixture(autouse=True)
 def clear_app_state(monkeypatch):
@@ -460,6 +488,36 @@ def test_late_historical_status_does_not_regress_current_apex_status(
 
   assert len(fake_repository.status_history) == 2
   assert fake_repository.current_status['LOAD500'][0] == ShipmentStatusCode.DELIVERED
+
+
+def test_get_shipment_status_history_orders_by_occurred_at(
+  client: TestClient,
+  fake_repository: FakeApexRepository,
+) -> None:
+  seed_load(fake_repository)
+  client.post('/v1/shipment-statuses', headers=auth_headers(), json=status_payload('DELIVERED', '2026-10-02T18:15:00Z'))
+  client.post('/v1/shipment-statuses', headers=auth_headers(), json=status_payload('ARRIVED', '2026-10-02T17:45:00Z'))
+
+  response = client.get('/v1/loads/LOAD500/shipment-statuses', headers=auth_headers(READONLY_TOKEN))
+
+  assert response.status_code == 200
+  body = response.json()
+  assert body['currentStatus'] == 'DELIVERED'
+  assert [event['statusCode'] for event in body['events']] == ['ARRIVED', 'DELIVERED']
+
+
+def test_get_shipment_status_history_unknown_load_returns_404(client: TestClient) -> None:
+  response = client.get('/v1/loads/LOAD404/shipment-statuses', headers=auth_headers(READONLY_TOKEN))
+
+  assert response.status_code == 404
+  assert response.json()['error']['code'] == 'LOAD_NOT_FOUND'
+
+
+def test_get_shipment_status_history_requires_read_auth(client: TestClient) -> None:
+  response = client.get('/v1/loads/LOAD500/shipment-statuses')
+
+  assert response.status_code == 401
+  assert response.json()['error']['code'] == 'AUTHENTICATION_ERROR'
 
 
 def test_error_response_preserves_safe_correlation_id(client: TestClient) -> None:

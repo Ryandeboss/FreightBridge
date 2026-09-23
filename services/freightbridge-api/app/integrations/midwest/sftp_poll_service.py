@@ -3,12 +3,14 @@ from dataclasses import dataclass, field
 from app.domain import Transport
 from app.infrastructure.repositories import FreightBridgeRepository, IntegrationRepository
 from app.integrations.common.errors import IntegrationAPIError
+from app.integrations.midwest.inbound_214_service import Midwest214IngestionService
 from app.integrations.midwest.inbound_990_service import Midwest990IngestionService
 from app.integrations.midwest.sftp_client import (
   MidwestSftpClient,
   MidwestSftpError,
   MidwestSftpFileConflictError,
 )
+from app.integrations.x12 import X12Error, parse_x12, validate_x12_envelopes
 
 
 OUTBOUND_DIR = '/outbound'
@@ -60,9 +62,16 @@ class MidwestSftpOutboundPollService:
     freightbridge_repository: FreightBridgeRepository | None = None,
     integration_repository: IntegrationRepository | None = None,
     ingestion_service: Midwest990IngestionService | None = None,
+    shipment_status_ingestion_service: Midwest214IngestionService | None = None,
   ) -> None:
     self.client_factory = client_factory
-    self.ingestion_service = ingestion_service or Midwest990IngestionService(
+    self.tender_response_ingestion_service = ingestion_service or Midwest990IngestionService(
+      audit_connection=audit_connection,
+      business_connection=business_connection,
+      freightbridge_repository=freightbridge_repository,
+      integration_repository=integration_repository,
+    )
+    self.shipment_status_ingestion_service = shipment_status_ingestion_service or Midwest214IngestionService(
       audit_connection=audit_connection,
       business_connection=business_connection,
       freightbridge_repository=freightbridge_repository,
@@ -80,7 +89,9 @@ class MidwestSftpOutboundPollService:
         source_path = _join(OUTBOUND_DIR, file_name)
         try:
           payload = client.download_bytes(source_path)
-          self.ingestion_service.ingest(
+          transaction_type = _detect_transaction_type(payload, correlation_id=f'{correlation_id}:{file_name}')
+          ingestion_service = self._ingestion_service_for(transaction_type, correlation_id=f'{correlation_id}:{file_name}')
+          ingestion_service.ingest(
             raw_body=payload,
             correlation_id=f'{correlation_id}:{file_name}',
             transport=Transport.SFTP,
@@ -138,6 +149,18 @@ class MidwestSftpOutboundPollService:
           )
     return SftpPollResult(status='POLLED', processed=processed, ignored=ignored)
 
+  def _ingestion_service_for(self, transaction_type: str, *, correlation_id: str):
+    if transaction_type == '990':
+      return self.tender_response_ingestion_service
+    if transaction_type == '214':
+      return self.shipment_status_ingestion_service
+    raise IntegrationAPIError(
+      status_code=422,
+      code='UNSUPPORTED_TRANSACTION_SET',
+      message='Unsupported Midwest outbound X12 transaction set.',
+      correlation_id=correlation_id,
+    )
+
 
 class MidwestSftpReadinessService:
   def __init__(self, *, client_factory=MidwestSftpClient) -> None:
@@ -161,3 +184,25 @@ def _ignore_file(file_name: str) -> bool:
 
 def _join(directory: str, file_name: str) -> str:
   return directory.rstrip('/') + '/' + file_name
+
+
+def _detect_transaction_type(payload: bytes, *, correlation_id: str) -> str:
+  try:
+    interchange = parse_x12(payload)
+    validate_x12_envelopes(interchange)
+  except X12Error as exc:
+    raise IntegrationAPIError(
+      status_code=400,
+      code=exc.code.value,
+      message='Midwest outbound SFTP file failed X12 envelope parsing or validation.',
+      correlation_id=correlation_id,
+    ) from exc
+  try:
+    return interchange.functional_groups[0].transaction_sets[0].transaction_set_identifier or ''
+  except IndexError as exc:
+    raise IntegrationAPIError(
+      status_code=400,
+      code='MISSING_TRANSACTION_SET',
+      message='Midwest outbound SFTP file does not contain a transaction set.',
+      correlation_id=correlation_id,
+    ) from exc

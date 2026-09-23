@@ -8,14 +8,20 @@ from fastapi.testclient import TestClient
 from app.api.dependencies import get_load_repository
 from app.api.routes import readiness
 from app.core.config import get_settings
+from app.edi.generator_214 import Midwest214Source, generate_214
 from app.edi.generator_990 import ControlNumbers, Midwest990Source, generate_990
 from app.edi import parse_midwest_204
 from app.infrastructure.sftp_client import MidwestSftpFileConflictError
 from app.infrastructure import database
 from app.main import app
+from app.models.shipment_event import MidwestShipmentEventRequest
 from app.repositories.loads import DuplicateLoadError
-from app.repositories.loads import LoadNotFoundError, TenderAlreadyDecidedError
-from app.services.sftp_transport import MidwestSftpInboundPollService, MidwestSftpTenderResponseDispatchService
+from app.repositories.loads import LoadNotFoundError, ShipmentEventNotAllowedError, TenderAlreadyDecidedError
+from app.services.sftp_transport import (
+  MidwestSftpInboundPollService,
+  MidwestSftpShipmentStatusDispatchService,
+  MidwestSftpTenderResponseDispatchService,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -39,6 +45,15 @@ def clear_state(monkeypatch):
   yield
   app.dependency_overrides.clear()
   get_settings.cache_clear()
+
+
+def shipment_event_request(status: str):
+  return MidwestShipmentEventRequest.model_validate({
+    'status': status,
+    'occurredAt': '2026-10-07T14:30:00Z',
+    'city': 'Aurora',
+    'state': 'IL',
+  })
 
 
 def test_health_returns_service_status() -> None:
@@ -339,6 +354,87 @@ def test_sftp_dispatch_tender_response_marks_failed_on_file_conflict() -> None:
   ]
 
 
+def test_generate_214_uses_midwest_status_profile() -> None:
+  raw_x12 = generate_214(
+    Midwest214Source(
+      cust_ship_no='LOAD503',
+      carrier_load_no='MWC900503',
+      bol_ref='BOL903',
+      po_ref='PO114',
+      at7_code='AF',
+      occurred_at=datetime(2026, 10, 7, 14, 30, tzinfo=timezone.utc),
+      city='Aurora',
+      state='IL',
+    ),
+    ControlNumbers('000000907', '907', '0001'),
+  )
+
+  assert 'GS*QM*MWCX*FREIGHTBRIDGE*20261007*1430*907*X*004010~' in raw_x12
+  assert 'ST*214*0001~' in raw_x12
+  assert 'B10*MWC900503*LOAD503*MWCX~' in raw_x12
+  assert 'L11*BOL903*BM~' in raw_x12
+  assert 'L11*PO114*PO~' in raw_x12
+  assert 'AT7*AF****20261007*1430*UT~' in raw_x12
+  assert 'MS1*Aurora*IL~' in raw_x12
+  assert 'SE*7*0001~' in raw_x12
+  assert 'GE*1*907~' in raw_x12
+  assert 'IEA*1*000000907~' in raw_x12
+
+
+def test_create_shipment_event_requires_accepted_load() -> None:
+  repository = FakeRepository()
+  repository.create_load_from_204(parse_midwest_204(MIDWEST_204))
+
+  with pytest.raises(ShipmentEventNotAllowedError):
+    repository.create_shipment_event('LOAD500', shipment_event_request('PICKED_UP'))
+
+
+def test_create_shipment_event_on_accepted_load_generates_outbound_214() -> None:
+  repository = FakeRepository()
+  repository.create_load_from_204(parse_midwest_204(MIDWEST_204))
+  repository.create_tender_decision(
+    'LOAD500',
+    type('Decision', (), {'decision': type('Value', (), {'value': 'ACCEPTED'})(), 'reason_code': None, 'message': None})(),
+  )
+
+  result = repository.create_shipment_event('LOAD500', shipment_event_request('PICKED_UP'))
+
+  assert result['status'] == 'PICKED_UP'
+  assert result['at7_code'] == 'AF'
+  assert result['outbound_document_id'] == repository.outbound_214['id']
+  assert 'ST*214*0001~' in repository.outbound_214['raw_x12']
+
+
+def test_sftp_dispatch_shipment_status_uploads_214_atomically() -> None:
+  repository = FakeRepository()
+  repository.create_load_from_204(parse_midwest_204(MIDWEST_204))
+  repository.create_tender_decision(
+    'LOAD500',
+    type('Decision', (), {'decision': type('Value', (), {'value': 'ACCEPTED'})(), 'reason_code': None, 'message': None})(),
+  )
+  event = repository.create_shipment_event('LOAD500', shipment_event_request('DELIVERED'))
+  fake_sftp = FakeSftpClient({})
+
+  result = MidwestSftpShipmentStatusDispatchService(
+    repository=repository,
+    client_factory=lambda: fake_sftp,
+  ).dispatch('LOAD500', event['event_id'])
+
+  assert result['transport'] == 'SFTP'
+  assert result['documentType'] == '214'
+  assert result['fileName'] == 'MWCX_APEX_214_000000907.edi'
+  assert fake_sftp.uploads[0][0] == '/outbound/MWCX_APEX_214_000000907.edi.part'
+  assert fake_sftp.uploads[1] == (
+    'rename',
+    '/outbound/MWCX_APEX_214_000000907.edi.part',
+    '/outbound/MWCX_APEX_214_000000907.edi',
+  )
+  assert repository.outbound_statuses[-2:] == [
+    'DELIVERING:SFTP',
+    'DELIVERED:SFTP:/outbound/MWCX_APEX_214_000000907.edi',
+  ]
+
+
 @pytest.mark.parametrize(
   ('payload', 'expected_code'),
   [
@@ -397,6 +493,8 @@ class FakeRepository:
     self.load_tender_status = 'PENDING'
     self.carrier_load_number = None
     self.outbound = None
+    self.outbound_214 = None
+    self.shipment_events = []
     self.outbound_statuses: list[str] = []
 
   def create_inbound_document(self, **kwargs):
@@ -455,6 +553,70 @@ class FakeRepository:
     if self.load is None or self.load.cust_ship_no != cust_ship_no:
       return None
     return self.outbound
+
+  def create_shipment_event(self, cust_ship_no, request):
+    if self.load is None or self.load.cust_ship_no != cust_ship_no:
+      raise LoadNotFoundError(cust_ship_no)
+    if self.load_tender_status != 'ACCEPTED':
+      raise ShipmentEventNotAllowedError(cust_ship_no)
+    at7_code = {
+      'PICKED_UP': 'AF',
+      'IN_TRANSIT': 'X6',
+      'ARRIVED': 'X1',
+      'DELIVERED': 'D1',
+    }[request.status.value]
+    event_id = uuid4()
+    raw_x12 = generate_214(
+      Midwest214Source(
+        cust_ship_no=cust_ship_no,
+        carrier_load_no=self.carrier_load_number,
+        bol_ref=self.load.bol_ref,
+        po_ref=self.load.po_ref,
+        at7_code=at7_code,
+        occurred_at=request.occurred_at,
+        city=request.city,
+        state=request.state,
+      ),
+      ControlNumbers('000000907', '907', '0001'),
+    )
+    self.shipment_events.append({
+      'id': event_id,
+      'status': request.status.value,
+      'at7_code': at7_code,
+      'status_description': request.status_description,
+      'occurred_at': request.occurred_at,
+      'city': request.city,
+      'state': request.state,
+      'created_at': request.occurred_at,
+    })
+    self.outbound_214 = {
+      'id': uuid4(),
+      'raw_x12': raw_x12,
+      'interchange_control_number': '000000907',
+    }
+    return {
+      'event_id': event_id,
+      'outbound_document_id': self.outbound_214['id'],
+      'customer_shipment_number': cust_ship_no,
+      'status': request.status.value,
+      'at7_code': at7_code,
+      'status_description': request.status_description or 'Shipment status update.',
+      'occurred_at': request.occurred_at,
+      'city': request.city,
+      'state': request.state,
+    }
+
+  def fetch_shipment_events(self, cust_ship_no):
+    if self.load is None or self.load.cust_ship_no != cust_ship_no:
+      return None
+    return self.shipment_events
+
+  def fetch_shipment_event_with_outbound_214(self, cust_ship_no, event_id):
+    if self.load is None or self.load.cust_ship_no != cust_ship_no:
+      return None
+    if not any(event['id'] == event_id for event in self.shipment_events):
+      return None
+    return self.outbound_214
 
   def mark_outbound_delivering(self, document_id, *, transport=None) -> None:
     self.outbound_statuses.append(f"DELIVERING:{transport}" if transport else 'DELIVERING')

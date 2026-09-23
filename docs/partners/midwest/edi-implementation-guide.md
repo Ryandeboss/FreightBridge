@@ -96,21 +96,23 @@ Direction: Midwest -> FreightBridge.
 
 Partner-specific status translation agreement:
 
-| AT7-01 code | X12-facing event meaning in this Midwest profile | FreightBridge internal normalization for later work |
+| AT7-01 code | X12-facing event meaning in this Midwest profile | FreightBridge normalization |
 | --- | --- | --- |
 | `AF` | Carrier departed pickup location with shipment | `PICKED_UP` |
 | `X6` | En route to delivery location | `IN_TRANSIT` |
 | `X1` | Arrived at delivery location | `ARRIVED` |
 | `D1` | Completed unloading at delivery location | `DELIVERED` |
 
-The X12 codes retain their X12-facing meanings. FreightBridge's names are internal normalization labels for future code. This Midwest implementation guide defines only the supported subset for this partner profile.
+The X12 codes retain their X12-facing meanings. FreightBridge's names are internal normalization labels. This Midwest implementation guide defines only the supported subset for this partner profile.
 
 Project subset:
 
-- B10 carries shipment/load correlation.
+- B10 carries shipment/load correlation: `B10-01` is Midwest carrier load number, `B10-02` is FreightBridge/Apex shipment number, and `B10-03` is `MWCX`.
 - L11 repeats BOL and PO references when available.
-- AT7 carries status code and event date/time.
-- MS1 carries event city/state.
+- AT7 carries status code and event date/time: `AT7-01` status, `AT7-05` event date, `AT7-06` event time, and `AT7-07 = UT`.
+- MS1 carries event city/state. `MS1-02` must be a two-letter uppercase state.
+
+FreightBridge treats AT7 date/time as the business event time (`occurred_at`). FreightBridge processing time becomes canonical `received_at`, which allows out-of-order event receipt without regressing current shipment status.
 
 ## 997 Functional Acknowledgment
 

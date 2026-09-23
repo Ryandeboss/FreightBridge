@@ -311,6 +311,62 @@ class ApexLoadRepository:
 
     return event_id
 
+  def fetch_shipment_status_history(self, load_id: str) -> dict[str, object] | None:
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        """
+        select load_id, current_shipment_status, current_shipment_status_occurred_at
+        from apex_sim.loads
+        where load_id = %s
+        """,
+        (load_id,),
+      )
+      load_row = cursor.fetchone()
+      if load_row is None:
+        return None
+
+      cursor.execute(
+        """
+        select
+          id,
+          carrier_code,
+          status_code,
+          status_description,
+          occurred_at,
+          received_at,
+          city,
+          state
+        from apex_sim.shipment_statuses
+        where load_id = %s
+        order by occurred_at, received_at, id
+        """,
+        (load_id,),
+      )
+      event_rows = cursor.fetchall()
+
+    return {
+      'loadId': load_row['load_id'],
+      'currentStatus': load_row['current_shipment_status'],
+      'currentStatusOccurredAt': (
+        load_row['current_shipment_status_occurred_at'].isoformat()
+        if load_row['current_shipment_status_occurred_at']
+        else None
+      ),
+      'events': [
+        {
+          'eventId': str(row['id']),
+          'statusCode': row['status_code'],
+          'carrierCode': row['carrier_code'],
+          'statusDescription': row['status_description'],
+          'occurredAt': row['occurred_at'].isoformat(),
+          'receivedAt': row['received_at'].isoformat(),
+          'city': row['city'],
+          'state': row['state'],
+        }
+        for row in event_rows
+      ],
+    }
+
   def _insert_location(self, cursor, load_id: str, role: LocationRole, location: ApexLocation) -> None:
     cursor.execute(
       """

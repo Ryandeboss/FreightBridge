@@ -167,6 +167,37 @@ paths:
           $ref: '#/components/responses/SystemFailure'
         '503':
           $ref: '#/components/responses/DependencyFailure'
+  /v1/loads/{loadId}/shipment-statuses:
+    get:
+      summary: Retrieve current shipment status and event history
+      operationId: getShipmentStatusHistory
+      tags: [Shipment Status]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: loadId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LOAD503
+      responses:
+        '200':
+          description: Shipment status history found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApexShipmentStatusHistory'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/LoadNotFound'
+        '500':
+          $ref: '#/components/responses/SystemFailure'
+        '503':
+          $ref: '#/components/responses/DependencyFailure'
   /v1/loads/{loadId}:
     get:
       summary: Retrieve a load by Apex load ID
@@ -362,6 +393,58 @@ components:
         state:
           type: string
           example: IL
+    ApexShipmentStatusEvent:
+      type: object
+      required: [eventId, statusCode, carrierCode, occurredAt, receivedAt]
+      properties:
+        eventId:
+          type: string
+          example: 7a6a9c2f-1d45-4c53-b7de-723c26417750
+        statusCode:
+          type: string
+          enum: [PICKED_UP, IN_TRANSIT, ARRIVED, DELIVERED]
+          example: ARRIVED
+        carrierCode:
+          type: string
+          example: MWCX
+        statusDescription:
+          type: string
+          example: Shipment arrived at delivery location.
+        occurredAt:
+          type: string
+          format: date-time
+          example: '2026-10-08T18:00:00Z'
+        receivedAt:
+          type: string
+          format: date-time
+          example: '2026-10-08T19:10:00Z'
+        city:
+          type: string
+          example: Detroit
+        state:
+          type: string
+          example: MI
+    ApexShipmentStatusHistory:
+      type: object
+      required: [loadId, currentStatus, currentStatusOccurredAt, events]
+      properties:
+        loadId:
+          type: string
+          example: LOAD503
+        currentStatus:
+          type: string
+          nullable: true
+          enum: [PICKED_UP, IN_TRANSIT, ARRIVED, DELIVERED]
+          example: DELIVERED
+        currentStatusOccurredAt:
+          type: string
+          nullable: true
+          format: date-time
+          example: '2026-10-08T18:30:00Z'
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApexShipmentStatusEvent'
     AcceptedLoadTender:
       type: object
       required: [loadId, status, acceptedAt]

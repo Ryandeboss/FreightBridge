@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from uuid import UUID
 
 from app.infrastructure.sftp_client import MidwestSftpClient, MidwestSftpError, MidwestSftpFileConflictError
 from app.repositories.loads import MidwestLoadRepository
@@ -162,6 +163,60 @@ class MidwestSftpTenderResponseDispatchService:
     }
 
 
+class MidwestSftpShipmentStatusDispatchService:
+  def __init__(
+    self,
+    *,
+    repository: MidwestLoadRepository,
+    client_factory=MidwestSftpClient,
+  ) -> None:
+    self.repository = repository
+    self.client_factory = client_factory
+
+  def dispatch(self, customer_shipment_number: str, event_id: UUID) -> dict[str, object] | None:
+    outbound = self.repository.fetch_shipment_event_with_outbound_214(customer_shipment_number, event_id)
+    if outbound is None:
+      return None
+    filename = sftp_214_filename(outbound['interchange_control_number'])
+    self.repository.mark_outbound_delivering(outbound['id'], transport='SFTP')
+    try:
+      with self.client_factory() as client:
+        remote_path = client.upload_bytes_atomic(
+          OUTBOUND_DIR,
+          filename,
+          outbound['raw_x12'].encode('utf-8'),
+        )
+    except MidwestSftpFileConflictError:
+      self.repository.mark_outbound_failed(
+        outbound['id'],
+        'SFTP_FILE_CONFLICT',
+        'SFTP destination file already exists.',
+      )
+      raise
+    except MidwestSftpError:
+      self.repository.mark_outbound_failed(
+        outbound['id'],
+        'SFTP_TRANSPORT_ERROR',
+        'Midwest SFTP delivery failed.',
+      )
+      raise
+    self.repository.mark_outbound_delivered(
+      outbound['id'],
+      transport='SFTP',
+      remote_filename=filename,
+      remote_path=remote_path,
+    )
+    return {
+      'status': 'DELIVERED_TO_SFTP',
+      'transport': 'SFTP',
+      'customerShipmentNumber': customer_shipment_number,
+      'eventId': str(event_id),
+      'documentType': '214',
+      'remotePath': remote_path,
+      'fileName': filename,
+    }
+
+
 class MidwestSftpReadinessService:
   def __init__(self, *, client_factory=MidwestSftpClient) -> None:
     self.client_factory = client_factory
@@ -180,6 +235,10 @@ class MidwestSftpReadinessService:
 
 def sftp_990_filename(interchange_control_number: str) -> str:
   return f'MWCX_APEX_990_{interchange_control_number}.edi'
+
+
+def sftp_214_filename(interchange_control_number: str) -> str:
+  return f'MWCX_APEX_214_{interchange_control_number}.edi'
 
 
 def _ignore_file(file_name: str) -> bool:
