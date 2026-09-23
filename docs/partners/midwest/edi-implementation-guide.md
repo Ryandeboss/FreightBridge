@@ -9,7 +9,7 @@ Where details are simplified or uncertain, they are documented as FreightBridge 
 - X12 version: `004010`
 - Supported MVP transaction sets: `204`, `990`, `214`, `997`
 - Future / stretch transaction: `210` freight invoice
-- Transport: Railway/SFTPGo SFTP for 204/990 exchange; temporary REST harness retained for regression testing
+- Transport: Railway/SFTPGo SFTP for 204/990/214/997 exchange; temporary REST harness retained for regression testing
 - Segment terminator: `~`
 - Element separator: `*`
 - Component separator: `:`
@@ -124,10 +124,36 @@ The 997 is a technical EDI acknowledgment and is distinct from the 990 business-
 
 Project subset:
 
+- ISA sender `MWCX`, receiver `FREIGHTBRIDGE`, ISA12 `00401`.
+- GS01 `FA`, GS08 `004010`.
+- ST01 `997`.
 - AK1 identifies the functional group being acknowledged.
+- `AK1-01 = SM`, `AK1-02 = original 204 GS06`.
 - AK2 identifies the transaction set and control number.
+- `AK2-01 = 204`, `AK2-02 = original 204 ST02`.
 - AK5 reports transaction acknowledgment status.
 - AK9 reports group acknowledgment status.
+
+Supported MVP acknowledgment statuses:
+
+| AK5 | AK9 | Meaning |
+| --- | --- | --- |
+| `A` | `A` | Original 204 was technically accepted. |
+| `R` | `R` | Original 204 was technically rejected. |
+
+Accepted count convention:
+
+```text
+AK9*A*1*1*1
+```
+
+Rejected count convention:
+
+```text
+AK9*R*1*1*0
+```
+
+TA1 is not implemented in this milestone. TA1 is a different interchange-level acknowledgment concept. X12 999 is not implemented; this project currently targets X12 004010 997.
 
 ## Future 210 Freight Invoice
 

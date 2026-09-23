@@ -3,6 +3,7 @@
 from app.domain.enums import (
   EquipmentType,
   ErrorCategory,
+  FunctionalAcknowledgmentStatus,
   IntegrationDirection,
   IntegrationStyle,
   MessageFormat,
@@ -35,6 +36,7 @@ __all__ = [
   'CanonicalShipment',
   'EquipmentType',
   'ErrorCategory',
+  'FunctionalAcknowledgmentStatus',
   'IntegrationDirection',
   'IntegrationError',
   'IntegrationStyle',

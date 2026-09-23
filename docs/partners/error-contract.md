@@ -45,8 +45,8 @@ EDI rejection and acknowledgment behavior depends on where the failure occurs:
 | Failure stage | Conceptual behavior |
 | --- | --- |
 | Transport | Future retry or file placement in `/error`; no EDI acknowledgment if the file was never received |
-| X12 syntax | Future 997 rejection may be appropriate when the envelope can be identified |
-| EDI validation | Future 997 or partner-specific error handling depending on segment-level failure |
+| X12 syntax | 997 rejection may be appropriate when the envelope and original controls can be identified; otherwise `/error` placement is acceptable |
+| EDI validation | 997 or partner-specific error handling depending on segment-level failure |
 | Business processing | Future business-level rejection, such as 990 decline or processing error, separate from 997 |
 
-Do not implement acknowledgments in this milestone.
+997 is implemented only for the constrained Midwest 204 acknowledgment profile. TA1, 999, AS2 MDN, and broad failure-injection acknowledgment handling remain out of scope.

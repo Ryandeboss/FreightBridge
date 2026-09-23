@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
 from app.infrastructure.database import DatabaseConnectivityError, connect
+from app.infrastructure.repositories import IntegrationRepository
 from app.integrations.common.correlation import CORRELATION_HEADER, resolve_correlation_id
 from app.integrations.common.errors import IntegrationAPIError
 from app.integrations.midwest.dispatch_service import MidwestDirectDispatchService
@@ -122,6 +123,22 @@ def get_midwest_sftp_outbound_poll_service() -> Iterator[MidwestSftpOutboundPoll
 
 def get_midwest_sftp_readiness_service() -> MidwestSftpReadinessService:
   return MidwestSftpReadinessService()
+
+
+def get_integration_repository() -> Iterator:
+  try:
+    with connect() as connection:
+      yield IntegrationRepository(connection)
+  except DatabaseConnectivityError as exc:
+    raise HTTPException(
+      status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+      detail={
+        'error': {
+          'code': 'DEPENDENCY_ERROR',
+          'message': 'A downstream dependency failed while reading Midwest acknowledgments.',
+        }
+      },
+    ) from exc
 
 
 @router.post('/load-tenders/{shipment_number}/generate', status_code=status.HTTP_200_OK)
@@ -338,6 +355,40 @@ def poll_midwest_sftp_outbound(
     status_code=status.HTTP_202_ACCEPTED,
     content=result.response_body(),
     headers={CORRELATION_HEADER: correlation_id},
+  )
+
+
+@router.get('/load-tenders/{shipment_number}/functional-acknowledgment', status_code=status.HTTP_200_OK)
+def get_midwest_functional_acknowledgment(
+  shipment_number: str,
+  repository = Depends(get_integration_repository),
+) -> JSONResponse:
+  acknowledgment = repository.fetch_latest_functional_acknowledgment_for_shipment(shipment_number)
+  if acknowledgment is None:
+    return JSONResponse(
+      status_code=status.HTTP_404_NOT_FOUND,
+      content={
+        'error': {
+          'code': 'FUNCTIONAL_ACKNOWLEDGMENT_NOT_FOUND',
+          'message': 'No Midwest 997 functional acknowledgment was found for this shipment.',
+        }
+      },
+    )
+  return JSONResponse(
+    status_code=status.HTTP_200_OK,
+    content={
+      'shipmentNumber': shipment_number,
+      'acknowledgedDocumentType': acknowledgment['acknowledged_document_type'],
+      'status': acknowledgment['status'],
+      'transactionAckCode': acknowledgment['transaction_ack_code'],
+      'groupAckCode': acknowledgment['group_ack_code'],
+      'functionalIdentifier': acknowledgment['functional_identifier'],
+      'acknowledgedGroupControlNumber': acknowledgment['acknowledged_group_control_number'],
+      'acknowledgedTransactionControlNumber': acknowledgment['acknowledged_transaction_control_number'],
+      'acknowledgedTransactionId': str(acknowledgment['acknowledged_transaction_id']),
+      'ackTransactionId': str(acknowledgment['ack_transaction_id']),
+      'receivedAt': acknowledgment['received_at'].isoformat(),
+    },
   )
 
 

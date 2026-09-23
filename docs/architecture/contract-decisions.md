@@ -28,11 +28,11 @@ Consequence: The implementation guide and fixtures constrain the MVP to a small 
 
 ## 204 and 990 Come Before 214 and 997 Processing
 
-Decision: The primary future flow starts with 204 tender and 990 response, with 997 acknowledgment and 214 status included in the MVP profile.
+Decision: The primary flow starts with 204 tender and 997 technical acknowledgment, then a separate 990 business response, with 214 status events after tender acceptance.
 
 Reason: Tender lifecycle proves the core broker-to-carrier integration before broader operational events.
 
-Consequence: 214/997 are documented now, but code can be phased later without changing the partner contract vocabulary.
+Consequence: 997 and 214 processing are implemented as distinct technical and operational layers, while 990 remains the business tender decision.
 
 ## Apex Originates Load Tenders
 

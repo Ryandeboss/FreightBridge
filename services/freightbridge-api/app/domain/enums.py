@@ -42,6 +42,11 @@ class ShipmentStatus(FreightBridgeEnum):
   DELIVERED = 'DELIVERED'
 
 
+class FunctionalAcknowledgmentStatus(FreightBridgeEnum):
+  ACCEPTED = 'ACCEPTED'
+  REJECTED = 'REJECTED'
+
+
 class PartnerBusinessRole(FreightBridgeEnum):
   BROKER_3PL = 'BROKER_3PL'
   MOTOR_CARRIER = 'MOTOR_CARRIER'

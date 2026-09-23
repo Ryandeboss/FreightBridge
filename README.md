@@ -1,6 +1,6 @@
 # FreightBridge
 
-FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current state includes the FreightBridge foundation, independent Apex and Midwest simulators, Apex-to-FreightBridge canonical shipment ingestion, a generic X12 structural foundation, Midwest 204 generation/direct delivery, Midwest 990 tender-response return processing, Midwest 214 shipment-status processing, and a real Railway/SFTPGo SFTP exchange path for Midwest files; 997 processing remains intentionally deferred.
+FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current state includes the FreightBridge foundation, independent Apex and Midwest simulators, Apex-to-FreightBridge canonical shipment ingestion, a generic X12 structural foundation, Midwest 204 generation/direct delivery, Midwest 997 functional acknowledgment processing, Midwest 990 tender-response return processing, Midwest 214 shipment-status processing, and a real Railway/SFTPGo SFTP exchange path for Midwest files.
 
 ## Planned Architecture
 
@@ -30,17 +30,17 @@ Apex Simulator
       | HTTPS REST/JSON + bearer
       v
 FreightBridge
-  [implemented canonical ingestion + 204 outbound + 990/214 return flow]
+  [implemented canonical ingestion + 204 outbound + 997/990/214 return flow]
       |
       | SFTP /inbound carrying X12 204
       v
 Midwest
   [implemented simulator]
       |
-      | SFTP /outbound carrying X12 990 and 214
+      | SFTP /outbound carrying X12 997, 990, and 214
       v
 FreightBridge
-  [forwards canonical tender response to Apex]
+  [stores technical acks; forwards business tender/status updates to Apex]
 ```
 
 See [docs/architecture/initial-architecture.md](docs/architecture/initial-architecture.md) for the first architecture diagram.
@@ -244,8 +244,10 @@ Major Milestone 3 contract files:
 - [Milestone 10 Midwest 990 return flow acceptance](docs/testing/milestone-10-midwest-990-return-flow.md)
 - [Milestone 11 Midwest SFTP transport acceptance](docs/testing/milestone-11-sftp-transport.md)
 - [Milestone 12 Midwest 214 status flow acceptance](docs/testing/milestone-12-midwest-214-status-flow.md)
+- [Milestone 13 997 functional acknowledgment acceptance](docs/testing/milestone-13-997-functional-acknowledgment.md)
 - [Deployed acceptance harness](docs/testing/deployed-acceptance-harness.md)
 - [Midwest 214 to canonical event mapping](docs/mappings/midwest-214-to-canonical-event.md)
+- [Midwest 997 functional acknowledgment mapping](docs/mappings/midwest-997-functional-acknowledgment.md)
 
 Sample contract fixtures:
 
@@ -281,6 +283,7 @@ Implemented:
 - Midwest tender decision endpoint, independent X12 990 generation, FreightBridge inbound 990 processing, and Apex tender-status readback.
 - Railway/SFTPGo-backed Midwest 204 and 990 file exchange with manual poll endpoints, archive/error routing, host-key verification, and atomic upload protection.
 - Midwest X12 214 shipment-status event creation, SFTP dispatch, FreightBridge canonical event history/current-status handling, and Apex shipment-status readback.
+- Midwest X12 997 functional acknowledgment generation, SFTP dispatch, FreightBridge AK1/AK2 correlation to outbound 204, and technical acknowledgment audit.
 - Reusable deployed acceptance harness for Milestone 12 black-box testing against Apex, FreightBridge, Midwest, and SFTPGo through public HTTP endpoints.
 
 Specified:

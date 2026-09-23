@@ -1,6 +1,6 @@
 # Interface Control Document
 
-This document defines the relationship between synthetic Apex Logistics, FreightBridge, and synthetic Midwest Carrier. FreightBridge now has canonical persistence, Apex ingestion, generic X12 structure handling, Midwest 204 SFTP delivery, Midwest 990 tender response processing, Midwest 214 shipment-status processing, and Apex callback/readback flows. 997 processing remains future work.
+This document defines the relationship between synthetic Apex Logistics, FreightBridge, and synthetic Midwest Carrier. FreightBridge now has canonical persistence, Apex ingestion, generic X12 structure handling, Midwest 204 SFTP delivery, Midwest 997 technical acknowledgment processing, Midwest 990 tender response processing, Midwest 214 shipment-status processing, and Apex callback/readback flows.
 
 ```text
 Apex Logistics
@@ -33,7 +33,7 @@ Midwest Carrier
 | X12 204 generation | Not applicable | Generates and delivers over SFTP | Receives/validates in simulator |
 | X12 990 generation | Receives transformed result | Transforms to canonical tender response | Produces |
 | X12 214 generation | Receives transformed result | Transforms to canonical ShipmentEvent | Produces |
-| X12 997 handling | Not applicable | Future processing owner | Produces for received 204 |
+| X12 997 handling | Not applicable | Correlates to original outbound 204 and stores technical acknowledgment audit | Produces for received 204 |
 | SFTP service | Not applicable | SFTP client/processing owner | SFTP account perspective |
 | Credential storage | Stores Apex token out of repo | Stores app secrets out of repo | Stores SSH public key/account data |
 
@@ -59,10 +59,12 @@ Current implemented flow:
 3. FreightBridge transforms and persists a canonical shipment.
 4. FreightBridge generates and sends the Midwest-specific X12 204 over SFTP.
 5. Midwest consumes the 204 and owns a pending load.
-6. Midwest processes the tender and returns a 990 over SFTP.
-7. FreightBridge transforms the tender decision and forwards JSON to Apex.
-8. Midwest later sends 214 shipment statuses over SFTP.
-9. FreightBridge appends canonical ShipmentEvent history, updates current status using canonical progression, and forwards JSON to Apex.
+6. Midwest generates a 997 technical acknowledgment for the received 204.
+7. FreightBridge consumes the 997 and records functional acknowledgment audit without changing tender status.
+8. Midwest processes the tender and returns a 990 over SFTP.
+9. FreightBridge transforms the tender decision and forwards JSON to Apex.
+10. Midwest later sends 214 shipment statuses over SFTP.
+11. FreightBridge appends canonical ShipmentEvent history, updates current status using canonical progression, and forwards JSON to Apex.
 
 ## Synchronous vs. Asynchronous Behavior
 
@@ -124,6 +126,8 @@ sequenceDiagram
   FB->>FB: Generate Midwest X12 204
   FB->>Midwest: Send X12 204 over SFTP
   Midwest->>Midwest: Validate X12 envelope/profile
+  Midwest->>FB: Send X12 997 technical acknowledgment
+  FB->>FB: Persist functional acknowledgment audit
   Midwest->>Midwest: Process tender in carrier TMS
   Midwest->>FB: Send X12 990 tender decision
   FB->>FB: Canonical tender-response transform

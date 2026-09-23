@@ -11,6 +11,7 @@ REQUIRED_DOMAIN_TABLES = (
   'tender_responses',
   'shipment_events',
   'integration_transactions',
+  'functional_acknowledgments',
   'processing_logs',
   'integration_errors',
 )

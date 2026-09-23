@@ -14,9 +14,10 @@ class Midwest204ReceiveResult:
   document_id: UUID
   midwest_load_id: UUID
   parsed: Parsed204
+  functional_acknowledgment: dict[str, object] | None = None
 
   def response_body(self) -> dict[str, object]:
-    return {
+    body: dict[str, object] = {
       'status': 'ACCEPTED',
       'documentType': '204',
       'customerShipmentNumber': self.parsed.cust_ship_no,
@@ -25,6 +26,14 @@ class Midwest204ReceiveResult:
       'midwestLoadId': str(self.midwest_load_id),
       'receivedAt': datetime.now(timezone.utc).isoformat(),
     }
+    if self.functional_acknowledgment:
+      body['functionalAcknowledgment'] = {
+        'outboundDocumentId': str(self.functional_acknowledgment['outbound_document_id']),
+        'status': self.functional_acknowledgment['acknowledgment_status'],
+        'transactionAckCode': self.functional_acknowledgment['transaction_ack_code'],
+        'groupAckCode': self.functional_acknowledgment['group_ack_code'],
+      }
+    return body
 
 
 class Midwest204ReceiveFailure(Exception):
@@ -65,6 +74,10 @@ class Midwest204ReceiveService:
       parsed = parse_midwest_204(raw_body)
       midwest_load_id = self.repository.create_load_from_204(parsed)
       self.repository.mark_document_accepted(document_id, parsed, archive_path=archive_path)
+      functional_acknowledgment = self.repository.create_functional_acknowledgment_for_204(
+        inbound_document_id=document_id,
+        parsed=parsed,
+      )
     except X12ReceiveError as exc:
       self.repository.mark_document_rejected(
         document_id,
@@ -97,6 +110,7 @@ class Midwest204ReceiveService:
       document_id=document_id,
       midwest_load_id=midwest_load_id,
       parsed=parsed,
+      functional_acknowledgment=functional_acknowledgment,
     )
 
 

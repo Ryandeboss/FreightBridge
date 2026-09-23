@@ -551,6 +551,135 @@ class IntegrationRepository:
         (raw_payload_location, transaction_id),
       )
 
+  def update_parent_transaction(self, transaction_id: UUID, parent_transaction_id: UUID, business_identifier: str) -> None:
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        """
+          UPDATE integration_transactions
+          SET parent_transaction_id = %s,
+              business_identifier = %s,
+              updated_at = now()
+          WHERE id = %s
+        """,
+        (parent_transaction_id, business_identifier, transaction_id),
+      )
+
+  def find_acknowledged_outbound_204(
+    self,
+    *,
+    partner_id: UUID,
+    group_control_number: str,
+    transaction_control_number: str,
+  ) -> list[dict[str, object]]:
+    with self.connection.cursor(row_factory=dict_row) as cursor:
+      cursor.execute(
+        """
+          SELECT id, business_identifier, partner_id, document_type,
+                 group_control_number, transaction_control_number
+          FROM integration_transactions
+          WHERE partner_id = %s
+            AND direction = 'OUTBOUND'
+            AND message_format = 'X12'
+            AND document_type = '204'
+            AND group_control_number = %s
+            AND transaction_control_number = %s
+          ORDER BY created_at desc, id desc
+        """,
+        (partner_id, group_control_number, transaction_control_number),
+      )
+      return list(cursor.fetchall())
+
+  def create_functional_acknowledgment(
+    self,
+    *,
+    ack_transaction_id: UUID,
+    acknowledged_transaction_id: UUID,
+    partner_id: UUID,
+    acknowledged_document_type: str,
+    functional_identifier: str,
+    acknowledged_group_control_number: str,
+    transaction_set_identifier: str,
+    acknowledged_transaction_control_number: str,
+    transaction_ack_code: str,
+    group_ack_code: str,
+    transaction_sets_included: int,
+    transaction_sets_received: int,
+    transaction_sets_accepted: int,
+    received_at,
+  ) -> UUID:
+    with self.connection.cursor(row_factory=dict_row) as cursor:
+      cursor.execute(
+        """
+          INSERT INTO functional_acknowledgments (
+            ack_transaction_id,
+            acknowledged_transaction_id,
+            partner_id,
+            acknowledged_document_type,
+            functional_identifier,
+            acknowledged_group_control_number,
+            transaction_set_identifier,
+            acknowledged_transaction_control_number,
+            transaction_ack_code,
+            group_ack_code,
+            transaction_sets_included,
+            transaction_sets_received,
+            transaction_sets_accepted,
+            received_at
+          )
+          VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+          RETURNING id
+        """,
+        (
+          ack_transaction_id,
+          acknowledged_transaction_id,
+          partner_id,
+          acknowledged_document_type,
+          functional_identifier,
+          acknowledged_group_control_number,
+          transaction_set_identifier,
+          acknowledged_transaction_control_number,
+          transaction_ack_code,
+          group_ack_code,
+          transaction_sets_included,
+          transaction_sets_received,
+          transaction_sets_accepted,
+          received_at,
+        ),
+      )
+      return cursor.fetchone()['id']
+
+  def fetch_latest_functional_acknowledgment_for_shipment(self, shipment_number: str) -> dict[str, object] | None:
+    with self.connection.cursor(row_factory=dict_row) as cursor:
+      cursor.execute(
+        """
+          SELECT
+            fa.id,
+            fa.ack_transaction_id,
+            fa.acknowledged_transaction_id,
+            fa.acknowledged_document_type,
+            fa.functional_identifier,
+            fa.acknowledged_group_control_number,
+            fa.transaction_set_identifier,
+            fa.acknowledged_transaction_control_number,
+            fa.transaction_ack_code,
+            fa.group_ack_code,
+            fa.received_at,
+            case
+              when fa.transaction_ack_code = 'A' and fa.group_ack_code = 'A' then 'ACCEPTED'
+              else 'REJECTED'
+            end as status
+          FROM functional_acknowledgments fa
+          JOIN integration_transactions original
+            ON original.id = fa.acknowledged_transaction_id
+          WHERE original.business_identifier = %s
+            AND fa.acknowledged_document_type = '204'
+          ORDER BY fa.received_at desc, fa.created_at desc
+          LIMIT 1
+        """,
+        (shipment_number,),
+      )
+      return cursor.fetchone()
+
   def update_processing_state(
     self,
     transaction_id: UUID,

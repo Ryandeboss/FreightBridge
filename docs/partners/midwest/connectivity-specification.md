@@ -35,6 +35,14 @@ GET /v1/loads/{customer_shipment_number}/shipment-events
 GET /v1/loads/{load_id}/shipment-statuses
 ```
 
+Milestone 13 extends `/outbound` polling to X12 997 functional acknowledgment files:
+
+```text
+GET /v1/loads/{customer_shipment_number}/functional-acknowledgments
+POST /v1/functional-acknowledgments/{outbound_document_id}/dispatch-sftp
+GET /api/integrations/midwest/load-tenders/{shipment_number}/functional-acknowledgment
+```
+
 ## Transport
 
 - Protocol: SFTP
@@ -88,7 +96,7 @@ Examples:
 - `APEX_MWCX_204_000000905.edi`
 - `MWCX_APEX_990_000000906.edi`
 - `MWCX_APEX_214_000000907.edi`
-- `MWCX_APEX_997_000000908.edi`
+- `MWCX_APEX_997_000000917.edi`
 
 ## Duplicate Handling
 

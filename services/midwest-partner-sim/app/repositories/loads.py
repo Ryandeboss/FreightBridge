@@ -6,6 +6,7 @@ from psycopg.errors import UniqueViolation
 
 from app.edi.generator_214 import Midwest214Source, generate_214
 from app.edi.generator_990 import ControlNumbers, Midwest990Source, generate_990
+from app.edi.generator_997 import accepted_204_997_source, generate_997
 from app.edi.parser import Parsed204
 from app.models.load import MidwestLoad, Party
 from app.models.shipment_event import (
@@ -37,6 +38,10 @@ class ShipmentEventNotAllowedError(Exception):
 
 
 class ShipmentEventNotFoundError(Exception):
+  pass
+
+
+class FunctionalAcknowledgmentNotFoundError(Exception):
   pass
 
 
@@ -217,6 +222,62 @@ class MidwestLoadRepository:
         return cursor.fetchone()['id']
     except UniqueViolation as exc:
       raise DuplicateLoadError(parsed.cust_ship_no) from exc
+
+  def create_functional_acknowledgment_for_204(
+    self,
+    *,
+    inbound_document_id: UUID,
+    parsed: Parsed204,
+    generated_at: datetime | None = None,
+    control_numbers: ControlNumbers | None = None,
+  ) -> dict[str, object]:
+    generated_at = generated_at or datetime.now(timezone.utc)
+    controls = control_numbers or self.next_control_numbers()
+    source = accepted_204_997_source(
+      original_group_control_number=parsed.group_control_number,
+      original_transaction_control_number=parsed.transaction_control_number,
+      generated_at=generated_at,
+    )
+    raw_x12 = generate_997(source, controls)
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        """
+        insert into midwest_sim.outbound_edi_documents (
+          inbound_document_id, document_type, customer_shipment_number,
+          x12_version, interchange_control_number, group_control_number,
+          transaction_control_number, payload_hash, raw_x12,
+          processing_status, generated_at
+        )
+        values (%s, '997', %s, '004010', %s, %s, %s, %s, %s, 'GENERATED', %s)
+        returning id
+        """,
+        (
+          inbound_document_id,
+          parsed.cust_ship_no,
+          controls.interchange_control_number,
+          controls.group_control_number,
+          controls.transaction_control_number,
+          hashlib.sha256(raw_x12.encode('utf-8')).hexdigest(),
+          raw_x12,
+          generated_at,
+        ),
+      )
+      document_id = cursor.fetchone()['id']
+    return {
+      'outbound_document_id': document_id,
+      'inbound_document_id': inbound_document_id,
+      'customer_shipment_number': parsed.cust_ship_no,
+      'acknowledgment_status': 'ACCEPTED',
+      'transaction_ack_code': source.transaction_ack_code,
+      'group_ack_code': source.group_ack_code,
+      'acknowledged_group_control_number': parsed.group_control_number,
+      'acknowledged_transaction_control_number': parsed.transaction_control_number,
+      'interchange_control_number': controls.interchange_control_number,
+      'group_control_number': controls.group_control_number,
+      'transaction_control_number': controls.transaction_control_number,
+      'raw_x12': raw_x12,
+      'generated_at': generated_at,
+    }
 
   def fetch_load(self, cust_ship_no: str) -> MidwestLoad | None:
     with self.connection.cursor() as cursor:
@@ -518,6 +579,66 @@ class MidwestLoadRepository:
         limit 1
         """,
         (cust_ship_no, event_id),
+      )
+      return cursor.fetchone()
+
+  def fetch_functional_acknowledgments(self, cust_ship_no: str) -> list[dict[str, object]] | None:
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        'select id from midwest_sim.loads where cust_ship_no = %s',
+        (cust_ship_no,),
+      )
+      if cursor.fetchone() is None:
+        return None
+      cursor.execute(
+        """
+        select
+          oed.id as outbound_document_id,
+          oed.inbound_document_id,
+          oed.document_type,
+          case
+            when oed.raw_x12 like '%AK5*A~%AK9*A*1*1*1~%' then 'ACCEPTED'
+            when oed.raw_x12 like '%AK5*R~%AK9*R*1*1*0~%' then 'REJECTED'
+            else 'UNKNOWN'
+          end as acknowledgment_status,
+          case
+            when oed.raw_x12 like '%AK5*A~%' then 'A'
+            when oed.raw_x12 like '%AK5*R~%' then 'R'
+            else null
+          end as transaction_ack_code,
+          case
+            when oed.raw_x12 like '%AK9*A*%' then 'A'
+            when oed.raw_x12 like '%AK9*R*%' then 'R'
+            else null
+          end as group_ack_code,
+          ied.group_control_number as acknowledged_group_control_number,
+          ied.transaction_control_number as acknowledged_transaction_control_number,
+          oed.processing_status,
+          oed.transport,
+          oed.remote_path,
+          oed.generated_at,
+          oed.delivered_at
+        from midwest_sim.outbound_edi_documents oed
+        join midwest_sim.inbound_edi_documents ied
+          on ied.id = oed.inbound_document_id
+        where oed.customer_shipment_number = %s
+          and oed.document_type = '997'
+        order by oed.generated_at desc, oed.created_at desc
+        """,
+        (cust_ship_no,),
+      )
+      return cursor.fetchall()
+
+  def fetch_outbound_997_by_id(self, outbound_document_id: UUID) -> dict[str, object] | None:
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        """
+        select *
+        from midwest_sim.outbound_edi_documents
+        where id = %s
+          and document_type = '997'
+        """,
+        (outbound_document_id,),
       )
       return cursor.fetchone()
 

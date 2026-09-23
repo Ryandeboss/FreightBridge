@@ -54,7 +54,7 @@ Technical contacts are represented by fictional roles only:
 Midwest is responsible for:
 
 - Receiving X12 204 load tenders through its inbound SFTP directory.
-- Returning future 997 acknowledgments for technical EDI receipt.
+- Returning 997 acknowledgments for technical EDI receipt.
 - Returning 990 tender decisions and 214 shipment statuses through SFTP outbound files.
 - Maintaining partner-specific EDI conventions documented for FreightBridge.
 
@@ -76,4 +76,4 @@ FreightBridge is responsible for:
 
 - The EDI profile is deliberately constrained for FreightBridge and is not a complete ANSI X12 implementation guide.
 - 210 freight invoice is explicitly future/stretch and is not part of the MVP implementation contract.
-- 997 processing and 210 freight invoice remain deferred.
+- 210 freight invoice remains deferred.

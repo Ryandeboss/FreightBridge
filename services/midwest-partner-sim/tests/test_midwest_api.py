@@ -10,6 +10,7 @@ from app.api.routes import readiness
 from app.core.config import get_settings
 from app.edi.generator_214 import Midwest214Source, generate_214
 from app.edi.generator_990 import ControlNumbers, Midwest990Source, generate_990
+from app.edi.generator_997 import accepted_204_997_source, generate_997, rejected_204_997_source
 from app.edi import parse_midwest_204
 from app.infrastructure.sftp_client import MidwestSftpFileConflictError
 from app.infrastructure import database
@@ -18,6 +19,7 @@ from app.models.shipment_event import MidwestShipmentEventRequest
 from app.repositories.loads import DuplicateLoadError
 from app.repositories.loads import LoadNotFoundError, ShipmentEventNotAllowedError, TenderAlreadyDecidedError
 from app.services.sftp_transport import (
+  MidwestSftpFunctionalAcknowledgmentDispatchService,
   MidwestSftpInboundPollService,
   MidwestSftpShipmentStatusDispatchService,
   MidwestSftpTenderResponseDispatchService,
@@ -32,6 +34,12 @@ MIDWEST_990_ACCEPTED = (PROJECT_ROOT / 'sample-data' / 'x12' / 'midwest' / '990-
   encoding='utf-8'
 )
 MIDWEST_990_REJECTED = (PROJECT_ROOT / 'sample-data' / 'x12' / 'midwest' / '990-rejected.edi').read_text(
+  encoding='utf-8'
+)
+MIDWEST_997_ACCEPTED = (PROJECT_ROOT / 'sample-data' / 'x12' / 'midwest' / '997-accepted-204.edi').read_text(
+  encoding='utf-8'
+)
+MIDWEST_997_REJECTED = (PROJECT_ROOT / 'sample-data' / 'x12' / 'midwest' / '997-rejected-204.edi').read_text(
   encoding='utf-8'
 )
 
@@ -171,6 +179,38 @@ def test_990_generator_matches_golden_accepted_and_rejected_fixtures() -> None:
   assert _compact_x12(rejected) == _compact_x12(MIDWEST_990_REJECTED)
 
 
+def test_997_generator_matches_golden_accepted_and_rejected_fixtures() -> None:
+  generated_at = datetime(2026, 9, 23, 14, 30, tzinfo=timezone.utc)
+  accepted = generate_997(
+    accepted_204_997_source(
+      original_group_control_number='905',
+      original_transaction_control_number='0001',
+      generated_at=generated_at,
+    ),
+    ControlNumbers('000000917', '917', '0001'),
+  )
+  rejected = generate_997(
+    rejected_204_997_source(
+      original_group_control_number='905',
+      original_transaction_control_number='0001',
+      generated_at=datetime(2026, 9, 23, 14, 35, tzinfo=timezone.utc),
+    ),
+    ControlNumbers('000000918', '918', '0001'),
+  )
+
+  assert _compact_x12(accepted) == _compact_x12(MIDWEST_997_ACCEPTED)
+  assert _compact_x12(rejected) == _compact_x12(MIDWEST_997_REJECTED)
+  assert 'GS*FA*MWCX*FREIGHTBRIDGE*20260923*1430*917*X*004010~' in accepted
+  assert 'ST*997*0001~' in accepted
+  assert 'AK1*SM*905~' in accepted
+  assert 'AK2*204*0001~' in accepted
+  assert 'AK5*A~' in accepted
+  assert 'AK9*A*1*1*1~' in accepted
+  assert 'AK5*R~' in rejected
+  assert 'AK9*R*1*1*0~' in rejected
+  assert 'SE*6*0001~' in accepted
+
+
 def test_create_accepted_tender_decision_generates_outbound_990() -> None:
   repository = FakeRepository()
   repository.create_load_from_204(parse_midwest_204(MIDWEST_204))
@@ -289,7 +329,31 @@ def test_sftp_inbound_poll_processes_204_and_archives_file() -> None:
   assert result.ignored == ['APEX_MWCX_204_000000905.edi.part']
   assert repository.load.cust_ship_no == 'LOAD500'
   assert repository.accepted_documents == 1
+  assert repository.outbound_997 is not None
+  assert result.processed[0].functional_acknowledgment_status == 'ACCEPTED'
+  assert result.processed[0].functional_acknowledgment_document_id == str(repository.outbound_997['id'])
   assert '/archive/APEX_MWCX_204_000000905.edi' in fake_sftp.files
+
+
+def test_successful_204_generates_997_without_changing_tender_status() -> None:
+  repository = FakeRepository()
+  result = repository.create_inbound_document(payload_hash='hash', raw_x12=MIDWEST_204)
+  parsed = parse_midwest_204(MIDWEST_204)
+  repository.create_load_from_204(parsed)
+  acknowledgment = repository.create_functional_acknowledgment_for_204(
+    inbound_document_id=result,
+    parsed=parsed,
+    generated_at=datetime(2026, 9, 23, 14, 30, tzinfo=timezone.utc),
+    control_numbers=ControlNumbers('000000917', '917', '0001'),
+  )
+
+  assert acknowledgment['acknowledgment_status'] == 'ACCEPTED'
+  assert acknowledgment['transaction_ack_code'] == 'A'
+  assert acknowledgment['group_ack_code'] == 'A'
+  assert repository.load_tender_status == 'PENDING'
+  assert repository.outbound_997['inbound_document_id'] == result
+  assert repository.outbound_997['document_type'] == '997'
+  assert 'AK1*SM*905~' in repository.outbound_997['raw_x12']
 
 
 def test_sftp_inbound_poll_moves_bad_204_to_error() -> None:
@@ -435,6 +499,66 @@ def test_sftp_dispatch_shipment_status_uploads_214_atomically() -> None:
   ]
 
 
+def test_sftp_dispatch_functional_acknowledgment_uploads_997_atomically() -> None:
+  repository = FakeRepository()
+  document_id = repository.create_inbound_document(payload_hash='hash', raw_x12=MIDWEST_204)
+  parsed = parse_midwest_204(MIDWEST_204)
+  repository.create_load_from_204(parsed)
+  acknowledgment = repository.create_functional_acknowledgment_for_204(
+    inbound_document_id=document_id,
+    parsed=parsed,
+    generated_at=datetime(2026, 9, 23, 14, 30, tzinfo=timezone.utc),
+    control_numbers=ControlNumbers('000000917', '917', '0001'),
+  )
+  fake_sftp = FakeSftpClient({})
+
+  result = MidwestSftpFunctionalAcknowledgmentDispatchService(
+    repository=repository,
+    client_factory=lambda: fake_sftp,
+  ).dispatch(acknowledgment['outbound_document_id'])
+
+  assert result['transport'] == 'SFTP'
+  assert result['documentType'] == '997'
+  assert result['fileName'] == 'MWCX_APEX_997_000000917.edi'
+  assert fake_sftp.uploads[0][0] == '/outbound/MWCX_APEX_997_000000917.edi.part'
+  assert fake_sftp.uploads[1] == (
+    'rename',
+    '/outbound/MWCX_APEX_997_000000917.edi.part',
+    '/outbound/MWCX_APEX_997_000000917.edi',
+  )
+  assert repository.outbound_statuses[-2:] == [
+    'DELIVERING:SFTP',
+    'DELIVERED:SFTP:/outbound/MWCX_APEX_997_000000917.edi',
+  ]
+
+
+def test_functional_acknowledgment_readback_endpoint() -> None:
+  repository = FakeRepository()
+  document_id = repository.create_inbound_document(payload_hash='hash', raw_x12=MIDWEST_204)
+  parsed = parse_midwest_204(MIDWEST_204)
+  repository.create_load_from_204(parsed)
+  acknowledgment = repository.create_functional_acknowledgment_for_204(
+    inbound_document_id=document_id,
+    parsed=parsed,
+    generated_at=datetime(2026, 9, 23, 14, 30, tzinfo=timezone.utc),
+    control_numbers=ControlNumbers('000000917', '917', '0001'),
+  )
+  app.dependency_overrides[get_load_repository] = lambda: repository
+
+  response = TestClient(app).get(
+    '/v1/loads/LOAD500/functional-acknowledgments',
+    headers={'Authorization': 'Bearer read-token'},
+  )
+
+  assert response.status_code == 200
+  body = response.json()['functionalAcknowledgments'][0]
+  assert body['outboundDocumentId'] == str(acknowledgment['outbound_document_id'])
+  assert body['documentType'] == '997'
+  assert body['acknowledgmentStatus'] == 'ACCEPTED'
+  assert body['transactionAckCode'] == 'A'
+  assert body['groupAckCode'] == 'A'
+
+
 @pytest.mark.parametrize(
   ('payload', 'expected_code'),
   [
@@ -494,11 +618,14 @@ class FakeRepository:
     self.carrier_load_number = None
     self.outbound = None
     self.outbound_214 = None
+    self.outbound_997 = None
+    self.inbound_document_id = None
     self.shipment_events = []
     self.outbound_statuses: list[str] = []
 
   def create_inbound_document(self, **kwargs):
-    return uuid4()
+    self.inbound_document_id = uuid4()
+    return self.inbound_document_id
 
   def mark_document_accepted(self, document_id, parsed, *, archive_path=None) -> None:
     self.accepted_documents += 1
@@ -511,6 +638,46 @@ class FakeRepository:
       raise DuplicateLoadError(parsed.cust_ship_no)
     self.load = parsed
     return uuid4()
+
+  def create_functional_acknowledgment_for_204(self, *, inbound_document_id, parsed, generated_at=None, control_numbers=None):
+    generated_at = generated_at or datetime(2026, 9, 23, 14, 30, tzinfo=timezone.utc)
+    controls = control_numbers or ControlNumbers('000000917', '917', '0001')
+    source = accepted_204_997_source(
+      original_group_control_number=parsed.group_control_number,
+      original_transaction_control_number=parsed.transaction_control_number,
+      generated_at=generated_at,
+    )
+    raw_x12 = generate_997(source, controls)
+    self.outbound_997 = {
+      'id': uuid4(),
+      'inbound_document_id': inbound_document_id,
+      'document_type': '997',
+      'customer_shipment_number': parsed.cust_ship_no,
+      'raw_x12': raw_x12,
+      'interchange_control_number': controls.interchange_control_number,
+      'group_control_number': controls.group_control_number,
+      'transaction_control_number': controls.transaction_control_number,
+      'processing_status': 'GENERATED',
+      'transport': None,
+      'remote_path': None,
+      'generated_at': generated_at,
+      'delivered_at': None,
+    }
+    return {
+      'outbound_document_id': self.outbound_997['id'],
+      'inbound_document_id': inbound_document_id,
+      'customer_shipment_number': parsed.cust_ship_no,
+      'acknowledgment_status': 'ACCEPTED',
+      'transaction_ack_code': 'A',
+      'group_ack_code': 'A',
+      'acknowledged_group_control_number': parsed.group_control_number,
+      'acknowledged_transaction_control_number': parsed.transaction_control_number,
+      'interchange_control_number': controls.interchange_control_number,
+      'group_control_number': controls.group_control_number,
+      'transaction_control_number': controls.transaction_control_number,
+      'raw_x12': raw_x12,
+      'generated_at': generated_at,
+    }
 
   def create_tender_decision(self, cust_ship_no, request):
     if self.load is None or self.load.cust_ship_no != cust_ship_no:
@@ -617,6 +784,32 @@ class FakeRepository:
     if not any(event['id'] == event_id for event in self.shipment_events):
       return None
     return self.outbound_214
+
+  def fetch_functional_acknowledgments(self, cust_ship_no):
+    if self.load is None or self.load.cust_ship_no != cust_ship_no:
+      return None
+    if self.outbound_997 is None:
+      return []
+    return [{
+      'outbound_document_id': self.outbound_997['id'],
+      'inbound_document_id': self.outbound_997['inbound_document_id'],
+      'document_type': '997',
+      'acknowledgment_status': 'ACCEPTED',
+      'transaction_ack_code': 'A',
+      'group_ack_code': 'A',
+      'acknowledged_group_control_number': self.load.group_control_number,
+      'acknowledged_transaction_control_number': self.load.transaction_control_number,
+      'processing_status': self.outbound_997['processing_status'],
+      'transport': self.outbound_997['transport'],
+      'remote_path': self.outbound_997['remote_path'],
+      'generated_at': self.outbound_997['generated_at'],
+      'delivered_at': self.outbound_997['delivered_at'],
+    }]
+
+  def fetch_outbound_997_by_id(self, outbound_document_id):
+    if self.outbound_997 and self.outbound_997['id'] == outbound_document_id:
+      return self.outbound_997
+    return None
 
   def mark_outbound_delivering(self, document_id, *, transport=None) -> None:
     self.outbound_statuses.append(f"DELIVERING:{transport}" if transport else 'DELIVERING')

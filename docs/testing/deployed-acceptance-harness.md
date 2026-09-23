@@ -61,6 +61,12 @@ Run Milestone 12:
 python scripts/acceptance/milestone12.py
 ```
 
+Run Milestone 13:
+
+```bash
+python scripts/acceptance/milestone13.py
+```
+
 Useful options:
 
 ```bash
@@ -166,7 +172,7 @@ The workflow is `workflow_dispatch` only because it mutates shared deployed test
 
 Supported inputs:
 
-- `milestone`: currently `milestone12`
+- `milestone`: `milestone12` or `milestone13`
 - `load_id`: optional, blank means generate a fresh load ID
 - `run_db_verification`: passes `DATABASE_URL` only when enabled
 - `verbose`: prints safe request progress
@@ -208,4 +214,3 @@ python -m pytest scripts/acceptance/tests
 ```
 
 CI never calls live deployed services automatically.
-

@@ -23,7 +23,7 @@ All partners and examples are synthetic and created for the FreightBridge portfo
 | Business Event | Direction | Apex Side | FreightBridge | Midwest Side |
 | --- | --- | --- | --- | --- |
 | Create Load / Tender | Apex -> FreightBridge -> Midwest | Apex sends JSON ApexLoad, `LOAD500`, to FreightBridge endpoint | Canonical shipment then Midwest 204 | X12 204 to Midwest `/inbound` |
-| Technical Ack | Midwest -> FreightBridge | N/A | Future EDI receipt processing | X12 997 for 204 receipt |
+| Technical Ack | Midwest -> FreightBridge | N/A | Persists 997 technical acknowledgment linked to outbound 204 | X12 997 for 204 receipt |
 | Accept Tender | Midwest -> FreightBridge -> Apex | JSON ApexTenderResponse | Canonical tender response | X12 990 with accepted decision |
 | Reject Tender | Midwest -> FreightBridge -> Apex | JSON ApexTenderResponse | Canonical tender response | X12 990 with rejected decision |
 | Shipment Pickup | Midwest -> FreightBridge -> Apex | JSON ApexShipmentStatus `PICKED_UP` | Canonical ShipmentEvent | X12 214 with `AF` |

@@ -5,6 +5,7 @@ from app.infrastructure.repositories import FreightBridgeRepository, Integration
 from app.integrations.common.errors import IntegrationAPIError
 from app.integrations.midwest.inbound_214_service import Midwest214IngestionService
 from app.integrations.midwest.inbound_990_service import Midwest990IngestionService
+from app.integrations.midwest.inbound_997_service import Midwest997IngestionService
 from app.integrations.midwest.sftp_client import (
   MidwestSftpClient,
   MidwestSftpError,
@@ -63,6 +64,7 @@ class MidwestSftpOutboundPollService:
     integration_repository: IntegrationRepository | None = None,
     ingestion_service: Midwest990IngestionService | None = None,
     shipment_status_ingestion_service: Midwest214IngestionService | None = None,
+    functional_acknowledgment_ingestion_service: Midwest997IngestionService | None = None,
   ) -> None:
     self.client_factory = client_factory
     self.tender_response_ingestion_service = ingestion_service or Midwest990IngestionService(
@@ -76,6 +78,15 @@ class MidwestSftpOutboundPollService:
       business_connection=business_connection,
       freightbridge_repository=freightbridge_repository,
       integration_repository=integration_repository,
+    )
+    self.functional_acknowledgment_ingestion_service = (
+      functional_acknowledgment_ingestion_service
+      or Midwest997IngestionService(
+        audit_connection=audit_connection,
+        business_connection=business_connection,
+        freightbridge_repository=freightbridge_repository,
+        integration_repository=integration_repository,
+      )
     )
 
   def poll(self, *, correlation_id: str) -> SftpPollResult:
@@ -154,6 +165,8 @@ class MidwestSftpOutboundPollService:
       return self.tender_response_ingestion_service
     if transaction_type == '214':
       return self.shipment_status_ingestion_service
+    if transaction_type == '997':
+      return self.functional_acknowledgment_ingestion_service
     raise IntegrationAPIError(
       status_code=422,
       code='UNSUPPORTED_TRANSACTION_SET',

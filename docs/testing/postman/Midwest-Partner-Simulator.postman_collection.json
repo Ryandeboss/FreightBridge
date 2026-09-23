@@ -228,6 +228,33 @@
       }
     },
     {
+      "name": "Midwest Get LOAD502 Functional Acknowledgments",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{midwestBearerToken}}" }
+        ],
+        "url": "{{midwestBaseUrl}}/v1/loads/LOAD502/functional-acknowledgments"
+      }
+    },
+    {
+      "name": "Midwest Dispatch 997 SFTP",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{midwestBearerToken}}" }
+        ],
+        "url": "{{midwestBaseUrl}}/v1/functional-acknowledgments/{{midwestFunctionalAckDocumentId}}/dispatch-sftp"
+      }
+    },
+    {
+      "name": "FreightBridge Get LOAD502 Functional Acknowledgment",
+      "request": {
+        "method": "GET",
+        "url": "{{freightbridgeBaseUrl}}/api/integrations/midwest/load-tenders/LOAD502/functional-acknowledgment"
+      }
+    },
+    {
       "name": "Apex Get LOAD503 Shipment Statuses",
       "request": {
         "method": "GET",

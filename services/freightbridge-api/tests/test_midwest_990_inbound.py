@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.api.routes.midwest_integrations import get_midwest_990_ingestion_service
 from app.core.config import get_settings
-from app.domain import ProcessingStage, ProcessingStatus, ShipmentStatus, TenderDecision, apply_shipment_event
+from app.domain import FunctionalAcknowledgmentStatus, ProcessingStage, ProcessingStatus, ShipmentStatus, TenderDecision, apply_shipment_event
 from app.infrastructure.repositories import (
   ShipmentNotFoundForEventError,
   ShipmentNotFoundForTenderError,
@@ -27,6 +27,8 @@ from app.integrations.midwest.inbound_214_service import Midwest214IngestionServ
 from app.integrations.midwest.mapping_214 import Midwest214MappingError, map_midwest_214
 from app.integrations.midwest.inbound_990_service import Midwest990IngestionService
 from app.integrations.midwest.mapping_990 import Midwest990MappingError, map_midwest_990
+from app.integrations.midwest.inbound_997_service import Midwest997IngestionService
+from app.integrations.midwest.mapping_997 import Midwest997MappingError, map_midwest_997
 from app.integrations.midwest.sftp_poll_service import MidwestSftpOutboundPollService
 from app.integrations.x12 import parse_x12, validate_x12_envelopes
 from app.main import app
@@ -36,6 +38,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_DIR = PROJECT_ROOT / 'sample-data' / 'x12' / 'midwest'
 MIDWEST_990_ACCEPTED = (FIXTURE_DIR / '990-accepted.edi').read_text(encoding='utf-8')
 MIDWEST_990_REJECTED = (FIXTURE_DIR / '990-rejected.edi').read_text(encoding='utf-8')
+MIDWEST_997_ACCEPTED = (FIXTURE_DIR / '997-accepted-204.edi').read_text(encoding='utf-8')
+MIDWEST_997_REJECTED = (FIXTURE_DIR / '997-rejected-204.edi').read_text(encoding='utf-8')
 
 
 def midwest_214(
@@ -62,6 +66,30 @@ def midwest_214(
     f'MS1*{city}*{state}~'
     'SE*7*0001~'
     'GE*1*907~'
+    f'IEA*1*{interchange_control}~'
+  )
+
+
+def midwest_997(
+  *,
+  ak5_code: str = 'A',
+  ak9_code: str = 'A',
+  accepted_count: int = 1,
+  original_group_control: str = '905',
+  original_transaction_control: str = '0001',
+  interchange_control: str = '000000917',
+  group_control: str = '917',
+) -> str:
+  return (
+    f'ISA*00*          *00*          *ZZ*MWCX           *ZZ*FREIGHTBRIDGE  *260923*1430*U*00401*{interchange_control}*0*T*:~'
+    f'GS*FA*MWCX*FREIGHTBRIDGE*20260923*1430*{group_control}*X*004010~'
+    'ST*997*0001~'
+    f'AK1*SM*{original_group_control}~'
+    f'AK2*204*{original_transaction_control}~'
+    f'AK5*{ak5_code}~'
+    f'AK9*{ak9_code}*1*1*{accepted_count}~'
+    'SE*6*0001~'
+    f'GE*1*{group_control}~'
     f'IEA*1*{interchange_control}~'
   )
 
@@ -135,6 +163,53 @@ def test_maps_midwest_214_supported_status_codes(at7_code: str, expected_status:
   assert mapped.po_reference == 'PO111'
 
 
+def test_maps_midwest_997_accepted_and_rejected_fixtures() -> None:
+  accepted = _map_997(MIDWEST_997_ACCEPTED)
+  rejected = _map_997(MIDWEST_997_REJECTED)
+
+  assert accepted.status == FunctionalAcknowledgmentStatus.ACCEPTED
+  assert accepted.functional_identifier == 'SM'
+  assert accepted.acknowledged_group_control_number == '905'
+  assert accepted.transaction_set_identifier == '204'
+  assert accepted.acknowledged_transaction_control_number == '0001'
+  assert accepted.transaction_ack_code == 'A'
+  assert accepted.group_ack_code == 'A'
+  assert accepted.transaction_sets_accepted == 1
+  assert rejected.status == FunctionalAcknowledgmentStatus.REJECTED
+  assert rejected.transaction_ack_code == 'R'
+  assert rejected.group_ack_code == 'R'
+  assert rejected.transaction_sets_accepted == 0
+
+
+@pytest.mark.parametrize(
+  ('payload', 'expected_code'),
+  [
+    (midwest_997().replace('MWCX           ', 'OTHER          ', 1), 'INVALID_PARTNER_PROFILE'),
+    (midwest_997().replace('FREIGHTBRIDGE  ', 'OTHER          ', 1), 'INVALID_PARTNER_PROFILE'),
+    (midwest_997().replace('*00401*', '*00501*', 1), 'UNSUPPORTED_X12_VERSION'),
+    (midwest_997().replace('GS*FA*', 'GS*GF*'), 'INVALID_FUNCTIONAL_GROUP'),
+    (midwest_997().replace('*004010~', '*005010~', 1), 'UNSUPPORTED_X12_VERSION'),
+    (midwest_997().replace('ST*997*0001', 'ST*990*0001'), 'UNEXPECTED_TRANSACTION_SET'),
+    (midwest_997().replace('AK1*SM*905~', '').replace('SE*6*0001', 'SE*5*0001'), 'MISSING_AK1'),
+    (midwest_997().replace('AK2*204*0001~', '').replace('SE*6*0001', 'SE*5*0001'), 'MISSING_AK2'),
+    (midwest_997().replace('AK5*A~', '').replace('SE*6*0001', 'SE*5*0001'), 'MISSING_AK5'),
+    (midwest_997().replace('AK9*A*1*1*1~', '').replace('SE*6*0001', 'SE*5*0001'), 'MISSING_AK9'),
+    (midwest_997(ak5_code='E'), 'UNSUPPORTED_AK5_CODE'),
+    (midwest_997(ak9_code='E'), 'UNSUPPORTED_AK9_CODE'),
+    (midwest_997(accepted_count=0), 'INVALID_AK9_COUNTS'),
+    (midwest_997(ak5_code='A', ak9_code='R', accepted_count=0), 'INCONSISTENT_ACK_CODES'),
+  ],
+)
+def test_midwest_997_mapping_rejects_invalid_profile_or_ack_content(payload: str, expected_code: str) -> None:
+  interchange = parse_x12(payload)
+  validate_x12_envelopes(interchange)
+
+  with pytest.raises(Midwest997MappingError) as exc_info:
+    map_midwest_997(interchange)
+
+  assert exc_info.value.code == expected_code
+
+
 @pytest.mark.parametrize(
   ('payload', 'expected_code'),
   [
@@ -160,7 +235,7 @@ def test_midwest_214_mapping_rejects_invalid_profile_or_business_fields(payload:
 
 def test_midwest_990_service_persists_response_and_forwards_to_apex() -> None:
   freightbridge_repository = FakeFreightBridgeRepository()
-  integration_repository = FakeIntegrationRepository()
+  integration_repository = FakeIntegrationRepository(acknowledged_transaction_id=freightbridge_repository.outbound_204_id)
   apex_client = FakeApexClient()
   service = Midwest990IngestionService(
     audit_connection=DummyConnection(),
@@ -190,7 +265,7 @@ def test_midwest_990_service_persists_response_and_forwards_to_apex() -> None:
 
 def test_midwest_214_service_persists_event_and_forwards_to_apex() -> None:
   freightbridge_repository = FakeFreightBridgeRepository()
-  integration_repository = FakeIntegrationRepository()
+  integration_repository = FakeIntegrationRepository(acknowledged_transaction_id=freightbridge_repository.outbound_204_id)
   apex_client = FakeApexShipmentStatusClient()
   service = Midwest214IngestionService(
     audit_connection=DummyConnection(),
@@ -276,6 +351,126 @@ def test_midwest_214_apex_failure_keeps_parent_successful_and_child_failed() -> 
   assert integration_repository.succeeded == [integration_repository.transaction_ids[0]]
   assert integration_repository.failed == [(integration_repository.transaction_ids[1], ProcessingStage.DELIVERY)]
   assert integration_repository.errors[0]['error_code'] == 'DEPENDENCY_ERROR'
+
+
+def test_midwest_997_service_persists_accepted_ack_without_mutating_business_state() -> None:
+  freightbridge_repository = FakeFreightBridgeRepository()
+  integration_repository = FakeIntegrationRepository(acknowledged_transaction_id=freightbridge_repository.outbound_204_id)
+  service = Midwest997IngestionService(
+    audit_connection=DummyConnection(),
+    business_connection=DummyConnection(),
+    freightbridge_repository=freightbridge_repository,
+    integration_repository=integration_repository,
+  )
+
+  result = service.ingest(
+    raw_body=MIDWEST_997_ACCEPTED.encode('utf-8'),
+    correlation_id='corr-997',
+    raw_payload_location='/outbound/MWCX_APEX_997_000000917.edi',
+  )
+
+  assert result.acknowledgment_status == FunctionalAcknowledgmentStatus.ACCEPTED
+  assert result.shipment_number == 'LOAD500'
+  assert freightbridge_repository.tender_status == 'PENDING'
+  assert freightbridge_repository.current_status == ShipmentStatus.PLANNED
+  assert integration_repository.parent_updates[0] == (
+    integration_repository.transaction_ids[0],
+    freightbridge_repository.outbound_204_id,
+    'LOAD500',
+  )
+  assert integration_repository.functional_acknowledgments[0]['transaction_ack_code'] == 'A'
+  assert integration_repository.functional_acknowledgments[0]['acknowledged_transaction_id'] == freightbridge_repository.outbound_204_id
+  assert integration_repository.logs[-2].transaction_id == freightbridge_repository.outbound_204_id
+  assert integration_repository.logs[-2].stage == ProcessingStage.ACKNOWLEDGMENT
+  assert integration_repository.logs[-2].status == ProcessingStatus.SUCCEEDED
+
+
+def test_midwest_997_service_persists_rejected_ack_and_logs_original_204_failure() -> None:
+  freightbridge_repository = FakeFreightBridgeRepository()
+  integration_repository = FakeIntegrationRepository(acknowledged_transaction_id=freightbridge_repository.outbound_204_id)
+  service = Midwest997IngestionService(
+    audit_connection=DummyConnection(),
+    business_connection=DummyConnection(),
+    freightbridge_repository=freightbridge_repository,
+    integration_repository=integration_repository,
+  )
+
+  result = service.ingest(
+    raw_body=MIDWEST_997_REJECTED.encode('utf-8'),
+    correlation_id='corr-997-r',
+  )
+
+  assert result.acknowledgment_status == FunctionalAcknowledgmentStatus.REJECTED
+  assert integration_repository.succeeded == [integration_repository.transaction_ids[0]]
+  assert integration_repository.functional_acknowledgments[0]['transaction_ack_code'] == 'R'
+  assert integration_repository.errors[0]['transaction_id'] == freightbridge_repository.outbound_204_id
+  assert integration_repository.errors[0]['error_code'] == '997_REJECTED'
+  assert integration_repository.logs[-2].status == ProcessingStatus.FAILED
+
+
+def test_midwest_997_correlation_requires_group_and_transaction_controls() -> None:
+  freightbridge_repository = FakeFreightBridgeRepository()
+  integration_repository = FakeIntegrationRepository()
+  service = Midwest997IngestionService(
+    audit_connection=DummyConnection(),
+    business_connection=DummyConnection(),
+    freightbridge_repository=freightbridge_repository,
+    integration_repository=integration_repository,
+  )
+
+  with pytest.raises(IntegrationAPIError) as exc_info:
+    service.ingest(
+      raw_body=midwest_997(original_group_control='999').encode('utf-8'),
+      correlation_id='corr-997-missing',
+    )
+
+  assert exc_info.value.code == 'ACKNOWLEDGED_204_NOT_FOUND'
+  assert integration_repository.failed[0][1] == ProcessingStage.BUSINESS_VALIDATION
+
+
+def test_midwest_997_ambiguous_original_204_is_deterministic_error() -> None:
+  freightbridge_repository = FakeFreightBridgeRepository()
+  service = Midwest997IngestionService(
+    audit_connection=DummyConnection(),
+    business_connection=DummyConnection(),
+    freightbridge_repository=freightbridge_repository,
+    integration_repository=FakeIntegrationRepository(
+      acknowledged_transaction_id=freightbridge_repository.outbound_204_id,
+      ambiguous_ack=True,
+    ),
+  )
+
+  with pytest.raises(IntegrationAPIError) as exc_info:
+    service.ingest(raw_body=MIDWEST_997_ACCEPTED.encode('utf-8'), correlation_id='corr-ambiguous')
+
+  assert exc_info.value.code == 'AMBIGUOUS_ACKNOWLEDGED_204'
+
+
+def test_997_then_990_keeps_technical_ack_separate_from_business_tender_decision() -> None:
+  freightbridge_repository = FakeFreightBridgeRepository()
+  integration_repository = FakeIntegrationRepository(acknowledged_transaction_id=freightbridge_repository.outbound_204_id)
+  Midwest997IngestionService(
+    audit_connection=DummyConnection(),
+    business_connection=DummyConnection(),
+    freightbridge_repository=freightbridge_repository,
+    integration_repository=integration_repository,
+  ).ingest(raw_body=MIDWEST_997_ACCEPTED.encode('utf-8'), correlation_id='corr-997-before-990')
+
+  assert freightbridge_repository.tender_status == 'PENDING'
+
+  Midwest990IngestionService(
+    audit_connection=DummyConnection(),
+    business_connection=DummyConnection(),
+    freightbridge_repository=freightbridge_repository,
+    integration_repository=integration_repository,
+    apex_client=FakeApexClient(),
+  ).ingest(
+    raw_body=MIDWEST_990_ACCEPTED.encode('utf-8'),
+    authorization_header='Bearer midwest-inbound-token',
+    correlation_id='corr-990-after-997',
+  )
+
+  assert freightbridge_repository.tender_status == 'ACCEPTED'
 
 
 def test_midwest_990_duplicate_tender_returns_409_and_failed_parent_audit() -> None:
@@ -392,26 +587,31 @@ def test_sftp_outbound_poll_moves_deterministic_invalid_990_to_error() -> None:
   assert '/error/MWCX_APEX_990_000000906.edi' in fake_sftp.files
 
 
-def test_sftp_outbound_poll_routes_990_and_214_by_transaction_type() -> None:
+def test_sftp_outbound_poll_routes_990_214_and_997_by_transaction_type() -> None:
   fake_sftp = FakeSftpClient({
     '/outbound/MWCX_APEX_990_000000906.edi': MIDWEST_990_ACCEPTED.encode('utf-8'),
     '/outbound/MWCX_APEX_214_000000907.edi': midwest_214().encode('utf-8'),
+    '/outbound/MWCX_APEX_997_000000917.edi': MIDWEST_997_ACCEPTED.encode('utf-8'),
   })
   tender_service = FakeTypedIngestionService('990')
   status_service = FakeTypedIngestionService('214')
+  ack_service = FakeTypedIngestionService('997')
   service = MidwestSftpOutboundPollService(
     audit_connection=DummyConnection(),
     business_connection=DummyConnection(),
     client_factory=lambda: fake_sftp,
     ingestion_service=tender_service,
     shipment_status_ingestion_service=status_service,
+    functional_acknowledgment_ingestion_service=ack_service,
   )
 
   result = service.poll(correlation_id='corr-route')
 
-  assert [item.status for item in result.processed] == ['ARCHIVED', 'ARCHIVED']
+  assert [item.status for item in result.processed] == ['ARCHIVED', 'ARCHIVED', 'ARCHIVED']
   assert tender_service.calls == ['corr-route:MWCX_APEX_990_000000906.edi']
   assert status_service.calls == ['corr-route:MWCX_APEX_214_000000907.edi']
+  assert ack_service.calls == ['corr-route:MWCX_APEX_997_000000917.edi']
+  assert '/archive/MWCX_APEX_997_000000917.edi' in fake_sftp.files
   assert '/archive/MWCX_APEX_214_000000907.edi' in fake_sftp.files
 
 
@@ -445,6 +645,12 @@ def _map_214(payload: str):
   return map_midwest_214(interchange)
 
 
+def _map_997(payload: str):
+  interchange = parse_x12(payload)
+  validate_x12_envelopes(interchange)
+  return map_midwest_997(interchange)
+
+
 class DummyConnection:
   @contextmanager
   def transaction(self):
@@ -461,6 +667,7 @@ class FakeFreightBridgeRepository:
     self.shipment_id = uuid4()
     self.tender_response = None
     self.shipment_events = []
+    self.outbound_204_id = uuid4()
 
   def fetch_trading_partner_by_code(self, partner_code: str):
     if partner_code not in self.partner_ids:
@@ -498,16 +705,24 @@ class FakeFreightBridgeRepository:
       'current_status_occurred_at': self.current_status_occurred_at,
     }
 
+  def fetch_acknowledged_204(self, group_control_number: str, transaction_control_number: str):
+    return None
+
 
 class FakeIntegrationRepository:
-  def __init__(self) -> None:
+  def __init__(self, *, acknowledged_transaction_id: UUID | None = None, ambiguous_ack: bool = False) -> None:
     self.transactions = []
     self.transaction_ids: list[UUID] = []
+    self.acknowledged_transaction_id = acknowledged_transaction_id or uuid4()
+    self.ambiguous_ack = ambiguous_ack
     self.succeeded: list[UUID] = []
     self.failed: list[tuple[UUID, ProcessingStage]] = []
     self.errors: list[dict[str, object]] = []
     self.states: list[tuple[UUID, ProcessingStatus, ProcessingStage, bool]] = []
     self.x12_metadata = None
+    self.logs = []
+    self.parent_updates = []
+    self.functional_acknowledgments = []
 
   def create_transaction(self, transaction):
     transaction_id = uuid4()
@@ -517,6 +732,28 @@ class FakeIntegrationRepository:
 
   def update_x12_metadata(self, transaction_id, **kwargs) -> None:
     self.x12_metadata = kwargs
+
+  def update_parent_transaction(self, transaction_id, parent_transaction_id, business_identifier) -> None:
+    self.parent_updates.append((transaction_id, parent_transaction_id, business_identifier))
+
+  def find_acknowledged_outbound_204(self, *, partner_id, group_control_number, transaction_control_number):
+    if group_control_number != '905' or transaction_control_number != '0001':
+      return []
+    original = {
+      'id': self.acknowledged_transaction_id,
+      'business_identifier': 'LOAD500',
+      'partner_id': partner_id,
+      'document_type': '204',
+      'group_control_number': group_control_number,
+      'transaction_control_number': transaction_control_number,
+    }
+    if self.ambiguous_ack:
+      return [original, {**original, 'id': uuid4()}]
+    return [original]
+
+  def create_functional_acknowledgment(self, **kwargs):
+    self.functional_acknowledgments.append(kwargs)
+    return uuid4()
 
   def update_processing_state(self, transaction_id, status, stage, *, processed=False):
     self.states.append((transaction_id, status, stage, processed))
@@ -534,6 +771,7 @@ class FakeIntegrationRepository:
     return uuid4()
 
   def append_log(self, log):
+    self.logs.append(log)
     return uuid4()
 
 
