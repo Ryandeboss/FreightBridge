@@ -544,6 +544,11 @@ describe('Analyst Console', () => {
     expect(await screen.findByTestId('partners-page')).toBeInTheDocument();
     await userEvent.click(await screen.findByRole('link', { name: /MWCX/i }));
     expect(await screen.findByTestId('partner-detail-page')).toBeInTheDocument();
+    expect(screen.getAllByText(/MWCX/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/MOTOR_CARRIER/i)).toBeInTheDocument();
+    expect(screen.getByText(/X12_SFTP/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/business role/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/integration style/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/secret/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/bearer token/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/ssh private key/i)).not.toBeInTheDocument();

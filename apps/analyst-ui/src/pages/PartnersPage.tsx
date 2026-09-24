@@ -224,6 +224,13 @@ export function PartnerDetailPage() {
               </div>
               <StatusBadge value={partner.active ? 'ACTIVE' : 'INACTIVE'} />
             </div>
+            <div className="definition-grid">
+              <Definition label="Partner Code" value={partner.partnerCode} />
+              <Definition label="Business Role" value={partner.businessRole} />
+              <Definition label="Integration Style" value={partner.integrationStyle} />
+              <Definition label="Config Revision" value={String(partner.configRevision)} />
+              <Definition label="Active Status" value={partner.active ? 'ACTIVE' : 'INACTIVE'} />
+            </div>
             <form className="editor-grid" onSubmit={submit}>
               <label>
                 <span>Name</span>
@@ -335,5 +342,14 @@ export function PartnerDetailPage() {
         />
       )}
     </section>
+  );
+}
+
+function Definition({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
   );
 }
