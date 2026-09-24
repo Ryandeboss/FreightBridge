@@ -160,6 +160,12 @@ Milestone 19 acceptance verifies three representative controlled failure drills 
 python scripts/acceptance/milestone19.py
 ```
 
+Milestone 20 hardens the automated QA story: normal CI now includes REST/API contract regression, Apex documented-contract checks, X12/EDI golden regression, integration-state tests, Analyst UI route/workflow regression, coverage gates, and a PostgreSQL 16 migration-chain job that applies migrations 001-011 from scratch. The deployed Milestone 20 pack reuses Milestone 18 and 19:
+
+```bash
+python scripts/acceptance/milestone20.py
+```
+
 See [deployed acceptance harness](docs/testing/deployed-acceptance-harness.md) for required environment variables, GitHub Actions secrets, optional DB verification, and failure reporting. Postman collections remain available for individual route debugging.
 
 ## Environment Variables

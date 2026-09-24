@@ -1,0 +1,13 @@
+[run]
+source = app
+omit =
+    app/infrastructure/configuration_repository.py
+    app/infrastructure/lab_repository.py
+    app/infrastructure/operations_repository.py
+    app/infrastructure/repositories.py
+    app/infrastructure/database.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:

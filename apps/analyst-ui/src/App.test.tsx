@@ -1008,6 +1008,32 @@ describe('Analyst Console', () => {
     expect(screen.queryByTestId('dashboard-page')).not.toBeInTheDocument();
   });
 
+  test('keeps core console routes available', async () => {
+    installFetchMock({ initialLabRun: completedLabRun });
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    render(<App />);
+
+    const routes = [
+      ['#/transactions', 'transactions-page'],
+      [`#/transactions/${transactionId}`, 'transaction-detail-page'],
+      ['#/failures', 'failures-page'],
+      [`#/failures/${errorId}`, 'failure-detail-page'],
+      ['#/trace', 'trace-search-page'],
+      ['#/trace/LOAD900', 'trace-detail-page'],
+      ['#/partners', 'partners-page'],
+      [`#/partners/${partner.partnerCode}`, 'partner-detail-page'],
+      ['#/mappings', 'mappings-page'],
+      [`#/mappings/${mapping.id}`, 'mapping-detail-page'],
+      ['#/lab', 'integration-lab-page'],
+      [`#/lab/runs/${labRun.id}`, 'lab-run-detail'],
+    ] as const;
+
+    for (const [hash, testId] of routes) {
+      window.location.hash = hash;
+      await waitFor(() => expect(screen.getByTestId(testId)).toBeInTheDocument());
+    }
+  });
+
   test('searches transactions and opens detail with retry action', async () => {
     const fetchMock = installFetchMock();
     window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);

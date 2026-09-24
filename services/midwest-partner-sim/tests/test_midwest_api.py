@@ -14,7 +14,7 @@ from app.edi.generator_214 import Midwest214Source, generate_214
 from app.edi.generator_990 import ControlNumbers, Midwest990Source, generate_990
 from app.edi.generator_997 import accepted_204_997_source, generate_997, rejected_204_997_source
 from app.edi import parse_midwest_204
-from app.infrastructure.sftp_client import MidwestSftpFileConflictError
+from app.infrastructure.sftp_client import MidwestSftpFileConflictError, _join_remote, _normalize_fingerprint
 from app.infrastructure import database
 from app.main import app
 from app.models.shipment_event import MidwestShipmentEventRequest
@@ -335,6 +335,13 @@ def test_sftp_inbound_poll_processes_204_and_archives_file() -> None:
   assert result.processed[0].functional_acknowledgment_status == 'ACCEPTED'
   assert result.processed[0].functional_acknowledgment_document_id == str(repository.outbound_997['id'])
   assert '/archive/APEX_MWCX_204_000000905.edi' in fake_sftp.files
+
+
+def test_sftp_path_and_fingerprint_helpers_normalize_profile_values() -> None:
+  assert _join_remote('/outbound/', 'MWCX_APEX_990_000000906.edi') == '/outbound/MWCX_APEX_990_000000906.edi'
+  assert _join_remote('/outbound', 'MWCX_APEX_214_000000907.edi') == '/outbound/MWCX_APEX_214_000000907.edi'
+  assert _normalize_fingerprint('SHA256:abc123   ') == 'abc123'
+  assert _normalize_fingerprint('def456') == 'def456'
 
 
 def test_successful_204_generates_997_without_changing_tender_status() -> None:
