@@ -1,8 +1,21 @@
-# Resume Bullets
+# Resume Materials
 
-- Built FreightBridge, a portfolio logistics integration platform connecting a synthetic REST/JSON broker to an X12 004010 SFTP carrier through a Python/FastAPI middleware layer.
-- Implemented canonical shipment mapping across Apex JSON and Midwest X12 flows, including 204 load tenders, 997 functional acknowledgments, 990 tender responses, and 214 shipment-status updates.
-- Designed integration observability with transaction timelines, processing logs, error classification, business trace, failure queue, and mapping-version audit metadata.
-- Added SFTP transport behavior with host-key verification, atomic temporary upload and rename, archive/error routing, and stored-payload retry safeguards.
-- Built a React/TypeScript Analyst Console with dashboard, transaction detail, failure diagnosis, business trace, partner configuration, mapping views, and Integration Lab workflows.
-- Hardened regression coverage with API contract tests, documented partner-contract tests, X12 fixtures, frontend coverage, acceptance harness tests, and PostgreSQL migration-chain validation in GitHub Actions.
+## Concise Resume Bullets
+
+- Built FreightBridge, a portfolio logistics integration lab connecting synthetic REST/JSON and X12/SFTP trading partner workflows.
+- Implemented end-to-end shipment lifecycle processing with canonical mapping, acknowledgments, status updates, and analyst-facing troubleshooting tools.
+- Hardened integration quality with contract tests, X12 regression fixtures, frontend coverage, and PostgreSQL migration validation in GitHub Actions.
+
+## Technical Resume Bullets
+
+- Developed Python/FastAPI services that translate Apex REST/JSON load tenders into canonical shipments and Midwest X12 004010 `204` load tenders over SFTP.
+- Implemented inbound X12 `997`, `990`, and `214` processing with functional acknowledgment correlation, tender-decision updates, shipment-event history, and out-of-order status protection.
+- Built a React/TypeScript Analyst Console backed by PostgreSQL audit data for transaction timelines, failure queue diagnosis, business trace, mapping/version visibility, and Integration Lab runs.
+
+## Short Project Description
+
+FreightBridge is a portfolio integration project that models a logistics middleware layer between two fictional trading partners: Apex Logistics and Midwest Carrier. It demonstrates REST/JSON ingestion, canonical shipment mapping, X12 004010 processing, SFTP exchange, observability, failure diagnosis, and regression testing without using real customer or partner data.
+
+## LinkedIn / Portfolio Description
+
+FreightBridge is a synthetic logistics integration lab built to demonstrate realistic EDI/API integration work without claiming production TMS status or using real trading partners. The project connects fictional Apex Logistics over REST/JSON to fictional Midwest Carrier over X12 004010 and SFTP, using a FreightBridge middleware layer for canonical mapping, 204 load tenders, 997 technical acknowledgments, 990 tender responses, 214 shipment status events, idempotency, retry, observability, and analyst troubleshooting. The strongest technical lessons are around keeping generic X12 parsing separate from partner-specific business mapping, treating 997 and 990 as distinct technical vs business events, preserving auditability through transaction/log/error records, and testing integration correctness across unit, contract, UI, deployed acceptance, and ephemeral PostgreSQL migration boundaries. Deferred scope includes 210 freight invoice, AS2, MDN, SOAP/XML third partner, 999, and TA1.
