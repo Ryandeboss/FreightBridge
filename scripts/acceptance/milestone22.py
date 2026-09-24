@@ -21,7 +21,7 @@ from scripts.acceptance.common import (  # noqa: E402
   assert_truth,
   print_required_env,
 )
-from scripts.acceptance.milestone19 import DRILLS  # noqa: E402
+
 
 
 Runner = Callable[[Sequence[str]], subprocess.CompletedProcess]
@@ -33,6 +33,17 @@ REQUIRED_MAPPING_KEYS = (
   'MWCX_990_TO_CANONICAL',
   'MWCX_214_TO_CANONICAL',
   'MWCX_997_TO_ACK',
+)
+
+REQUIRED_FAILURE_DRILL_KEYS = (
+  'APEX_BAD_AUTH',
+  'APEX_INVALID_JSON',
+  'APEX_INVALID_CONTRACT',
+  'APEX_DUPLICATE_SHIPMENT',
+  'X12_214_CONTROL_MISMATCH',
+  'X12_214_UNSUPPORTED_STATUS',
+  'X12_214_WRONG_VERSION',
+  'SFTP_HOST_KEY_MISMATCH',
 )
 
 REQUIRED_NAV_LINKS = (
@@ -154,8 +165,14 @@ class Milestone22Acceptance:
     health = self.apex.get('/health', token=self.config.apex_readonly_token, step='Apex health')
     assert_equal(health.get('status'), 'ok', 'Apex health', 'status')
     assert_equal(health.get('service'), 'apex-partner-sim', 'Apex health', 'service')
-    readiness = self.apex.get('/readiness', token=self.config.apex_readonly_token, step='Apex readiness')
+
+    readiness = self.apex.get(
+      '/readiness',
+      token=self.config.apex_readonly_token,
+      step='Apex readiness',
+    )
     assert_equal(readiness.get('status'), 'ready', 'Apex readiness', 'status')
+    assert_equal(readiness.get('service'), 'apex-partner-sim', 'Apex readiness', 'service')
     self._assert_dependency(readiness, 'database', 'Apex readiness')
     self._assert_dependency(readiness, 'apex_schema', 'Apex readiness')
     return readiness
@@ -164,18 +181,32 @@ class Milestone22Acceptance:
     health = self.freightbridge.get('/health', step='FreightBridge health')
     assert_equal(health.get('status'), 'ok', 'FreightBridge health', 'status')
     assert_equal(health.get('service'), 'freightbridge-api', 'FreightBridge health', 'service')
+
     readiness = self.freightbridge.get('/readiness', step='FreightBridge readiness')
     assert_equal(readiness.get('status'), 'ready', 'FreightBridge readiness', 'status')
+    assert_equal(readiness.get('service'), 'freightbridge-api', 'FreightBridge readiness', 'service')
+
     for dependency in ('configuration', 'database', 'domain_schema'):
       self._assert_dependency(readiness, dependency, 'FreightBridge readiness')
+
     return readiness
 
   def _check_midwest_readiness(self) -> dict[str, object]:
-    health = self.midwest.get('/health', token=self.midwest_readonly_token, step='Midwest health')
+    health = self.midwest.get(
+      '/health',
+      token=self.midwest_readonly_token,
+      step='Midwest health',
+    )
     assert_equal(health.get('status'), 'ok', 'Midwest health', 'status')
     assert_equal(health.get('service'), 'midwest-partner-sim', 'Midwest health', 'service')
-    readiness = self.midwest.get('/readiness', token=self.midwest_readonly_token, step='Midwest readiness')
+
+    readiness = self.midwest.get(
+      '/readiness',
+      token=self.midwest_readonly_token,
+      step='Midwest readiness',
+    )
     assert_equal(readiness.get('status'), 'ready', 'Midwest readiness', 'status')
+    assert_equal(readiness.get('service'), 'midwest-partner-sim', 'Midwest readiness', 'service')
     self._assert_dependency(readiness, 'database', 'Midwest readiness')
     self._assert_dependency(readiness, 'midwest_schema', 'Midwest readiness')
     return readiness
@@ -263,19 +294,44 @@ class Milestone22Acceptance:
     return observed
 
   def _check_lab_readiness(self) -> dict[str, object]:
-    body = self.freightbridge.get('/api/lab/readiness', token=self.operations_token, step='Integration Lab readiness')
+    body = self.freightbridge.get(
+      '/api/lab/readiness',
+      token=self.operations_token,
+      step='Integration Lab readiness',
+    )
+
     assert_equal(body.get('status'), 'ready', 'Integration Lab readiness', 'status')
+
     scenarios = {
       scenario.get('scenarioKey'): scenario
       for scenario in body.get('scenarios', [])
       if isinstance(scenario, dict)
     }
-    assert_truth('FULL_SHIPMENT_LIFECYCLE' in scenarios, 'Integration Lab readiness', 'FULL_SHIPMENT_LIFECYCLE scenario is missing.')
-    for drill in DRILLS:
-      assert_truth(drill['scenario'] in scenarios, 'Integration Lab readiness', f"{drill['scenario']} scenario is missing.")
+
+    assert_truth(
+      'FULL_SHIPMENT_LIFECYCLE' in scenarios,
+      'Integration Lab readiness',
+      'FULL_SHIPMENT_LIFECYCLE scenario is missing.',
+    )
+
+    for scenario_key in REQUIRED_FAILURE_DRILL_KEYS:
+      assert_truth(
+        scenario_key in scenarios,
+        'Integration Lab readiness',
+        f'{scenario_key} failure drill is missing.',
+      )
+
     dependencies = body.get('dependencies')
-    assert_truth(isinstance(dependencies, dict), 'Integration Lab readiness', 'dependencies must be an object.')
-    return {'scenarioCount': len(scenarios), 'drills': [drill['scenario'] for drill in DRILLS]}
+    assert_truth(
+      isinstance(dependencies, dict),
+      'Integration Lab readiness',
+      'dependencies must be an object.',
+    )
+
+    return {
+      'scenarioCount': len(scenarios),
+      'failureDrills': list(REQUIRED_FAILURE_DRILL_KEYS),
+    }
 
   def _check_analyst_ui(self) -> dict[str, object]:
     return self.ui_preflight(self.analyst_ui_base_url, self.operations_token)

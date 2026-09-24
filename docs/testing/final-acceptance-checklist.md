@@ -51,3 +51,22 @@ python scripts/acceptance/milestone22.py
 - Do not add migration `012`.
 - Do not change production configuration or secrets.
 - Do not implement `210`, AS2/MDN, SOAP/XML third partner behavior, `999`, or `TA1`.
+
+
+
+## Acceptance Record
+
+Fill this section only after the final deployed acceptance has completed.
+
+| Field | Value |
+| --- | --- |
+| Final commit SHA | TO BE RECORDED AFTER FINAL ACCEPTANCE |
+| Normal CI run ID | TO BE RECORDED AFTER FINAL ACCEPTANCE |
+| Normal CI conclusion | TO BE RECORDED AFTER FINAL ACCEPTANCE |
+| Milestone 22 deployed run ID | TO BE RECORDED AFTER FINAL ACCEPTANCE |
+| Milestone 22 conclusion | TO BE RECORDED AFTER FINAL ACCEPTANCE |
+| Accepted date | TO BE RECORDED AFTER FINAL ACCEPTANCE |
+| Accepted load/run identifiers | TO BE RECORDED AFTER FINAL ACCEPTANCE |
+| Migrations through | `011` |
+| Supported X12 transactions | `204`, `997`, `990`, `214` |
+| Deferred Phase 2 | `210`, AS2/MDN, SOAP/XML third partner, `999`, TA1 |

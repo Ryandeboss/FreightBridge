@@ -152,3 +152,16 @@ def test_real_runner_is_not_invoked_with_shell_keyword() -> None:
 
 def test_empty_custom_load_id_is_normalized() -> None:
   assert milestone22.derived_milestone20_load_id('---') == 'LOADM22'
+
+
+def test_required_failure_drill_catalog_contains_all_current_drills() -> None:
+  assert milestone22.REQUIRED_FAILURE_DRILL_KEYS == (
+    'APEX_BAD_AUTH',
+    'APEX_INVALID_JSON',
+    'APEX_INVALID_CONTRACT',
+    'APEX_DUPLICATE_SHIPMENT',
+    'X12_214_CONTROL_MISMATCH',
+    'X12_214_UNSUPPORTED_STATUS',
+    'X12_214_WRONG_VERSION',
+    'SFTP_HOST_KEY_MISMATCH',
+  )

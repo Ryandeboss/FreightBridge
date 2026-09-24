@@ -15,13 +15,57 @@ FreightBridge is deployed as a synthetic portfolio lab. These environments demon
 
 ## Runtime Configuration
 
-| Service | Required Runtime Inputs | Secret Boundary |
-| --- | --- | --- |
-| Analyst UI | `VITE_API_BASE_URL`, `VITE_APP_ENV` | Does not receive partner tokens, SFTP credentials, database URLs, or Supabase secrets. |
-| FreightBridge API | app environment, allowed origins, Supabase metadata, database URL, partner base URLs, partner bearer tokens, operations token, Midwest SFTP settings | All partner tokens, database URLs, Supabase secrets, and SFTP private keys stay backend-only. |
-| Apex Partner Simulator | app environment, database URL, Apex API tokens, FreightBridge callback URL/token | Simulator tokens and database URL stay service-side. |
-| Midwest Partner Simulator | app environment, database URL, Midwest API tokens, FreightBridge callback URL/token, SFTP settings | Simulator tokens and SFTP settings stay service-side. |
-| Acceptance Harness | deployed base URLs, simulator tokens, operations token, Analyst UI URL | GitHub Actions secrets/variables only; no new production variables are required for Milestone 22. |
+No secret values belong in this document. The table records configuration names, ownership, and visibility only.
+
+| Component | Variable | Required / Optional | Visibility | Purpose |
+| --- | --- | --- | --- | --- |
+| Analyst UI | `VITE_API_BASE_URL` | Required | Browser-visible | FreightBridge API base URL used by the Analyst Console. |
+| Analyst UI | `VITE_APP_ENV` | Required | Browser-visible | Safe environment label displayed/used by the frontend. |
+| FreightBridge API | `APP_ENV` | Required | Server-side | Runtime environment label. |
+| FreightBridge API | `ALLOWED_ORIGINS` | Required | Server-side | Allowed frontend CORS origins. |
+| FreightBridge API | `SUPABASE_URL` | Required | Server-side configuration | Supabase project URL. |
+| FreightBridge API | `SUPABASE_PUBLISHABLE_KEY` | Required | Server-side | Supabase publishable key used by the backend configuration. |
+| FreightBridge API | `SUPABASE_SECRET_KEY` | Required | Server-side secret | Backend-only Supabase credential. |
+| FreightBridge API | `DATABASE_URL` | Required | Server-side secret | PostgreSQL connection string. |
+| FreightBridge API | `APEX_INBOUND_BEARER_TOKEN` | Required | Server-side secret | Authenticates Apex-to-FreightBridge inbound integration requests. |
+| FreightBridge API | `OPERATIONS_API_BEARER_TOKEN` | Required | Server-side secret | Protects operations, configuration, and Integration Lab APIs. |
+| FreightBridge API | `MIDWEST_SIM_BASE_URL` | Required | Server-side configuration | Midwest simulator REST base URL. |
+| FreightBridge API | `MIDWEST_SIM_BEARER_TOKEN` | Required | Server-side secret | Authenticates FreightBridge-to-Midwest simulator requests. |
+| FreightBridge API | `MIDWEST_INBOUND_BEARER_TOKEN` | Required | Server-side secret | Authenticates Midwest-to-FreightBridge direct integration requests. |
+| FreightBridge API | `APEX_SIM_BASE_URL` | Required | Server-side configuration | Apex simulator REST base URL. |
+| FreightBridge API | `APEX_SIM_BEARER_TOKEN` | Required | Server-side secret | Authenticates FreightBridge-to-Apex simulator callbacks. |
+| FreightBridge API | `MWCX_SFTP_HOST` | Required | Server-side configuration | Railway/SFTPGo TCP host. |
+| FreightBridge API | `MWCX_SFTP_PORT` | Required | Server-side configuration | Railway/SFTPGo TCP port. |
+| FreightBridge API | `MWCX_SFTP_USERNAME` | Required | Server-side configuration | Midwest SFTP account name. |
+| FreightBridge API | `MWCX_SFTP_PRIVATE_KEY_B64` | Required | Server-side secret | Base64-encoded SFTP private key. |
+| FreightBridge API | `MWCX_SFTP_HOST_KEY_SHA256` | Required | Server-side transport configuration | Pinned SFTP host-key fingerprint. |
+| Apex Simulator | `APP_ENV` | Required | Server-side | Runtime environment label. |
+| Apex Simulator | `DATABASE_URL` | Required | Server-side secret | PostgreSQL connection string. |
+| Apex Simulator | `APEX_API_BEARER_TOKEN` | Required | Server-side secret | Apex simulator write/API bearer token. |
+| Apex Simulator | `APEX_API_READONLY_TOKEN` | Optional | Server-side secret | Optional read-only Apex API token. |
+| Apex Simulator | `FREIGHTBRIDGE_API_BASE_URL` | Required | Server-side configuration | FreightBridge API callback base URL. |
+| Apex Simulator | `FREIGHTBRIDGE_APEX_BEARER_TOKEN` | Required | Server-side secret | Authenticates Apex dispatches into FreightBridge. |
+| Midwest Simulator | `APP_ENV` | Required | Server-side | Runtime environment label. |
+| Midwest Simulator | `DATABASE_URL` | Required | Server-side secret | PostgreSQL connection string. |
+| Midwest Simulator | `MIDWEST_API_BEARER_TOKEN` | Required | Server-side secret | Midwest simulator write/API token. |
+| Midwest Simulator | `MIDWEST_API_READONLY_TOKEN` | Optional | Server-side secret | Optional read-only Midwest API token. |
+| Midwest Simulator | `FREIGHTBRIDGE_API_BASE_URL` | Required | Server-side configuration | FreightBridge API callback base URL. |
+| Midwest Simulator | `FREIGHTBRIDGE_MIDWEST_BEARER_TOKEN` | Required | Server-side secret | Authenticates Midwest-to-FreightBridge API calls. |
+| Midwest Simulator | `MWCX_SFTP_HOST` | Required | Server-side configuration | Railway/SFTPGo TCP host. |
+| Midwest Simulator | `MWCX_SFTP_PORT` | Required | Server-side configuration | Railway/SFTPGo TCP port. |
+| Midwest Simulator | `MWCX_SFTP_USERNAME` | Required | Server-side configuration | Midwest SFTP account name. |
+| Midwest Simulator | `MWCX_SFTP_PRIVATE_KEY_B64` | Required | Server-side secret | Base64-encoded SFTP private key. |
+| Midwest Simulator | `MWCX_SFTP_HOST_KEY_SHA256` | Required | Server-side transport configuration | Pinned SFTP host-key fingerprint. |
+| Acceptance Harness | `APEX_BASE_URL` | Required | GitHub Actions secret/configuration | Deployed Apex simulator URL. |
+| Acceptance Harness | `APEX_BEARER_TOKEN` | Required | GitHub Actions secret | Apex write token used during acceptance. |
+| Acceptance Harness | `APEX_READONLY_TOKEN` | Optional | GitHub Actions secret | Optional read-only Apex token. |
+| Acceptance Harness | `FREIGHTBRIDGE_BASE_URL` | Required | GitHub Actions secret/configuration | Deployed FreightBridge API URL. |
+| Acceptance Harness | `MIDWEST_BASE_URL` | Required | GitHub Actions secret/configuration | Deployed Midwest simulator URL. |
+| Acceptance Harness | `MIDWEST_BEARER_TOKEN` | Required | GitHub Actions secret | Midwest write token used during acceptance. |
+| Acceptance Harness | `MIDWEST_READONLY_TOKEN` | Optional | GitHub Actions secret | Optional read-only Midwest token. |
+| Acceptance Harness | `OPERATIONS_API_BEARER_TOKEN` | Required for Milestone 22 | GitHub Actions secret | Unlocks protected FreightBridge operations/configuration/Lab APIs. |
+| Acceptance Harness | `ANALYST_UI_BASE_URL` | Required for Milestone 22 | GitHub Actions variable | Deployed Vercel Analyst Console URL. |
+| Acceptance Harness | `DATABASE_URL` | Optional; not used by Milestone 22 | GitHub Actions secret | Direct SQL verification for older acceptance milestones only. |
 
 ## Readiness Gates
 
