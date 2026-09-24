@@ -95,7 +95,21 @@ class Milestone18Acceptance:
         expect_text(page, 'Create Apex load')
         expect_text(page, 'Complete previous step first')
         page.get_by_role('button', name='Run All Remaining').click()
-        expect_text(page, 'SUCCEEDED', timeout=180000)
+
+        # Wait for the actual persisted Lab run to complete.
+        # Do not rely on visible "SUCCEEDED" text because earlier step cards
+        # may already contain that text while later steps are still running.
+        self._wait_for_lab_run_complete(run_id)
+
+        # Reload the completed run so the UI reflects the final persisted state.
+        page.goto(
+          f'{self.analyst_ui_base_url}/#/lab/runs/{run_id}',
+          wait_until='domcontentloaded',
+        )
+        expect(page.get_by_test_id('lab-run-detail')).to_be_visible(timeout=30000)
+
+        expect_text(page, '21 / 21', timeout=30000)
+
         for required in (
           'Apex Load Tender',
           'ABC Factory',
@@ -184,6 +198,70 @@ class Milestone18Acceptance:
         return step
       time.sleep(2)
     raise AcceptanceFailure(step_name, f'{step_key} did not reach {expected_status}.', response_body=last_run)
+
+  def _wait_for_lab_run_complete(self, run_id: str) -> dict[str, Any]:
+    step_name = 'Wait for complete Integration Lab lifecycle'
+    last_run: dict[str, Any] | None = None
+
+    # Allow up to about 5 minutes for the real REST/SFTP lifecycle.
+    for _ in range(150):
+      run = self.freightbridge.get(
+        f'/api/lab/runs/{run_id}',
+        token=self.operations_token,
+        step=step_name,
+      )
+      last_run = run
+
+      steps = run.get('steps') or []
+      succeeded_steps = [
+        item
+        for item in steps
+        if isinstance(item, dict) and item.get('status') == 'SUCCEEDED'
+      ]
+
+      failed_step = next(
+        (
+          item
+          for item in steps
+          if isinstance(item, dict) and item.get('status') == 'FAILED'
+        ),
+        None,
+      )
+
+      if self.recorder.verbose:
+        print(
+          f'       lab_status={run.get("status")} '
+          f'succeeded_steps={len(succeeded_steps)}/{len(steps)}'
+        )
+
+      if failed_step is not None:
+        safe_failure = {
+          'stepKey': failed_step.get('stepKey'),
+          'status': failed_step.get('status'),
+          'errorCode': failed_step.get('errorCode'),
+          'safeMessage': failed_step.get('safeMessage'),
+          'attemptCount': failed_step.get('attemptCount'),
+        }
+        raise AcceptanceFailure(
+          step_name,
+          f'Lab step {failed_step.get("stepKey")} failed.',
+          response_body=safe_failure,
+        )
+
+      if (
+        run.get('status') == 'SUCCEEDED'
+        and len(steps) == 21
+        and len(succeeded_steps) == 21
+      ):
+        return run
+
+      time.sleep(2)
+
+    raise AcceptanceFailure(
+      step_name,
+      'Full Shipment Lifecycle did not reach SUCCEEDED with all 21 steps.',
+      response_body=last_run,
+    )
 
   def _verify_trace(self) -> dict[str, Any]:
     body = self.freightbridge.get(
