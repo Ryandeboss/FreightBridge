@@ -6,6 +6,10 @@ FreightBridge is a synthetic logistics integration platform that translates betw
 
 This is a portfolio lab, not a production TMS. Apex Logistics and Midwest Carrier are fictional trading partners created for the project. The architecture and failure modes are modeled after real EDI/API integration work, but no real customer or partner data is involved.
 
+## MVP Status
+
+FreightBridge's MVP scope is complete through Milestone 22 final deployed acceptance. The final gate verifies deployed readiness, runs the Milestone 20 happy-path and failure-drill regression pack, and rechecks postflight health without adding Phase 2 functionality.
+
 ## What It Demonstrates
 
 - REST/JSON ingestion from a synthetic broker/3PL partner.
@@ -92,6 +96,7 @@ sequenceDiagram
 - [End-to-end flow](docs/portfolio/end-to-end-flow.md)
 - [Troubleshooting case study](docs/portfolio/troubleshooting-case-study.md)
 - [Evidence index](docs/portfolio/evidence.md)
+- [Final MVP summary](docs/portfolio/final-mvp-summary.md)
 - [Demo script](docs/portfolio/demo-script.md)
 - [Interview guide](docs/portfolio/interview-guide.md)
 - [Full documentation index](docs/README.md)

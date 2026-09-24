@@ -6,7 +6,7 @@ The deployed acceptance harness is a production-like black-box runner for the al
 - FreightBridge API
 - Midwest Partner Simulator
 - Railway/SFTPGo transport through the deployed services
-- Vercel Analyst UI for Milestones 16 through 20
+- Vercel Analyst UI for Milestones 16 through 22
 
 It replaces the long manual Postman sequence for full milestone acceptance. Postman collections remain useful for debugging individual requests.
 
@@ -110,7 +110,14 @@ python -m playwright install chromium
 python scripts/acceptance/milestone20.py
 ```
 
-Milestones 14, 15, 16, 17, 18, 19, and 20 require `OPERATIONS_API_BEARER_TOKEN`. Milestones 16, 17, 18, 19, and 20 also require `ANALYST_UI_BASE_URL`. Milestones 12 and 13 do not require the operations token.
+Run Milestone 22, which performs final MVP preflight checks, invokes Milestone 20, and then performs postflight checks:
+
+```bash
+python -m playwright install chromium
+python scripts/acceptance/milestone22.py
+```
+
+Milestones 14, 15, 16, 17, 18, 19, 20, and 22 require `OPERATIONS_API_BEARER_TOKEN`. Milestones 16, 17, 18, 19, 20, and 22 also require `ANALYST_UI_BASE_URL`. Milestones 12 and 13 do not require the operations token.
 
 Useful options:
 
@@ -124,7 +131,7 @@ python scripts/acceptance/milestone12.py --print-env
 
 Milestone 15 also uses safe custom headers for `Idempotency-Key`; the shared HTTP client rejects custom `Authorization` overrides so bearer tokens are controlled only by the configured token arguments.
 
-Milestones 16 through 20 use Playwright to type the operations token into the deployed Analyst Console. The token remains a GitHub Actions secret and is not passed to Vite or printed in output.
+Milestones 16 through 22 use Playwright to type the operations token into the deployed Analyst Console. The token remains a GitHub Actions secret and is not passed to Vite or printed in output.
 
 When `--load-id` is omitted, the harness generates a fresh ID like:
 
@@ -221,12 +228,14 @@ The workflow is `workflow_dispatch` only because it mutates shared deployed test
 
 Supported inputs:
 
-- `milestone`: `milestone12`, `milestone13`, `milestone14`, `milestone15`, `milestone16`, `milestone17`, `milestone18`, `milestone19`, or `milestone20`
+- `milestone`: `milestone12`, `milestone13`, `milestone14`, `milestone15`, `milestone16`, `milestone17`, `milestone18`, `milestone19`, `milestone20`, or `milestone22`
 - `load_id`: optional, blank means generate a fresh load ID
 - `run_db_verification`: passes `DATABASE_URL` only when enabled
 - `verbose`: prints safe request progress
 
 Milestone 20 runs Milestone 18 first and Milestone 19 second with separate generated load IDs. Milestone 19 is not run if Milestone 18 fails unless `scripts/acceptance/milestone20.py --keep-going` is used locally.
+
+Milestone 22 runs deployment preflight checks before invoking Milestone 20 as a child process. It uses the same deployed base URL/token inputs as Milestone 20 and does not require `DATABASE_URL`.
 
 ## GitHub Repository Secrets
 
@@ -244,13 +253,27 @@ DATABASE_URL
 OPERATIONS_API_BEARER_TOKEN
 ```
 
-Create this repository Actions variable for Milestones 16, 17, 18, and 19:
+Create this repository Actions variable for Milestones 16, 17, 18, 19, 20, and 22:
 
 ```text
 ANALYST_UI_BASE_URL
 ```
 
-`APEX_READONLY_TOKEN`, `MIDWEST_READONLY_TOKEN`, and `DATABASE_URL` are optional. `OPERATIONS_API_BEARER_TOKEN` is required for Milestones 14, 15, 16, 17, 18, and 19. Add `DATABASE_URL` only if you want GitHub to run direct SQL verification.
+`APEX_READONLY_TOKEN`, `MIDWEST_READONLY_TOKEN`, and `DATABASE_URL` are optional. `OPERATIONS_API_BEARER_TOKEN` is required for Milestones 14, 15, 16, 17, 18, 19, 20, and 22. Add `DATABASE_URL` only if you want GitHub to run direct SQL verification for older milestones that support it.
+
+## Milestone 22 Final MVP Acceptance
+
+Milestone 22 is a final deployment audit. It verifies:
+
+- Apex, FreightBridge, and Midwest health/readiness.
+- FreightBridge and Midwest SFTP readiness.
+- Operations summary stable fields.
+- APEX/MWCX partner configuration and capabilities.
+- Required active mapping profiles.
+- Integration Lab scenario catalog.
+- Analyst UI unlock and primary navigation.
+- Milestone 20 regression success.
+- FreightBridge, operations, and Lab postflight readiness.
 
 ## Milestone 19 Automated Sequence
 

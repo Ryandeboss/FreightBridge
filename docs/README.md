@@ -13,6 +13,7 @@ This is the documentation hub for FreightBridge. Start with the portfolio overvi
 - [Demo script](portfolio/demo-script.md)
 - [Interview guide](portfolio/interview-guide.md)
 - [Resume bullets](portfolio/resume-bullets.md)
+- [Final MVP summary](portfolio/final-mvp-summary.md)
 - [Screenshot plan](portfolio/screenshots/README.md)
 
 ## Architecture
@@ -47,6 +48,8 @@ Historical architecture files may describe earlier milestone state. The current 
 
 - [Operations index](operations/README.md)
 - [Deployment](operations/deployment.md)
+- [Environment matrix](operations/environment-matrix.md)
+- [Final MVP checklist](operations/final-mvp-checklist.md)
 - [SFTPGo Railway runbook](operations/sftpgo-railway-runbook.md)
 - [Operational observability and failure queue](operations/observability-and-failure-queue.md)
 - [Idempotency, replay, and manual retry](operations/idempotency-and-retry.md)
@@ -61,6 +64,8 @@ Historical architecture files may describe earlier milestone state. The current 
 - [Test strategy](testing/test-strategy.md)
 - [Regression traceability](testing/regression-traceability.md)
 - [Milestone 20 regression hardening](testing/milestone-20-regression-hardening.md)
+- [Milestone 22 final acceptance](testing/milestone-22-final-acceptance.md)
+- [Final acceptance checklist](testing/final-acceptance-checklist.md)
 - [Deployed acceptance harness](testing/deployed-acceptance-harness.md)
 
 ## Historical Milestone Acceptance

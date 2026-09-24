@@ -5,6 +5,8 @@ This folder holds runbooks and operator-facing references for deployment, SFTP, 
 Current references:
 
 - [Deployment](deployment.md)
+- [Environment matrix](environment-matrix.md)
+- [Final MVP checklist](final-mvp-checklist.md)
 - [SFTPGo Railway runbook](sftpgo-railway-runbook.md)
 - [Operational observability and failure queue](observability-and-failure-queue.md)
 - [Idempotency, replay, and manual retry](idempotency-and-retry.md)
