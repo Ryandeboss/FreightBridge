@@ -6,8 +6,9 @@ from fastapi.testclient import TestClient
 
 from app.api.routes.lab import get_lab_service
 from app.core.config import get_settings
-from app.integrations.lab import LabExecutionError
+from app.integrations.lab import IntegrationLabService, LabExecutionError
 from app.main import app
+from app.models.lab import CreateLabRunRequest
 
 
 TOKEN = 'ops-test-token'
@@ -136,10 +137,92 @@ def test_lab_step_prerequisite_failure_returns_safe_error() -> None:
   assert 'token' not in response.text.lower()
 
 
+def test_lab_rejects_unknown_scenario_and_extra_fields() -> None:
+  app.dependency_overrides[get_lab_service] = lambda: FakeLabService()
+
+  response = TestClient(app).post(
+    '/api/lab/runs',
+    headers=auth_headers(),
+    json={'scenarioKey': 'UNKNOWN_SCENARIO', 'unexpectedField': 'not allowed'},
+  )
+
+  assert response.status_code == 422
+  assert 'unexpectedField' in response.text
+
+
+def test_lab_apex_payload_matches_deployed_simulator_contract() -> None:
+  service = IntegrationLabService(repository=None)  # type: ignore[arg-type]
+  request = CreateLabRunRequest.model_validate({'scenarioKey': 'FULL_SHIPMENT_LIFECYCLE', 'loadId': 'LAB900'})
+
+  snapshot = service._input_snapshot(request)
+  payload = service._apex_payload(snapshot)
+
+  assert payload['pickup']['facilityName'] == 'ABC Factory'
+  assert payload['pickup']['address1'] == '200 Industrial Rd'
+  assert 'addressLine1' not in payload['pickup']
+  assert payload['delivery']['facilityName'] == 'XYZ Warehouse'
+  assert payload['delivery']['address1'] == '900 Commerce St'
+  assert payload['equipmentType'] == 'VAN_53'
+  assert payload['weightLbs'] == 42000
+  assert payload['pieces'] == 22
+  assert payload['commodityDescription'] == 'Industrial Components'
+  assert payload['createdAt'] <= payload['updatedAt']
+
+
+def test_lab_exact_204_preview_uses_stored_payload_metadata() -> None:
+  service = IntegrationLabService(repository=None)  # type: ignore[arg-type]
+
+  preview = service._x12_preview_from_payload(
+    {
+      'payload_text': 'ISA*stored~GS*SM~ST*204*0001~',
+      'interchange_control_number': '000000901',
+      'group_control_number': '901',
+      'transaction_control_number': '0001',
+      'mapping_key': 'CANONICAL_TO_MWCX_204',
+      'mapping_profile_id': UUID('55555555-5555-4555-8555-555555555555'),
+      'mapping_profile_version': 1,
+      'payload_sha256': 'abc123',
+    },
+    {'fileName': 'FB_MWCX_204_000000901.edi', 'remotePath': '/inbound/FB_MWCX_204_000000901.edi'},
+  )
+
+  assert preview['x12'] == 'ISA*stored~GS*SM~ST*204*0001~'
+  assert preview['mappingKey'] == 'CANONICAL_TO_MWCX_204'
+  assert preview['mappingProfileVersion'] == 1
+  assert preview['payloadSha256'] == 'abc123'
+  assert 'mappingSpecVersion' not in preview
+
+
+def test_lab_sftp_target_matching_requires_exact_filename() -> None:
+  service = IntegrationLabService(repository=None)  # type: ignore[arg-type]
+  response = {
+    'processed': [
+      {'fileName': 'unrelated.edi', 'status': 'ARCHIVED'},
+      {'fileName': 'expected.edi', 'status': 'ARCHIVED'},
+    ]
+  }
+
+  assert service._processed_file(response, 'expected.edi')['status'] == 'ARCHIVED'
+  assert service._processed_file(response, 'missing.edi') is None
+
+
+def test_lab_running_step_returns_deterministic_conflict() -> None:
+  app.dependency_overrides[get_lab_service] = lambda: FakeLabService(in_progress=True)
+
+  response = TestClient(app).post(
+    f'/api/lab/runs/{RUN_ID}/steps/CREATE_APEX_LOAD/execute',
+    headers=auth_headers(),
+  )
+
+  assert response.status_code == 409
+  assert response.json()['detail']['error']['code'] == 'LAB_STEP_IN_PROGRESS'
+
+
 class FakeLabService:
-  def __init__(self, *, completed: bool = False, blocked: bool = False) -> None:
+  def __init__(self, *, completed: bool = False, blocked: bool = False, in_progress: bool = False) -> None:
     self.completed = completed
     self.blocked = blocked
+    self.in_progress = in_progress
     self.created_payloads: list[dict[str, object]] = []
 
   def readiness(self) -> dict[str, object]:
@@ -163,6 +246,8 @@ class FakeLabService:
   def execute_step(self, run_id: UUID, step_key: str):
     if self.blocked:
       raise LabExecutionError('LAB_STEP_NOT_READY', 'Earlier Lab steps must succeed before this step can run.')
+    if self.in_progress:
+      raise LabExecutionError('LAB_STEP_IN_PROGRESS', 'This Lab step is already running.')
     run = lab_run(status='SUCCEEDED', step_status='SUCCEEDED')
     return run, run['steps'][0], self.completed
 

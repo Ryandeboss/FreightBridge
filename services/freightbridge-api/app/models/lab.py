@@ -1,8 +1,9 @@
 from datetime import datetime
+import re
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 RunStatus = Literal['READY', 'RUNNING', 'SUCCEEDED', 'FAILED']
@@ -10,25 +11,40 @@ StepStatus = Literal['PENDING', 'RUNNING', 'SUCCEEDED', 'FAILED', 'SKIPPED']
 
 
 class LabModel(BaseModel):
-  model_config = ConfigDict(populate_by_name=True)
+  model_config = ConfigDict(populate_by_name=True, extra='forbid')
 
 
 class LabLocationInput(LabModel):
   facility_name: str | None = Field(default=None, alias='facilityName', max_length=120)
-  address_line_1: str | None = Field(default=None, alias='addressLine1', max_length=160)
+  address_1: str | None = Field(default=None, alias='address1', max_length=160)
+  address_2: str | None = Field(default=None, alias='address2', max_length=160)
   city: str | None = Field(default=None, max_length=80)
   state: str | None = Field(default=None, min_length=2, max_length=2)
   postal_code: str | None = Field(default=None, alias='postalCode', max_length=20)
   scheduled_date_time: datetime | None = Field(default=None, alias='scheduledDateTime')
 
+  @field_validator('state')
+  @classmethod
+  def state_must_be_uppercase(cls, value: str | None) -> str | None:
+    if value is not None and not re.fullmatch(r'[A-Z]{2}', value):
+      raise ValueError('state must be a two-letter uppercase code')
+    return value
+
+  @field_validator('scheduled_date_time')
+  @classmethod
+  def scheduled_time_must_be_aware(cls, value: datetime | None) -> datetime | None:
+    if value is not None and (value.tzinfo is None or value.tzinfo.utcoffset(value) is None):
+      raise ValueError('scheduledDateTime must include timezone information')
+    return value
+
 
 class CreateLabRunRequest(LabModel):
-  scenario_key: str = Field(alias='scenarioKey', min_length=1, max_length=80)
+  scenario_key: Literal['TECHNICAL_ACK_ONLY', 'TENDER_ACCEPTED', 'TENDER_REJECTED', 'FULL_SHIPMENT_LIFECYCLE'] = Field(alias='scenarioKey')
   load_id: str | None = Field(default=None, alias='loadId', min_length=6, max_length=30)
-  equipment_type: str | None = Field(default='VAN_53', alias='equipmentType')
+  equipment_type: Literal['VAN_53', 'REEFER_53', 'FLATBED'] | None = Field(default='VAN_53', alias='equipmentType')
   weight_lbs: int | None = Field(default=42000, alias='weightLbs', gt=0)
-  pieces: int | None = Field(default=24, gt=0)
-  commodity_description: str | None = Field(default='Synthetic consumer goods', alias='commodityDescription')
+  pieces: int | None = Field(default=22, gt=0)
+  commodity_description: str | None = Field(default='Industrial Components', alias='commodityDescription')
   bol_number: str | None = Field(default=None, alias='bolNumber', min_length=3, max_length=40)
   purchase_order_number: str | None = Field(default=None, alias='purchaseOrderNumber', min_length=3, max_length=40)
   customer_reference: str | None = Field(default=None, alias='customerReference', max_length=80)

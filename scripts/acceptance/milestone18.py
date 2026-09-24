@@ -80,12 +80,21 @@ class Milestone18Acceptance:
         page.get_by_role('button', name='Run All Remaining').click()
         expect_text(page, 'SUCCEEDED', timeout=180000)
         for required in (
-          'Midwest 204 Preview',
+          'Apex Load Tender',
+          'ABC Factory',
+          '200 Industrial Rd',
+          'Canonical Shipment',
+          'Midwest 204',
           'ISA13',
           'GS06',
           'ST02',
+          'Payload SHA-256',
+          'CANONICAL_TO_MWCX_204',
+          'View Transaction',
           '997 Technical Ack',
           '990 Business Response',
+          'AK5',
+          'AK9',
           'ACCEPTED',
           'DELIVERED',
           'PICKED_UP',
@@ -123,6 +132,24 @@ class Milestone18Acceptance:
     )
     runs = body.get('runs') or []
     assert_truth(any(run.get('businessIdentifier') == self.load_id for run in runs), 'Verify Integration Lab history', 'Run history does not include the created Lab run.')
+    summary_run = next(run for run in runs if run.get('businessIdentifier') == self.load_id)
+    run = self.freightbridge.get(
+      f"/api/lab/runs/{summary_run.get('id')}",
+      token=self.operations_token,
+      step='Verify Integration Lab history',
+    )
+    steps = run.get('steps') or []
+    assert_truth(len(steps) == 21, 'Verify Integration Lab history', 'Full lifecycle run did not create 21 Lab steps.')
+    assert_truth(all(step.get('status') == 'SUCCEEDED' for step in steps), 'Verify Integration Lab history', 'Not every Lab step succeeded.')
+    summary = run.get('resultSummary') or {}
+    assert_truth(summary.get('technicalAcknowledgment') == 'ACCEPTED', 'Verify Integration Lab history', '997 technical acknowledgment was not accepted.')
+    assert_truth(summary.get('tenderStatus') == 'ACCEPTED', 'Verify Integration Lab history', 'Tender status was not accepted.')
+    assert_truth(summary.get('shipmentStatus') == 'DELIVERED', 'Verify Integration Lab history', 'Shipment status was not delivered.')
+    dispatch_204 = next((step for step in steps if step.get('stepKey') == 'DISPATCH_204_SFTP'), {})
+    preview = (dispatch_204.get('responseSummary') or {}).get('x12Preview') or {}
+    for required_key in ('interchangeControlNumber', 'groupControlNumber', 'transactionControlNumber', 'mappingKey', 'mappingProfileId', 'mappingProfileVersion', 'fileName', 'remotePath', 'payloadSha256'):
+      assert_truth(bool(preview.get(required_key)), 'Verify Integration Lab history', f'Missing 204 preview metadata: {required_key}.')
+    assert_truth('mappingSpecVersion' not in preview, 'Verify Integration Lab history', '204 preview used obsolete mappingSpecVersion metadata.')
     return body
 
 

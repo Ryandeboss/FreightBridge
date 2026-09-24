@@ -218,6 +218,24 @@ const labRun = {
     bolNumber: 'BOLLAB900',
     purchaseOrderNumber: 'POLAB900',
     equipmentType: 'VAN_53',
+    pickup: {
+      facilityName: 'ABC Factory',
+      address1: '200 Industrial Rd',
+      city: 'Aurora',
+      state: 'IL',
+      postalCode: '60505',
+      scheduledDateTime: '2026-09-25T15:00:00Z',
+    },
+    delivery: {
+      facilityName: 'XYZ Warehouse',
+      address1: '900 Commerce St',
+      city: 'Detroit',
+      state: 'MI',
+      postalCode: '48201',
+      scheduledDateTime: '2026-09-26T15:00:00Z',
+    },
+    createdAt: '2026-09-24T15:00:00Z',
+    updatedAt: '2026-09-24T15:00:00Z',
   },
   resultSummary: {
     technicalAcknowledgment: 'PENDING',
@@ -283,9 +301,38 @@ const completedLabRun = {
   ...labRun,
   status: 'SUCCEEDED',
   resultSummary: {
-    technicalAcknowledgment: 'RECEIVED',
+    technicalAcknowledgment: 'ACCEPTED',
+    technicalAcknowledgmentDetail: {
+      ak5: 'A',
+      ak9: 'A',
+      acknowledgedGroupControlNumber: '901',
+      acknowledgedTransactionControlNumber: '0001',
+    },
     tenderStatus: 'ACCEPTED',
     shipmentStatus: 'DELIVERED',
+    canonicalShipment: {
+      shipmentNumber: 'LAB900',
+      equipmentType: 'DRY_VAN_53',
+      weightLbs: 42000,
+      pieces: 22,
+      commodityDescription: 'Industrial Components',
+      pickup: {
+        facilityName: 'ABC Factory',
+        address1: '200 Industrial Rd',
+        city: 'Aurora',
+        state: 'IL',
+        postalCode: '60505',
+      },
+      delivery: {
+        facilityName: 'XYZ Warehouse',
+        address1: '900 Commerce St',
+        city: 'Detroit',
+        state: 'MI',
+        postalCode: '48201',
+      },
+      tenderStatus: 'ACCEPTED',
+      currentStatus: 'DELIVERED',
+    },
     shipmentEvents: [
       { status: 'PICKED_UP', occurredAt: '2026-09-24T16:00:00Z', city: 'Aurora', state: 'IL' },
       { status: 'DELIVERED', occurredAt: '2026-09-25T16:00:00Z', city: 'Detroit', state: 'MI' },
@@ -300,15 +347,43 @@ const completedLabRun = {
     responseSummary: index === 1
       ? {
           fileName: 'MW204_000000901.edi',
+          remotePath: '/inbound/MW204_000000901.edi',
+          canonicalShipment: {
+            shipmentNumber: 'LAB900',
+            equipmentType: 'DRY_VAN_53',
+            weightLbs: 42000,
+            pieces: 22,
+            commodityDescription: 'Industrial Components',
+          },
           x12Preview: {
             interchangeControlNumber: '000000901',
             groupControlNumber: '901',
             transactionControlNumber: '0001',
-            mappingSpecVersion: '1',
+            mappingKey: 'CANONICAL_TO_MWCX_204',
+            mappingProfileId: mapping.id,
+            mappingProfileVersion: 1,
+            payloadSha256: 'sha256-204',
+            fileName: 'MW204_000000901.edi',
+            remotePath: '/inbound/MW204_000000901.edi',
             x12: 'ISA*00*          *00*          *ZZ*FREIGHTBRIDGE   *ZZ*MWCX           *260924*1500*U*00401*000000901*0*T*:~GS*SM*FREIGHTBRIDGE*MWCX*20260924*1500*901*X*004010~ST*204*0001~SE*3*0001~GE*1*901~IEA*1*000000901~',
           },
         }
-      : { status: 'ACCEPTED_FOR_PROCESSING' },
+      : {
+          status: 'ACCEPTED_FOR_PROCESSING',
+          apexLoadTenderJson: {
+            loadId: 'LAB900',
+            bolNumber: 'BOLLAB900',
+            purchaseOrderNumber: 'POLAB900',
+            equipmentType: 'VAN_53',
+            weightLbs: 42000,
+            pieces: 22,
+            commodityDescription: 'Industrial Components',
+            pickup: labRun.inputSnapshot.pickup,
+            delivery: labRun.inputSnapshot.delivery,
+            createdAt: '2026-09-24T15:00:00Z',
+            updatedAt: '2026-09-24T15:00:00Z',
+          },
+        },
   })),
 };
 
@@ -869,15 +944,22 @@ describe('Analyst Console', () => {
     });
 
     await userEvent.click(screen.getByRole('button', { name: /run next step/i }));
-    expect((await screen.findAllByText(/RECEIVED/i)).length).toBeGreaterThan(0);
+    expect(await screen.findByText(/Apex Load Tender/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/ABC Factory/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/200 Industrial Rd/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/AK5/i)).toBeInTheDocument();
+    expect(screen.getByText(/AK9/i)).toBeInTheDocument();
     expect(screen.getAllByText(/ACCEPTED/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/DELIVERED/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/997 Technical Ack/i)).toBeInTheDocument();
     expect(screen.getByText(/990 Business Response/i)).toBeInTheDocument();
     expect(screen.getByText(/ISA13/i)).toBeInTheDocument();
     expect(screen.getAllByText(/000000901/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/sha256-204/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/CANONICAL_TO_MWCX_204/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/MW204_000000901.edi/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/PICKED_UP/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: /View Transaction/i })).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /Business Trace/i }).length).toBeGreaterThan(0);
     expect(screen.queryByLabelText(/bearer token/i)).not.toBeInTheDocument();
   });

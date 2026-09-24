@@ -261,6 +261,10 @@ function RunDetail({
   const completed = run.steps.filter((step) => step.status === 'SUCCEEDED').length;
   const preview = find204Preview(run);
   const events = Array.isArray(run.resultSummary.shipmentEvents) ? run.resultSummary.shipmentEvents : [];
+  const apexPayload = findApexPayload(run);
+  const canonicalShipment = findCanonicalShipment(run);
+  const transactions = transactionIds(run);
+  const technicalAckDetail = asRecord(run.resultSummary.technicalAcknowledgmentDetail);
 
   return (
     <section className="page-stack" data-testid="lab-run-detail">
@@ -283,11 +287,23 @@ function RunDetail({
             <dd>{run.businessIdentifier}</dd>
           </div>
           <div>
-            <dt>Technical Ack</dt>
+            <dt>997 Technical Ack</dt>
             <dd>{technicalAck}</dd>
           </div>
+          {technicalAckDetail && (
+            <>
+              <div>
+                <dt>AK5</dt>
+                <dd>{String(technicalAckDetail.ak5 ?? 'Pending')}</dd>
+              </div>
+              <div>
+                <dt>AK9</dt>
+                <dd>{String(technicalAckDetail.ak9 ?? 'Pending')}</dd>
+              </div>
+            </>
+          )}
           <div>
-            <dt>Tender Status</dt>
+            <dt>990 Business Response</dt>
             <dd>{tenderStatus}</dd>
           </div>
           <div>
@@ -346,40 +362,59 @@ function RunDetail({
       <section className="content-grid two-column">
         <article className="panel">
           <div className="panel-header">
-            <h2>Message Inspector</h2>
+            <h2>Apex Load Tender</h2>
           </div>
           <dl className="definition-grid">
             <div>
-              <dt>Apex JSON</dt>
-              <dd>{String(run.inputSnapshot.loadId ?? run.businessIdentifier)}</dd>
+              <dt>Load ID</dt>
+              <dd>{String(apexPayload.loadId ?? run.businessIdentifier)}</dd>
             </div>
             <div>
-              <dt>Canonical Shipment</dt>
-              <dd>{run.businessIdentifier}</dd>
+              <dt>Equipment</dt>
+              <dd>{String(apexPayload.equipmentType ?? 'Pending')}</dd>
             </div>
             <div>
-              <dt>Transactions</dt>
-              <dd>{transactionIds(run).length}</dd>
+              <dt>Pickup</dt>
+              <dd>{locationLine(asRecord(apexPayload.pickup))}</dd>
             </div>
             <div>
-              <dt>997 Technical Ack</dt>
-              <dd>{technicalAck}</dd>
-            </div>
-            <div>
-              <dt>990 Business Response</dt>
-              <dd>{tenderStatus}</dd>
-            </div>
-            <div>
-              <dt>Mapping</dt>
-              <dd><Link to="/mappings">Mapping Profiles</Link></dd>
+              <dt>Delivery</dt>
+              <dd>{locationLine(asRecord(apexPayload.delivery))}</dd>
             </div>
           </dl>
-          <pre className="lab-preview">{JSON.stringify({ input: run.inputSnapshot, result: run.resultSummary }, null, 2)}</pre>
+          <pre className="lab-preview" aria-label="Apex Load Tender JSON">{JSON.stringify(apexPayload, null, 2)}</pre>
         </article>
 
         <article className="panel">
           <div className="panel-header">
-            <h2>Midwest 204 Preview</h2>
+            <h2>Canonical Shipment</h2>
+          </div>
+          <dl className="definition-grid">
+            <div>
+              <dt>Shipment</dt>
+              <dd>{String(canonicalShipment.shipmentNumber ?? run.businessIdentifier)}</dd>
+            </div>
+            <div>
+              <dt>Weight</dt>
+              <dd>{String(canonicalShipment.weightLbs ?? 'Pending')}</dd>
+            </div>
+            <div>
+              <dt>Pieces</dt>
+              <dd>{String(canonicalShipment.pieces ?? 'Pending')}</dd>
+            </div>
+            <div>
+              <dt>Commodity</dt>
+              <dd>{String(canonicalShipment.commodityDescription ?? 'Pending')}</dd>
+            </div>
+          </dl>
+          <pre className="lab-preview" aria-label="Canonical Shipment Summary">{JSON.stringify(canonicalShipment, null, 2)}</pre>
+        </article>
+      </section>
+
+      <section className="content-grid two-column">
+        <article className="panel">
+          <div className="panel-header">
+            <h2>Midwest 204</h2>
           </div>
           {preview ? (
             <>
@@ -387,13 +422,36 @@ function RunDetail({
                 <div><dt>ISA13</dt><dd>{String(preview.interchangeControlNumber ?? 'Pending')}</dd></div>
                 <div><dt>GS06</dt><dd>{String(preview.groupControlNumber ?? 'Pending')}</dd></div>
                 <div><dt>ST02</dt><dd>{String(preview.transactionControlNumber ?? 'Pending')}</dd></div>
-                <div><dt>Mapping Version</dt><dd>{String(preview.mappingSpecVersion ?? 'configured')}</dd></div>
-                <div><dt>SFTP Filename</dt><dd>{String(find204Dispatch(run)?.fileName ?? 'Pending')}</dd></div>
+                <div><dt>Mapping</dt><dd>{mappingLink(preview)}</dd></div>
+                <div><dt>Mapping Version</dt><dd>{String(preview.mappingProfileVersion ?? 'configured')}</dd></div>
+                <div><dt>Payload SHA-256</dt><dd>{String(preview.payloadSha256 ?? 'Pending')}</dd></div>
+                <div><dt>SFTP Filename</dt><dd>{String(preview.fileName ?? find204Dispatch(run)?.fileName ?? 'Pending')}</dd></div>
+                <div><dt>Remote Path</dt><dd>{String(preview.remotePath ?? find204Dispatch(run)?.remotePath ?? 'Pending')}</dd></div>
               </dl>
-              <pre className="lab-preview">{String(preview.x12 ?? '')}</pre>
+              <pre className="lab-preview" aria-label="Midwest 204 X12">{String(preview.x12 ?? '')}</pre>
             </>
           ) : (
             <EmptyBlock title="204 preview pending" />
+          )}
+        </article>
+
+        <article className="panel">
+          <div className="panel-header">
+            <h2>Transactions</h2>
+          </div>
+          {!transactions.length ? (
+            <EmptyBlock title="No transactions yet" />
+          ) : (
+            <div className="compact-list">
+              {transactions.map((transactionId) => (
+                <Link className="compact-row" key={transactionId} to={`/transactions/${transactionId}`}>
+                  <div>
+                    <strong>View Transaction</strong>
+                    <span>{transactionId}</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
           )}
         </article>
       </section>
@@ -456,6 +514,39 @@ function find204Dispatch(run: LabRun): Record<string, unknown> | null {
   return step?.responseSummary ?? null;
 }
 
+function findApexPayload(run: LabRun): Record<string, unknown> {
+  const step = run.steps.find((candidate) => candidate.stepKey === 'CREATE_APEX_LOAD');
+  const fromResponse = asRecord(step?.responseSummary.apexLoadTenderJson);
+  const fromRequest = asRecord(step?.requestSummary.apexLoadTenderJson);
+  return fromResponse ?? fromRequest ?? run.inputSnapshot;
+}
+
+function findCanonicalShipment(run: LabRun): Record<string, unknown> {
+  const fromSummary = asRecord(run.resultSummary.canonicalShipment);
+  const fromDispatch = asRecord(find204Dispatch(run)?.canonicalShipment);
+  return fromSummary ?? fromDispatch ?? {};
+}
+
 function transactionIds(run: LabRun): string[] {
   return Array.from(new Set(run.steps.flatMap((step) => step.relatedTransactionIds)));
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function locationLine(location: Record<string, unknown> | null): string {
+  if (!location) return 'Pending';
+  const facility = String(location.facilityName ?? '');
+  const city = String(location.city ?? '');
+  const state = String(location.state ?? '');
+  return [facility, [city, state].filter(Boolean).join(', ')].filter(Boolean).join(' / ') || 'Pending';
+}
+
+function mappingLink(preview: Record<string, unknown>) {
+  const mappingProfileId = preview.mappingProfileId;
+  const mappingKey = String(preview.mappingKey ?? 'Mapping Profile');
+  return typeof mappingProfileId === 'string' && mappingProfileId
+    ? <Link to={`/mappings/${mappingProfileId}`}>{mappingKey}</Link>
+    : mappingKey;
 }

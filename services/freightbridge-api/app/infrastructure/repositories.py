@@ -639,6 +639,54 @@ class IntegrationRepository:
         (transaction_id, media_type, payload_sha256, payload_text),
       )
 
+  def fetch_lab_message_payload(
+    self,
+    *,
+    transaction_id: UUID,
+    business_identifier: str,
+    document_type: str,
+    direction: IntegrationDirection,
+    message_format: MessageFormat,
+  ) -> dict[str, object] | None:
+    with self.connection.cursor(row_factory=dict_row) as cursor:
+      cursor.execute(
+        """
+          SELECT
+            t.id,
+            t.business_identifier,
+            t.direction,
+            t.message_format,
+            t.document_type,
+            t.interchange_control_number,
+            t.group_control_number,
+            t.transaction_control_number,
+            t.payload_hash,
+            t.raw_payload_location,
+            t.mapping_profile_id,
+            t.mapping_profile_version,
+            t.mapping_key,
+            p.media_type,
+            p.payload_sha256,
+            p.payload_text
+          FROM integration_transactions t
+          JOIN integration_message_payloads p ON p.transaction_id = t.id
+          WHERE t.id = %s
+            AND t.business_identifier = %s
+            AND t.document_type = %s
+            AND t.direction = %s
+            AND t.message_format = %s
+        """,
+        (
+          transaction_id,
+          business_identifier,
+          document_type,
+          direction.value,
+          message_format.value,
+        ),
+      )
+      row = cursor.fetchone()
+    return dict(row) if row else None
+
   def find_x12_control_replay(
     self,
     *,

@@ -1,18 +1,20 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 import httpx
 
 from app.core.config import get_settings
+from app.domain import IntegrationDirection, MessageFormat
 from app.infrastructure.configuration_repository import IntegrationConfigurationRepository
 from app.infrastructure.database import connect
-from app.infrastructure.lab_repository import IntegrationLabRepository
+from app.infrastructure.lab_repository import IntegrationLabRepository, LabStepInProgressError
 from app.infrastructure.operations_repository import OperationsRepository
+from app.infrastructure.repositories import FreightBridgeRepository, IntegrationRepository
 from app.integrations.common.correlation import resolve_correlation_id
 from app.integrations.midwest.dispatch_service import MidwestDirectDispatchService
-from app.integrations.midwest.service import Midwest204GenerationService
-from app.integrations.midwest.sftp_poll_service import MidwestSftpOutboundPollService
+from app.integrations.midwest.sftp_poll_service import MidwestSftpOutboundPollService, MidwestSftpReadinessService
 from app.integrations.midwest.transport import MidwestSftpTransport
 from app.models.lab import CreateLabRunRequest
 
@@ -134,7 +136,15 @@ class PartnerSimulatorClient:
     self.bearer_token = bearer_token
     self.unavailable_code = unavailable_code
 
-  def request(self, method: str, path: str, *, json: dict[str, object] | None = None) -> dict[str, object]:
+  def request(
+    self,
+    method: str,
+    path: str,
+    *,
+    json: dict[str, object] | None = None,
+    headers: dict[str, str] | None = None,
+    expected_statuses: tuple[int, ...] = (200, 202),
+  ) -> dict[str, object]:
     if not self.base_url or not self.bearer_token:
       raise LabExecutionError(self.unavailable_code, 'Partner simulator configuration is incomplete.')
     try:
@@ -142,7 +152,7 @@ class PartnerSimulatorClient:
         method,
         self.base_url + path,
         json=json,
-        headers={'Authorization': f'Bearer {self.bearer_token}'},
+        headers={'Authorization': f'Bearer {self.bearer_token}', **(headers or {})},
         timeout=20.0,
       )
     except (httpx.TimeoutException, httpx.HTTPError) as exc:
@@ -152,7 +162,7 @@ class PartnerSimulatorClient:
       raise LabExecutionError('LAB_PARTNER_AUTHENTICATION_FAILED', 'Partner simulator authentication failed.')
     if response.status_code >= 500:
       raise LabExecutionError(self.unavailable_code, 'Partner simulator is temporarily unavailable.')
-    if response.status_code >= 400:
+    if response.status_code not in expected_statuses:
       detail = body.get('error') if isinstance(body.get('error'), dict) else {}
       raise LabExecutionError(
         str(detail.get('code') or 'LAB_PARTNER_REJECTED_REQUEST'),
@@ -163,8 +173,14 @@ class PartnerSimulatorClient:
   def get(self, path: str) -> dict[str, object]:
     return self.request('GET', path)
 
-  def post(self, path: str, payload: dict[str, object] | None = None) -> dict[str, object]:
-    return self.request('POST', path, json=payload)
+  def post(
+    self,
+    path: str,
+    payload: dict[str, object] | None = None,
+    *,
+    headers: dict[str, str] | None = None,
+  ) -> dict[str, object]:
+    return self.request('POST', path, json=payload, headers=headers)
 
   def _safe_json(self, response: httpx.Response) -> dict[str, object]:
     try:
@@ -201,13 +217,29 @@ class IntegrationLabService:
     self.midwest = MidwestSimulatorClient()
 
   def readiness(self) -> dict[str, object]:
+    settings = get_settings()
+    apex = self._safe_partner_readiness(
+      self.apex,
+      configured=bool(settings.apex_sim_base_url and settings.apex_sim_bearer_token),
+    )
+    midwest = self._safe_partner_readiness(
+      self.midwest,
+      configured=bool(settings.midwest_sim_base_url and settings.midwest_sim_bearer_token),
+    )
+    sftp = self._safe_sftp_readiness(
+      configured=bool(settings.mwcx_sftp_host and settings.mwcx_sftp_username and settings.mwcx_sftp_private_key_b64),
+    )
     dependencies = {
-      'apexSimulatorConfigured': bool(get_settings().apex_sim_base_url and get_settings().apex_sim_bearer_token),
-      'midwestSimulatorConfigured': bool(get_settings().midwest_sim_base_url and get_settings().midwest_sim_bearer_token),
-      'sftpConfigured': bool(get_settings().mwcx_sftp_host and get_settings().mwcx_sftp_username),
+      'freightBridge': self._safe_freightbridge_readiness(),
+      'apexSimulator': apex,
+      'midwestSimulator': midwest,
+      'midwestSftp': sftp,
+      'apexSimulatorConfigured': apex['configured'],
+      'midwestSimulatorConfigured': midwest['configured'],
+      'sftpConfigured': sftp['configured'],
     }
     return {
-      'status': 'ready' if all(dependencies.values()) else 'not_ready',
+      'status': 'ready' if apex['status'] == 'ready' and midwest['status'] == 'ready' and sftp['status'] == 'ready' else 'not_ready',
       'dependencies': dependencies,
       'scenarios': [
         {
@@ -254,9 +286,14 @@ class IntegrationLabService:
     if step['status'] == 'SUCCEEDED':
       return self.repository.get_run(run_id), step, True
     self._ensure_prerequisites(run, step)
-    acquired = self.repository.acquire_step(run_id, step_key)
+    try:
+      acquired = self.repository.acquire_step(run_id, step_key)
+    except LabStepInProgressError as exc:
+      raise LabExecutionError('LAB_STEP_IN_PROGRESS', 'This Lab step is already running.') from exc
     if acquired is None:
       raise LabExecutionError('LAB_STEP_NOT_FOUND', 'Integration Lab step was not found.')
+    if acquired['status'] == 'SUCCEEDED':
+      return self.repository.get_run(run_id), acquired, True
     try:
       request_summary, response_summary = self._execute(run_id, step_key)
       transaction_ids = self._related_transactions(run['business_identifier'])
@@ -293,33 +330,50 @@ class IntegrationLabService:
 
     if step_key == 'CREATE_APEX_LOAD':
       payload = self._apex_payload(snapshot)
-      return {'target': 'Apex load tender'}, self.apex.post('/v1/load-tenders', payload)
+      return {'target': 'Apex load tender', 'apexLoadTenderJson': payload}, self._create_apex_load(load_id, payload)
     if step_key == 'DISPATCH_APEX_TENDER':
-      return {'loadId': load_id}, self.apex.post(f'/v1/load-tenders/{load_id}/dispatch')
+      return {'loadId': load_id, 'idempotencyKey': f'lab-{run_id}-apex-tender'}, self.apex.post(
+        f'/v1/load-tenders/{load_id}/dispatch',
+        headers={'Idempotency-Key': f'lab-{run_id}-apex-tender'},
+      )
     if step_key == 'DISPATCH_204_SFTP':
       return {'shipmentNumber': load_id}, self._dispatch_204(load_id, correlation_id)
     if step_key == 'MIDWEST_RECEIVE_204':
-      return {'source': '/inbound'}, self.midwest.post('/v1/sftp/inbound/poll')
+      response = self.midwest.post('/v1/sftp/inbound/poll')
+      return {'source': '/inbound', 'expectedFileName': self._expected_file(run, 'DISPATCH_204_SFTP')}, self._verified_midwest_receive_204(run, response)
     if step_key == 'DISPATCH_997_SFTP':
       document_id = self._functional_ack_document_id(run)
       return {'outboundDocumentId': document_id}, self.midwest.post(f'/v1/functional-acknowledgments/{document_id}/dispatch-sftp')
     if step_key == 'FREIGHTBRIDGE_RECEIVE_997':
-      return {'source': '/outbound', 'documentType': '997'}, self._poll_freightbridge_sftp(correlation_id)
+      expected = self._expected_file(run, 'DISPATCH_997_SFTP')
+      return {'source': '/outbound', 'documentType': '997', 'expectedFileName': expected}, self._verified_freightbridge_poll(
+        correlation_id,
+        expected_file_name=expected,
+        document_type='997',
+        business_identifier=load_id,
+      )
     if step_key in ('CREATE_TENDER_DECISION', 'CREATE_TENDER_REJECTION'):
       decision = 'REJECTED' if step_key == 'CREATE_TENDER_REJECTION' else 'ACCEPTED'
       payload: dict[str, object] = {'decision': decision}
       if decision == 'REJECTED':
         payload['reasonCode'] = snapshot.get('rejectionReasonCode') or 'CAPACITY'
         payload['message'] = snapshot.get('rejectionMessage') or 'Synthetic carrier rejection.'
-      return payload, self.midwest.post(f'/v1/loads/{load_id}/tender-decisions', payload)
+      return payload, self._create_tender_decision(load_id, decision, payload)
     if step_key in ('DISPATCH_990_SFTP', 'DISPATCH_REJECTED_990_SFTP'):
       return {'shipmentNumber': load_id}, self.midwest.post(f'/v1/loads/{load_id}/tender-response/dispatch-sftp')
     if step_key in ('FREIGHTBRIDGE_RECEIVE_990', 'FREIGHTBRIDGE_RECEIVE_REJECTED_990'):
-      return {'source': '/outbound', 'documentType': '990'}, self._poll_freightbridge_sftp(correlation_id)
+      dispatch_step = 'DISPATCH_REJECTED_990_SFTP' if step_key == 'FREIGHTBRIDGE_RECEIVE_REJECTED_990' else 'DISPATCH_990_SFTP'
+      expected = self._expected_file(run, dispatch_step)
+      return {'source': '/outbound', 'documentType': '990', 'expectedFileName': expected}, self._verified_freightbridge_poll(
+        correlation_id,
+        expected_file_name=expected,
+        document_type='990',
+        business_identifier=load_id,
+      )
     if step_key.startswith('CREATE_214_'):
       status = step_key.removeprefix('CREATE_214_')
       payload = self._event_payload(snapshot, status)
-      return payload, self.midwest.post(f'/v1/loads/{load_id}/shipment-events', payload)
+      return payload, self._create_shipment_event(load_id, payload)
     if step_key.startswith('DISPATCH_214_'):
       status = step_key.removeprefix('DISPATCH_214_')
       event_id = self._event_id(run, status)
@@ -327,13 +381,18 @@ class IntegrationLabService:
         f'/v1/loads/{load_id}/shipment-events/{event_id}/dispatch-sftp'
       )
     if step_key.startswith('FREIGHTBRIDGE_RECEIVE_214_'):
-      return {'source': '/outbound', 'documentType': '214'}, self._poll_freightbridge_sftp(correlation_id)
+      status = step_key.removeprefix('FREIGHTBRIDGE_RECEIVE_214_')
+      expected = self._expected_file(run, f'DISPATCH_214_{status}')
+      return {'source': '/outbound', 'documentType': '214', 'expectedFileName': expected}, self._verified_freightbridge_poll(
+        correlation_id,
+        expected_file_name=expected,
+        document_type='214',
+        business_identifier=load_id,
+      )
     raise LabExecutionError('LAB_STEP_NOT_READY', 'This Lab step is not executable.')
 
   def _dispatch_204(self, shipment_number: str, correlation_id: str) -> dict[str, object]:
     try:
-      with connect() as preview_connection:
-        preview = Midwest204GenerationService(connection=preview_connection).generate_for_shipment_number(shipment_number)
       with connect() as audit_connection:
         with connect() as business_connection:
           result = MidwestDirectDispatchService(
@@ -347,8 +406,22 @@ class IntegrationLabService:
             idempotency_key=f'lab-{shipment_number}-204',
           )
       body = result.response_body()
-      body['x12Preview'] = preview.response_body()
+      transaction_id = UUID(str(body['transactionId']))
+      with connect() as audit_connection:
+        payload = IntegrationRepository(audit_connection).fetch_lab_message_payload(
+          transaction_id=transaction_id,
+          business_identifier=shipment_number,
+          document_type='204',
+          direction=IntegrationDirection.OUTBOUND,
+          message_format=MessageFormat.X12,
+        )
+      if payload is None:
+        raise LabExecutionError('LAB_STORED_PAYLOAD_NOT_FOUND', 'Stored Midwest 204 payload was not found for this Lab dispatch.')
+      body['x12Preview'] = self._x12_preview_from_payload(payload, body)
+      body['canonicalShipment'] = self._canonical_shipment_summary(shipment_number)
       return body
+    except LabExecutionError:
+      raise
     except Exception as exc:
       raise LabExecutionError('LAB_SFTP_STEP_FAILED', 'FreightBridge could not dispatch the Midwest 204 over SFTP.') from exc
 
@@ -364,6 +437,214 @@ class IntegrationLabService:
       return result.response_body()
     except Exception as exc:
       raise LabExecutionError('LAB_SFTP_STEP_FAILED', 'FreightBridge could not poll Midwest outbound SFTP.') from exc
+
+  def _safe_partner_readiness(self, client: PartnerSimulatorClient, *, configured: bool) -> dict[str, object]:
+    if not configured:
+      return {'configured': False, 'status': 'not_ready'}
+    try:
+      body = client.get('/readiness')
+      return {'configured': True, 'status': 'ready' if body.get('status') == 'ready' else 'not_ready'}
+    except LabExecutionError:
+      return {'configured': True, 'status': 'not_ready'}
+
+  def _safe_sftp_readiness(self, *, configured: bool) -> dict[str, object]:
+    if not configured:
+      return {'configured': False, 'status': 'not_ready'}
+    try:
+      status = MidwestSftpReadinessService().check()
+      return {'configured': True, 'status': status.get('status', 'not_ready'), 'directories': status.get('directories', {})}
+    except Exception:
+      return {'configured': True, 'status': 'not_ready'}
+
+  def _safe_freightbridge_readiness(self) -> dict[str, object]:
+    try:
+      with connect() as connection:
+        with connection.cursor() as cursor:
+          cursor.execute('select 1')
+          cursor.fetchone()
+      return {'status': 'ready'}
+    except Exception:
+      return {'status': 'not_ready'}
+
+  def _get_or_none(self, client: PartnerSimulatorClient, path: str) -> dict[str, object] | None:
+    try:
+      return client.get(path)
+    except LabExecutionError as exc:
+      if exc.code == 'LOAD_NOT_FOUND':
+        return None
+      raise
+
+  def _create_apex_load(self, load_id: str, payload: dict[str, object]) -> dict[str, object]:
+    existing = self._get_or_none(self.apex, f'/v1/loads/{load_id}')
+    if existing is not None:
+      if self._apex_payload_matches(existing, payload):
+        return {
+          'loadId': load_id,
+          'status': 'RECONCILED_EXISTING',
+          'apexLoadTenderJson': payload,
+        }
+      raise LabExecutionError('LAB_APEX_LOAD_CONFLICT', 'Apex already has a different load with this load ID.')
+    body = self.apex.post('/v1/load-tenders', payload)
+    body['apexLoadTenderJson'] = payload
+    return body
+
+  def _apex_payload_matches(self, existing: dict[str, object], expected: dict[str, object]) -> bool:
+    scalar_keys = (
+      'loadId',
+      'bolNumber',
+      'purchaseOrderNumber',
+      'customerReference',
+      'equipmentType',
+      'pieces',
+      'commodityDescription',
+    )
+    for key in scalar_keys:
+      if existing.get(key) != expected.get(key):
+        return False
+    if Decimal(str(existing.get('weightLbs'))) != Decimal(str(expected.get('weightLbs'))):
+      return False
+    for stop_key in ('pickup', 'delivery'):
+      existing_stop = dict(existing.get(stop_key) or {})
+      expected_stop = dict(expected.get(stop_key) or {})
+      for key in ('facilityName', 'address1', 'city', 'state', 'postalCode', 'scheduledDateTime'):
+        if existing_stop.get(key) != expected_stop.get(key):
+          return False
+    return True
+
+  def _create_tender_decision(self, load_id: str, decision: str, payload: dict[str, object]) -> dict[str, object]:
+    load = self._get_or_none(self.midwest, f'/v1/loads/{load_id}')
+    if load is None:
+      raise LabExecutionError('LAB_STEP_NOT_READY', 'Midwest has not received the 204 for this load yet.')
+    current = str(load.get('tenderStatus') or 'PENDING')
+    if current == decision:
+      return {'customerShipmentNumber': load_id, 'decision': decision, 'status': 'RECONCILED_EXISTING'}
+    if current != 'PENDING':
+      raise LabExecutionError('LAB_MIDWEST_TENDER_CONFLICT', 'Midwest already has a different final tender decision for this load.')
+    return self.midwest.post(f'/v1/loads/{load_id}/tender-decisions', payload)
+
+  def _create_shipment_event(self, load_id: str, payload: dict[str, object]) -> dict[str, object]:
+    existing = self._get_or_none(self.midwest, f'/v1/loads/{load_id}/shipment-events')
+    if existing is not None:
+      for event in existing.get('events') or []:
+        if isinstance(event, dict) and self._shipment_event_matches(event, payload):
+          return {
+            'eventId': event.get('eventId'),
+            'customerShipmentNumber': load_id,
+            'status': event.get('status'),
+            'occurredAt': event.get('occurredAt'),
+            'city': event.get('city'),
+            'state': event.get('state'),
+            'reconciled': True,
+          }
+    return self.midwest.post(f'/v1/loads/{load_id}/shipment-events', payload)
+
+  def _verified_midwest_receive_204(self, run: dict[str, object], response: dict[str, object]) -> dict[str, object]:
+    expected = self._expected_file(run, 'DISPATCH_204_SFTP')
+    item = self._processed_file(response, expected)
+    if item is None:
+      reconciled = self._reconcile_midwest_204_receive(run)
+      if reconciled is not None:
+        return reconciled
+      raise LabExecutionError('LAB_SFTP_TARGET_FILE_NOT_FOUND', f'Midwest SFTP poll did not process expected file {expected}.')
+    if item.get('functionalAcknowledgmentDocumentId') is None:
+      raise LabExecutionError('LAB_FUNCTIONAL_ACK_NOT_CREATED', 'Midwest processed the 204 but did not create a 997 acknowledgment document.')
+    return {
+      **response,
+      'targetFileName': expected,
+      'targetProcessed': item,
+      'functionalAcknowledgmentDocumentId': item.get('functionalAcknowledgmentDocumentId'),
+      'functionalAcknowledgmentStatus': item.get('functionalAcknowledgmentStatus'),
+    }
+
+  def _verified_freightbridge_poll(
+    self,
+    correlation_id: str,
+    *,
+    expected_file_name: str,
+    document_type: str,
+    business_identifier: str,
+  ) -> dict[str, object]:
+    response = self._poll_freightbridge_sftp(correlation_id)
+    item = self._processed_file(response, expected_file_name)
+    if item is not None:
+      return {**response, 'targetFileName': expected_file_name, 'targetProcessed': item}
+    if document_type in self._transaction_document_types(business_identifier):
+      return {
+        'status': 'RECONCILED_ALREADY_PROCESSED',
+        'transport': 'SFTP',
+        'targetFileName': expected_file_name,
+        'documentType': document_type,
+      }
+    raise LabExecutionError('LAB_SFTP_TARGET_FILE_NOT_FOUND', f'FreightBridge SFTP poll did not process expected file {expected_file_name}.')
+
+  def _processed_file(self, response: dict[str, object], expected_file_name: str) -> dict[str, object] | None:
+    for item in response.get('processed') or []:
+      if isinstance(item, dict) and item.get('fileName') == expected_file_name:
+        return item
+    return None
+
+  def _reconcile_midwest_204_receive(self, run: dict[str, object]) -> dict[str, object] | None:
+    load_id = str(run['business_identifier'])
+    if self._get_or_none(self.midwest, f'/v1/loads/{load_id}') is None:
+      return None
+    document_id = self._functional_ack_document_id_from_readback(run)
+    if document_id is None:
+      return None
+    return {
+      'status': 'RECONCILED_ALREADY_RECEIVED',
+      'transport': 'SFTP',
+      'targetFileName': self._expected_file(run, 'DISPATCH_204_SFTP'),
+      'functionalAcknowledgmentDocumentId': document_id,
+    }
+
+  def _x12_preview_from_payload(self, payload: dict[str, object], dispatch_body: dict[str, object]) -> dict[str, object]:
+    return {
+      'x12': payload['payload_text'],
+      'interchangeControlNumber': payload['interchange_control_number'],
+      'groupControlNumber': payload['group_control_number'],
+      'transactionControlNumber': payload['transaction_control_number'],
+      'mappingKey': payload['mapping_key'],
+      'mappingProfileId': str(payload['mapping_profile_id']) if payload.get('mapping_profile_id') is not None else None,
+      'mappingProfileVersion': payload['mapping_profile_version'],
+      'fileName': dispatch_body.get('fileName'),
+      'remotePath': dispatch_body.get('remotePath'),
+      'payloadSha256': payload['payload_sha256'],
+    }
+
+  def _canonical_shipment_summary(self, shipment_number: str) -> dict[str, object]:
+    try:
+      with connect() as connection:
+        shipment = FreightBridgeRepository(connection).fetch_shipment_by_number(shipment_number)
+      if shipment is None:
+        return {}
+      return {
+        'shipmentNumber': shipment.shipment_number,
+        'equipmentType': shipment.equipment_type.value,
+        'weightLbs': float(shipment.weight_lbs),
+        'pieces': shipment.pieces,
+        'commodityDescription': shipment.commodity_description,
+        'pickup': self._location_summary(shipment.origin),
+        'delivery': self._location_summary(shipment.destination),
+        'references': [
+          {'type': reference.reference_type.value, 'value': reference.reference_value}
+          for reference in shipment.references
+        ],
+        'tenderStatus': shipment.tender_status.value,
+        'currentStatus': shipment.current_status.value,
+      }
+    except Exception:
+      return {}
+
+  def _location_summary(self, location) -> dict[str, object]:
+    return {
+      'facilityName': location.facility_name,
+      'address1': location.address_line_1,
+      'address2': location.address_line_2,
+      'city': location.city,
+      'state': location.state,
+      'postalCode': location.postal_code,
+      'scheduledAt': location.scheduled_at.isoformat(),
+    }
 
   def _scenario(self, scenario_key: str) -> LabScenarioDefinition:
     scenario = SCENARIOS.get(scenario_key)
@@ -393,22 +674,26 @@ class IntegrationLabService:
         'customerReference': request.customer_reference or f'CUST{load_id[-8:]}',
         'equipmentType': request.equipment_type or 'VAN_53',
         'weightLbs': request.weight_lbs or 42000,
-        'pieces': request.pieces or 24,
-        'commodityDescription': request.commodity_description or 'Synthetic consumer goods',
+        'pieces': request.pieces or 22,
+        'commodityDescription': request.commodity_description or 'Industrial Components',
+        'createdAt': now.isoformat(),
+        'updatedAt': now.isoformat(),
         'pickup': {
-          'facilityName': (request.pickup.facility_name if request.pickup and request.pickup.facility_name else 'Apex Aurora Distribution'),
-          'addressLine1': (request.pickup.address_line_1 if request.pickup and request.pickup.address_line_1 else '1000 Logistics Way'),
+          'facilityName': (request.pickup.facility_name if request.pickup and request.pickup.facility_name else 'ABC Factory'),
+          'address1': (request.pickup.address_1 if request.pickup and request.pickup.address_1 else '200 Industrial Rd'),
+          'address2': (request.pickup.address_2 if request.pickup and request.pickup.address_2 else None),
           'city': (request.pickup.city if request.pickup and request.pickup.city else 'Aurora'),
           'state': (request.pickup.state if request.pickup and request.pickup.state else 'IL'),
-          'postalCode': (request.pickup.postal_code if request.pickup and request.pickup.postal_code else '60502'),
+          'postalCode': (request.pickup.postal_code if request.pickup and request.pickup.postal_code else '60505'),
           'scheduledDateTime': pickup_time.isoformat(),
         },
         'delivery': {
-          'facilityName': (request.delivery.facility_name if request.delivery and request.delivery.facility_name else 'Detroit Retail Consolidation'),
-          'addressLine1': (request.delivery.address_line_1 if request.delivery and request.delivery.address_line_1 else '2200 Market Street'),
+          'facilityName': (request.delivery.facility_name if request.delivery and request.delivery.facility_name else 'XYZ Warehouse'),
+          'address1': (request.delivery.address_1 if request.delivery and request.delivery.address_1 else '900 Commerce St'),
+          'address2': (request.delivery.address_2 if request.delivery and request.delivery.address_2 else None),
           'city': (request.delivery.city if request.delivery and request.delivery.city else 'Detroit'),
           'state': (request.delivery.state if request.delivery and request.delivery.state else 'MI'),
-          'postalCode': (request.delivery.postal_code if request.delivery and request.delivery.postal_code else '48226'),
+          'postalCode': (request.delivery.postal_code if request.delivery and request.delivery.postal_code else '48201'),
           'scheduledDateTime': delivery_time.isoformat(),
         },
         'eventSchedule': self._event_schedule(pickup_time),
@@ -449,6 +734,8 @@ class IntegrationLabService:
         {'type': 'PO', 'value': snapshot['purchaseOrderNumber']},
         {'type': 'CUSTOMER_REF', 'value': snapshot['customerReference']},
       ],
+      'createdAt': snapshot['createdAt'],
+      'updatedAt': snapshot['updatedAt'],
     }
 
   def _event_payload(self, snapshot: dict[str, object], status: str) -> dict[str, object]:
@@ -463,17 +750,60 @@ class IntegrationLabService:
         }
     raise LabExecutionError('LAB_STEP_NOT_READY', f'No shipment event schedule exists for {status}.')
 
+  def _expected_file(self, run: dict[str, object], step_key: str) -> str:
+    response = self._step_response(run, step_key)
+    file_name = response.get('fileName')
+    if not isinstance(file_name, str) or not file_name:
+      raise LabExecutionError('LAB_STEP_NOT_READY', f'{step_key} has not produced an SFTP filename yet.')
+    return file_name
+
+  def _shipment_event_matches(self, existing: dict[str, object], expected: dict[str, object]) -> bool:
+    return (
+      existing.get('status') == expected.get('status')
+      and existing.get('city') == expected.get('city')
+      and existing.get('state') == expected.get('state')
+      and self._same_timestamp(existing.get('occurredAt'), expected.get('occurredAt'))
+    )
+
+  def _same_timestamp(self, left: object, right: object) -> bool:
+    if not isinstance(left, str) or not isinstance(right, str):
+      return False
+    try:
+      left_dt = datetime.fromisoformat(left.replace('Z', '+00:00'))
+      right_dt = datetime.fromisoformat(right.replace('Z', '+00:00'))
+    except ValueError:
+      return left == right
+    return left_dt == right_dt
+
   def _functional_ack_document_id(self, run: dict[str, object]) -> str:
     response = self._step_response(run, 'MIDWEST_RECEIVE_204')
-    for item in response.get('processed') or []:
-      if item.get('functionalAcknowledgmentDocumentId'):
-        return str(item['functionalAcknowledgmentDocumentId'])
+    if response.get('functionalAcknowledgmentDocumentId'):
+      return str(response['functionalAcknowledgmentDocumentId'])
+    target = response.get('targetProcessed')
+    if isinstance(target, dict) and target.get('functionalAcknowledgmentDocumentId'):
+      return str(target['functionalAcknowledgmentDocumentId'])
+    document_id = self._functional_ack_document_id_from_readback(run)
+    if document_id is not None:
+      return document_id
+    raise LabExecutionError('LAB_STEP_NOT_READY', 'Midwest has not generated a 997 for this 204 yet.')
+
+  def _functional_ack_document_id_from_readback(self, run: dict[str, object]) -> str | None:
     load_id = str(run['business_identifier'])
-    acknowledgments = self.midwest.get(f'/v1/loads/{load_id}/functional-acknowledgments')
+    preview = self._step_response(run, 'DISPATCH_204_SFTP').get('x12Preview')
+    group_control = preview.get('groupControlNumber') if isinstance(preview, dict) else None
+    transaction_control = preview.get('transactionControlNumber') if isinstance(preview, dict) else None
+    try:
+      acknowledgments = self.midwest.get(f'/v1/loads/{load_id}/functional-acknowledgments')
+    except LabExecutionError:
+      return None
     for item in acknowledgments.get('functionalAcknowledgments') or []:
+      if group_control and item.get('acknowledgedGroupControlNumber') != group_control:
+        continue
+      if transaction_control and item.get('acknowledgedTransactionControlNumber') != transaction_control:
+        continue
       if item.get('outboundDocumentId'):
         return str(item['outboundDocumentId'])
-    raise LabExecutionError('LAB_STEP_NOT_READY', 'Midwest has not generated a 997 for this 204 yet.')
+    return None
 
   def _event_id(self, run: dict[str, object], status: str) -> str:
     response = self._step_response(run, f'CREATE_214_{status}')
@@ -499,25 +829,41 @@ class IntegrationLabService:
     except Exception:
       return []
 
+  def _transaction_document_types(self, business_identifier: str) -> set[str]:
+    try:
+      with connect() as connection:
+        trace = OperationsRepository(connection).get_business_trace(business_identifier)
+      return {str(tx['document_type']) for tx in trace['transactions']}
+    except Exception:
+      return set()
+
   def _result_summary(self, business_identifier: str) -> dict[str, object]:
     summary: dict[str, object] = {
       'loadId': business_identifier,
       'transactionDocumentTypes': [],
-      'technicalAcknowledgment': 'PENDING',
+      'technicalAcknowledgment': 'NOT_RECEIVED',
       'tenderStatus': 'PENDING',
-      'shipmentStatus': 'PENDING',
+      'shipmentStatus': 'PLANNED',
       'shipmentEvents': [],
+      'canonicalShipment': self._canonical_shipment_summary(business_identifier),
     }
     try:
       with connect() as connection:
         trace = OperationsRepository(connection).get_business_trace(business_identifier)
       summary['transactionDocumentTypes'] = sorted({tx['document_type'] for tx in trace['transactions']})
-      if '997' in summary['transactionDocumentTypes']:
-        summary['technicalAcknowledgment'] = 'RECEIVED'
-      if any(tx['document_type'] == '990' for tx in trace['transactions']):
-        summary['tenderStatus'] = 'UPDATED'
-      if any(tx['document_type'] == '214' for tx in trace['transactions']):
-        summary['shipmentStatus'] = 'UPDATED'
+    except Exception:
+      pass
+    try:
+      with connect() as connection:
+        acknowledgment = IntegrationRepository(connection).fetch_latest_functional_acknowledgment_for_shipment(business_identifier)
+      if acknowledgment is not None:
+        summary['technicalAcknowledgment'] = acknowledgment['status']
+        summary['technicalAcknowledgmentDetail'] = {
+          'ak5': acknowledgment['transaction_ack_code'],
+          'ak9': acknowledgment['group_ack_code'],
+          'acknowledgedGroupControlNumber': acknowledgment['acknowledged_group_control_number'],
+          'acknowledgedTransactionControlNumber': acknowledgment['acknowledged_transaction_control_number'],
+        }
     except Exception:
       pass
     try:

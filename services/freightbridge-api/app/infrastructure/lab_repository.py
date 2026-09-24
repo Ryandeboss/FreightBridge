@@ -5,6 +5,10 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 
+class LabStepInProgressError(RuntimeError):
+  pass
+
+
 class IntegrationLabRepository:
   def __init__(self, connection: Connection):
     self.connection = connection
@@ -140,6 +144,10 @@ class IntegrationLabRepository:
         if step is None:
           return None
         if step['status'] == 'SUCCEEDED':
+          return self._step(step)
+        if step['status'] == 'RUNNING':
+          raise LabStepInProgressError(step_key)
+        if step['status'] not in ('PENDING', 'FAILED'):
           return self._step(step)
         cursor.execute(
           """
@@ -279,8 +287,10 @@ class IntegrationLabRepository:
       return
     if all(step['status'] == 'SUCCEEDED' for step in run['steps']):
       self.update_run_summary(run_id, result_summary, status='SUCCEEDED')
+    elif any(step['status'] == 'FAILED' for step in run['steps']):
+      self.update_run_summary(run_id, result_summary, status='FAILED')
     else:
-      self.update_run_summary(run_id, result_summary)
+      self.update_run_summary(run_id, result_summary, status='RUNNING')
 
   def _run(self, row: dict[str, object], *, include_steps: bool) -> dict[str, object]:
     return {
