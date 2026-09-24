@@ -245,34 +245,81 @@ class Milestone22Acceptance:
     return body
 
   def _check_configuration_partners(self) -> dict[str, object]:
-    partners = self.freightbridge.get('/api/configuration/partners', token=self.operations_token, step='Configuration partners')
-    assert_truth(isinstance(partners, list), 'Configuration partners', 'Partner list response must be an array.')
+    partners_response = self.freightbridge.get(
+      '/api/configuration/partners',
+      token=self.operations_token,
+      step='Configuration partners',
+    )
+
+    partners = partners_response.get('body')
+
+    assert_truth(
+      isinstance(partners, list),
+      'Configuration partners',
+      'Partner list response must be an array.',
+    )
+
     partner_codes = {
       item.get('partnerCode')
       for item in partners
       if isinstance(item, dict) and isinstance(item.get('partnerCode'), str)
     }
+
     for partner_code in ('APEX', 'MWCX'):
-      assert_truth(partner_code in partner_codes, 'Configuration partners', f'{partner_code} partner is missing.')
+      assert_truth(
+        partner_code in partner_codes,
+        'Configuration partners',
+        f'{partner_code} partner is missing.',
+      )
+
       detail = self.freightbridge.get(
         f'/api/configuration/partners/{partner_code}',
         token=self.operations_token,
         step=f'{partner_code} configuration detail',
       )
-      assert_equal(detail.get('partnerCode'), partner_code, f'{partner_code} configuration detail', 'partnerCode')
-      assert_truth(bool(detail.get('businessRole')), f'{partner_code} configuration detail', 'businessRole is missing.')
-      assert_truth(bool(detail.get('integrationStyle')), f'{partner_code} configuration detail', 'integrationStyle is missing.')
-      capabilities = self.freightbridge.get(
+
+      assert_equal(
+        detail.get('partnerCode'),
+        partner_code,
+        f'{partner_code} configuration detail',
+        'partnerCode',
+      )
+
+      assert_truth(
+        bool(detail.get('businessRole')),
+        f'{partner_code} configuration detail',
+        'businessRole is missing.',
+      )
+
+      assert_truth(
+        bool(detail.get('integrationStyle')),
+        f'{partner_code} configuration detail',
+        'integrationStyle is missing.',
+      )
+
+      capabilities_response = self.freightbridge.get(
         f'/api/configuration/partners/{partner_code}/capabilities',
         token=self.operations_token,
         step=f'{partner_code} capabilities',
       )
-      assert_truth(isinstance(capabilities, list) and len(capabilities) > 0, f'{partner_code} capabilities', 'No capabilities returned.')
+
+      capabilities = capabilities_response.get('body')
+
       assert_truth(
-        any(isinstance(item, dict) and item.get('enabled') is True for item in capabilities),
+        isinstance(capabilities, list) and len(capabilities) > 0,
+        f'{partner_code} capabilities',
+        'No capabilities returned.',
+      )
+
+      assert_truth(
+        any(
+          isinstance(item, dict) and item.get('enabled') is True
+          for item in capabilities
+        ),
         f'{partner_code} capabilities',
         'No enabled capabilities returned.',
       )
+
     return {'partners': sorted(partner_codes)}
 
   def _check_mapping_profiles(self) -> dict[str, object]:
