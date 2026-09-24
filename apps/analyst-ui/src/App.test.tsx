@@ -338,6 +338,7 @@ const completedLabRun = {
       { status: 'DELIVERED', occurredAt: '2026-09-25T16:00:00Z', city: 'Detroit', state: 'MI' },
     ],
   },
+  startedAt: '2026-09-24T15:01:00Z',
   completedAt: '2026-09-24T15:15:00Z',
   steps: labRun.steps.map((step, index) => ({
     ...step,
@@ -396,9 +397,47 @@ function jsonResponse(payload: unknown, status = 200) {
   );
 }
 
-function installFetchMock() {
+function installFetchMock(options: { readiness?: Record<string, unknown>; initialLabRun?: Record<string, unknown> } = {}) {
   let currentDraftMapping: Record<string, unknown> = draftMapping;
-  let currentLabRun: Record<string, unknown> = labRun;
+  let currentLabRun: Record<string, unknown> = options.initialLabRun ?? labRun;
+  const readiness = options.readiness ?? {
+    status: 'ready',
+    dependencies: {
+      freightBridge: { status: 'ready' },
+      apexSimulator: { status: 'ready' },
+      midwestSimulator: { status: 'ready' },
+      midwestSftp: { status: 'ready' },
+      apexSimulatorConfigured: true,
+      midwestSimulatorConfigured: true,
+      sftpConfigured: true,
+    },
+    scenarios: [
+      {
+        scenarioKey: 'TECHNICAL_ACK_ONLY',
+        name: 'Technical acknowledgment only',
+        description: 'Apex tender through Midwest 204 and 997 technical acknowledgment.',
+        stepCount: 6,
+      },
+      {
+        scenarioKey: 'TENDER_ACCEPTED',
+        name: 'Tender accepted',
+        description: 'Full tender acceptance flow through 204, 997, and 990.',
+        stepCount: 9,
+      },
+      {
+        scenarioKey: 'TENDER_REJECTED',
+        name: 'Tender rejected',
+        description: 'Tender rejection flow through 204, 997, and rejected 990.',
+        stepCount: 9,
+      },
+      {
+        scenarioKey: 'FULL_SHIPMENT_LIFECYCLE',
+        name: 'Full shipment lifecycle',
+        description: 'Accepted tender plus picked up, in transit, arrived, and delivered 214 updates.',
+        stepCount: 21,
+      },
+    ],
+  };
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     const path = url.pathname;
@@ -624,28 +663,7 @@ function installFetchMock() {
     }
 
     if (path === '/api/lab/readiness') {
-      return jsonResponse({
-        status: 'ready',
-        dependencies: {
-          apexSimulatorConfigured: true,
-          midwestSimulatorConfigured: true,
-          sftpConfigured: true,
-        },
-        scenarios: [
-          {
-            scenarioKey: 'FULL_SHIPMENT_LIFECYCLE',
-            name: 'Full shipment lifecycle',
-            description: 'Accepted tender plus picked up, in transit, arrived, and delivered 214 updates.',
-            stepCount: 21,
-          },
-          {
-            scenarioKey: 'TECHNICAL_ACK_ONLY',
-            name: 'Technical acknowledgment only',
-            description: 'Apex tender through Midwest 204 and 997 technical acknowledgment.',
-            stepCount: 6,
-          },
-        ],
-      });
+      return jsonResponse(readiness);
     }
 
     if (path === '/api/lab/runs') {
@@ -929,11 +947,44 @@ describe('Analyst Console', () => {
     render(<App />);
 
     expect(await screen.findByTestId('integration-lab-page')).toBeInTheDocument();
-    expect(screen.getByText(/Full shipment lifecycle/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Technical Acknowledgment/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Tender Accepted/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Tender Rejected/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Full Shipment Lifecycle/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/FreightBridge/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Ready/i).length).toBeGreaterThanOrEqual(4);
+    expect(screen.getByText(/Synthetic Integration Test/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/BOL/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^PO$/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Customer Reference/i)).toBeInTheDocument();
+    expect(screen.getAllByLabelText(/Facility Name/i)[0]).toHaveValue('ABC Factory');
+    expect(screen.getAllByLabelText(/Address 1/i)[0]).toHaveValue('200 Industrial Rd');
+    expect(screen.getByLabelText(/Commodity/i)).toHaveValue('Industrial Components');
+    expect(screen.queryByLabelText(/raw json/i)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Tender Rejected/i }));
+    expect(screen.getByLabelText(/Reason Code/i)).toHaveValue('CAPACITY');
+    expect(screen.getByLabelText(/Message/i)).toHaveValue('Synthetic carrier rejection.');
+    await userEvent.click(screen.getByRole('button', { name: /Full Shipment Lifecycle/i }));
     expect(screen.getAllByText(/Integration Lab/i).length).toBeGreaterThan(0);
     await userEvent.click(screen.getByRole('button', { name: /create run/i }));
     expect(await screen.findByTestId('lab-run-detail')).toBeInTheDocument();
+    expect(window.location.hash).toBe(`#/lab/runs/${labRun.id}`);
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining(`/api/lab/runs/${labRun.id}`), expect.any(Object));
+    });
+    await waitFor(() => {
+      const createCall = fetchMock.mock.calls.find(([input, init]) => String(input).endsWith('/api/lab/runs') && init?.method === 'POST');
+      expect(createCall).toBeTruthy();
+      const body = JSON.parse(String(createCall?.[1]?.body));
+      expect(body.pickup.address1).toBe('200 Industrial Rd');
+      expect(body.delivery.address1).toBe('900 Commerce St');
+      expect(body.weightLbs).toBe(42000);
+      expect(body.pieces).toBe(22);
+    });
     expect(screen.getAllByText(/LAB900/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Started/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Complete previous step first/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: /run step/i })[1]).toBeDisabled();
     await userEvent.click(screen.getAllByRole('button', { name: /run step/i })[0]);
 
     await waitFor(() => {
@@ -951,17 +1002,75 @@ describe('Analyst Console', () => {
     expect(screen.getByText(/AK9/i)).toBeInTheDocument();
     expect(screen.getAllByText(/ACCEPTED/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/DELIVERED/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/997 Technical Ack/i)).toBeInTheDocument();
-    expect(screen.getByText(/990 Business Response/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/997 Technical Ack/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/990 Business Response/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/ISA13/i)).toBeInTheDocument();
     expect(screen.getAllByText(/000000901/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/sha256-204/i)).toBeInTheDocument();
     expect(screen.getAllByText(/CANONICAL_TO_MWCX_204/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/MW204_000000901.edi/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/PICKED_UP/i).length).toBeGreaterThan(0);
-    expect(screen.getByRole('link', { name: /View Transaction/i })).toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole('link', { name: /View Transaction/i })[0]);
+    expect(await screen.findByTestId('transaction-detail-page')).toBeInTheDocument();
+    window.location.hash = `#/lab/runs/${labRun.id}`;
+    await waitFor(() => expect(screen.getByTestId('lab-run-detail')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('link', { name: /CANONICAL_TO_MWCX_204/i }));
+    expect(await screen.findByTestId('mapping-detail-page')).toBeInTheDocument();
+    expect(screen.getAllByText(/CANONICAL_TO_MWCX_204/i).length).toBeGreaterThan(0);
+    window.location.hash = '#/lab';
+    await waitFor(() => expect(screen.getByTestId('integration-lab-page')).toBeInTheDocument());
+    await screen.findByText(/Recent Runs/i);
+    await screen.findByText(/LAB900/i);
+    await userEvent.click(screen.getByRole('link', { name: /LAB900/i }));
+    await waitFor(() => expect(window.location.hash).toBe(`#/lab/runs/${labRun.id}`));
     expect(screen.getAllByRole('link', { name: /Business Trace/i }).length).toBeGreaterThan(0);
     expect(screen.queryByLabelText(/bearer token/i)).not.toBeInTheDocument();
+  });
+
+  test('disables Integration Lab run creation until readiness is healthy', async () => {
+    installFetchMock({
+      readiness: {
+        status: 'not_ready',
+        dependencies: {
+          freightBridge: { status: 'ready' },
+          apexSimulator: { status: 'ready' },
+          midwestSimulator: { status: 'not_ready' },
+          midwestSftp: { status: 'ready' },
+        },
+        scenarios: [
+          {
+            scenarioKey: 'FULL_SHIPMENT_LIFECYCLE',
+            name: 'Full shipment lifecycle',
+            description: 'Accepted tender plus 214 lifecycle updates.',
+            stepCount: 21,
+          },
+        ],
+      },
+    });
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/lab';
+    render(<App />);
+
+    expect(await screen.findByTestId('integration-lab-page')).toBeInTheDocument();
+    expect(screen.getAllByText(/Not Ready/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Create Run is disabled until every dependency is Ready/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /create run/i })).toBeDisabled();
+  });
+
+  test('loads a full Integration Lab run from a direct history URL', async () => {
+    const fetchMock = installFetchMock({ initialLabRun: completedLabRun });
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = `#/lab/runs/${labRun.id}`;
+    render(<App />);
+
+    expect(await screen.findByTestId('lab-run-detail')).toBeInTheDocument();
+    expect(screen.getAllByText(/Synthetic Integration Test/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/SUCCEEDED/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/CANONICAL_TO_MWCX_204/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/sha256-204/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining(`/api/lab/runs/${labRun.id}`), expect.any(Object));
+    });
   });
 
   test('transaction detail links to the mapping profile that processed it', async () => {

@@ -64,6 +64,32 @@ export type LabExecutionResponse = {
   alreadyCompleted: boolean;
 };
 
+export type LabLocationInput = {
+  facilityName?: string;
+  address1?: string;
+  address2?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  scheduledDateTime?: string;
+};
+
+export type LabRunCreateRequest = {
+  scenarioKey: string;
+  loadId?: string;
+  equipmentType?: 'VAN_53' | 'REEFER_53' | 'FLATBED';
+  weightLbs?: number;
+  pieces?: number;
+  commodityDescription?: string;
+  bolNumber?: string;
+  purchaseOrderNumber?: string;
+  customerReference?: string;
+  pickup?: LabLocationInput;
+  delivery?: LabLocationInput;
+  rejectionReasonCode?: string;
+  rejectionMessage?: string;
+};
+
 export function fetchLabReadiness(token: string): Promise<LabReadiness> {
   return requestJson('/api/lab/readiness', { token });
 }
@@ -78,7 +104,7 @@ export function fetchLabRun(token: string, runId: string): Promise<LabRun> {
 
 export function createLabRun(
   token: string,
-  body: { scenarioKey: string; loadId?: string; equipmentType?: string; weightLbs?: number; pieces?: number },
+  body: LabRunCreateRequest,
 ): Promise<LabRun> {
   return requestJson('/api/lab/runs', { token, method: 'POST', body });
 }

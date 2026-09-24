@@ -32,6 +32,7 @@ function AppRoutes() {
           <Route path="/trace" element={<TraceSearchPage />} />
           <Route path="/trace/:businessIdentifier" element={<BusinessTraceDetailPage />} />
           <Route path="/lab" element={<IntegrationLabPage />} />
+          <Route path="/lab/runs/:runId" element={<IntegrationLabPage />} />
           <Route path="/partners" element={<PartnersPage />} />
           <Route path="/partners/:partnerCode" element={<PartnerDetailPage />} />
           <Route path="/mappings" element={<MappingsPage />} />

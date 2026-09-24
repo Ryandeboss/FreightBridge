@@ -347,6 +347,7 @@ class IntegrationLabService:
     if step_key == 'FREIGHTBRIDGE_RECEIVE_997':
       expected = self._expected_file(run, 'DISPATCH_997_SFTP')
       return {'source': '/outbound', 'documentType': '997', 'expectedFileName': expected}, self._verified_freightbridge_poll(
+        run,
         correlation_id,
         expected_file_name=expected,
         document_type='997',
@@ -365,6 +366,7 @@ class IntegrationLabService:
       dispatch_step = 'DISPATCH_REJECTED_990_SFTP' if step_key == 'FREIGHTBRIDGE_RECEIVE_REJECTED_990' else 'DISPATCH_990_SFTP'
       expected = self._expected_file(run, dispatch_step)
       return {'source': '/outbound', 'documentType': '990', 'expectedFileName': expected}, self._verified_freightbridge_poll(
+        run,
         correlation_id,
         expected_file_name=expected,
         document_type='990',
@@ -384,10 +386,12 @@ class IntegrationLabService:
       status = step_key.removeprefix('FREIGHTBRIDGE_RECEIVE_214_')
       expected = self._expected_file(run, f'DISPATCH_214_{status}')
       return {'source': '/outbound', 'documentType': '214', 'expectedFileName': expected}, self._verified_freightbridge_poll(
+        run,
         correlation_id,
         expected_file_name=expected,
         document_type='214',
         business_identifier=load_id,
+        shipment_status=status,
       )
     raise LabExecutionError('LAB_STEP_NOT_READY', 'This Lab step is not executable.')
 
@@ -546,6 +550,7 @@ class IntegrationLabService:
       if reconciled is not None:
         return reconciled
       raise LabExecutionError('LAB_SFTP_TARGET_FILE_NOT_FOUND', f'Midwest SFTP poll did not process expected file {expected}.')
+    self._ensure_archived(item, file_name=expected)
     if item.get('functionalAcknowledgmentDocumentId') is None:
       raise LabExecutionError('LAB_FUNCTIONAL_ACK_NOT_CREATED', 'Midwest processed the 204 but did not create a 997 acknowledgment document.')
     return {
@@ -558,17 +563,20 @@ class IntegrationLabService:
 
   def _verified_freightbridge_poll(
     self,
+    run: dict[str, object],
     correlation_id: str,
     *,
     expected_file_name: str,
     document_type: str,
     business_identifier: str,
+    shipment_status: str | None = None,
   ) -> dict[str, object]:
     response = self._poll_freightbridge_sftp(correlation_id)
     item = self._processed_file(response, expected_file_name)
     if item is not None:
+      self._ensure_archived(item, file_name=expected_file_name)
       return {**response, 'targetFileName': expected_file_name, 'targetProcessed': item}
-    if document_type in self._transaction_document_types(business_identifier):
+    if self._reconcile_freightbridge_receive(run, document_type=document_type, shipment_status=shipment_status):
       return {
         'status': 'RECONCILED_ALREADY_PROCESSED',
         'transport': 'SFTP',
@@ -583,6 +591,29 @@ class IntegrationLabService:
         return item
     return None
 
+  def _ensure_archived(self, item: dict[str, object], *, file_name: str) -> None:
+    status = item.get('status')
+    if status == 'ARCHIVED':
+      return
+    if status == 'LEFT_FOR_RETRY':
+      raise LabExecutionError('LAB_SFTP_TARGET_RETRY_PENDING', f'SFTP target file {file_name} was left for retry.')
+    raise LabExecutionError('LAB_SFTP_TARGET_PROCESSING_FAILED', f'SFTP target file {file_name} was not processed successfully.')
+
+  def _reconcile_freightbridge_receive(
+    self,
+    run: dict[str, object],
+    *,
+    document_type: str,
+    shipment_status: str | None = None,
+  ) -> bool:
+    if document_type == '997':
+      return self._has_matching_functional_ack(run)
+    if document_type == '990':
+      return self._has_expected_tender_outcome(run)
+    if document_type == '214' and shipment_status:
+      return self._has_matching_shipment_status(run, shipment_status)
+    return False
+
   def _reconcile_midwest_204_receive(self, run: dict[str, object]) -> dict[str, object] | None:
     load_id = str(run['business_identifier'])
     if self._get_or_none(self.midwest, f'/v1/loads/{load_id}') is None:
@@ -596,6 +627,51 @@ class IntegrationLabService:
       'targetFileName': self._expected_file(run, 'DISPATCH_204_SFTP'),
       'functionalAcknowledgmentDocumentId': document_id,
     }
+
+  def _has_matching_functional_ack(self, run: dict[str, object]) -> bool:
+    load_id = str(run['business_identifier'])
+    preview = self._step_response(run, 'DISPATCH_204_SFTP').get('x12Preview')
+    if not isinstance(preview, dict):
+      return False
+    group_control = preview.get('groupControlNumber')
+    transaction_control = preview.get('transactionControlNumber')
+    if not group_control or not transaction_control:
+      return False
+    try:
+      with connect() as connection:
+        acknowledgment = IntegrationRepository(connection).fetch_latest_functional_acknowledgment_for_shipment(load_id)
+    except Exception:
+      return False
+    if acknowledgment is None:
+      return False
+    return (
+      acknowledgment['acknowledged_group_control_number'] == group_control
+      and acknowledgment['acknowledged_transaction_control_number'] == transaction_control
+      and acknowledgment['status'] in ('ACCEPTED', 'REJECTED')
+    )
+
+  def _has_expected_tender_outcome(self, run: dict[str, object]) -> bool:
+    expected = 'REJECTED' if run['scenario_key'] == 'TENDER_REJECTED' else 'ACCEPTED'
+    load_id = str(run['business_identifier'])
+    try:
+      tender = self.apex.get(f'/v1/loads/{load_id}/tender-status')
+    except LabExecutionError:
+      return False
+    return tender.get('currentTenderDecision') == expected
+
+  def _has_matching_shipment_status(self, run: dict[str, object], status: str) -> bool:
+    expected = self._step_response(run, f'CREATE_214_{status}')
+    if not expected:
+      return False
+    load_id = str(run['business_identifier'])
+    try:
+      statuses = self.apex.get(f'/v1/loads/{load_id}/shipment-statuses')
+    except LabExecutionError:
+      return False
+    for event in statuses.get('events') or []:
+      if isinstance(event, dict) and self._shipment_event_matches(event, expected):
+        return True
+    return False
 
   def _x12_preview_from_payload(self, payload: dict[str, object], dispatch_body: dict[str, object]) -> dict[str, object]:
     return {

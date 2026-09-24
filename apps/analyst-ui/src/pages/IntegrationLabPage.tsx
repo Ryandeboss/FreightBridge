@@ -1,15 +1,17 @@
 import { FastForward, Play, RefreshCw, RotateCcw, Square } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
   createLabRun,
   executeLabStep,
   fetchLabReadiness,
+  fetchLabRun,
   fetchLabRuns,
   runNextLabStep,
   type LabReadiness,
   type LabRun,
+  type LabRunCreateRequest,
   type LabScenario,
   type LabStep,
 } from '../api/lab';
@@ -21,13 +23,93 @@ import { formatDateTime } from '../utils/dates';
 
 const lanes = ['Apex Logistics', 'FreightBridge', 'Midwest Carrier'];
 
+const scenarioMeta: Record<string, { title: string; path: string; endState: string }> = {
+  TECHNICAL_ACK_ONLY: {
+    title: 'Technical Acknowledgment',
+    path: 'Apex JSON -> FreightBridge -> Midwest 204 -> Midwest 997',
+    endState: '204 acknowledged, tender still pending',
+  },
+  TENDER_ACCEPTED: {
+    title: 'Tender Accepted',
+    path: '204 + 997 + accepted 990',
+    endState: 'Tender accepted',
+  },
+  TENDER_REJECTED: {
+    title: 'Tender Rejected',
+    path: '204 + 997 + rejected 990',
+    endState: 'Tender rejected',
+  },
+  FULL_SHIPMENT_LIFECYCLE: {
+    title: 'Full Shipment Lifecycle',
+    path: '204 + 997 + 990 + four 214 updates',
+    endState: 'Delivered',
+  },
+};
+
+type LabFormState = {
+  scenarioKey: string;
+  loadId: string;
+  bolNumber: string;
+  purchaseOrderNumber: string;
+  customerReference: string;
+  equipmentType: 'VAN_53' | 'REEFER_53' | 'FLATBED';
+  weightLbs: string;
+  pieces: string;
+  commodityDescription: string;
+  pickupFacilityName: string;
+  pickupAddress1: string;
+  pickupAddress2: string;
+  pickupCity: string;
+  pickupState: string;
+  pickupPostalCode: string;
+  pickupScheduledDateTime: string;
+  deliveryFacilityName: string;
+  deliveryAddress1: string;
+  deliveryAddress2: string;
+  deliveryCity: string;
+  deliveryState: string;
+  deliveryPostalCode: string;
+  deliveryScheduledDateTime: string;
+  rejectionReasonCode: string;
+  rejectionMessage: string;
+};
+
+const defaultForm: LabFormState = {
+  scenarioKey: 'FULL_SHIPMENT_LIFECYCLE',
+  loadId: '',
+  bolNumber: '',
+  purchaseOrderNumber: '',
+  customerReference: '',
+  equipmentType: 'VAN_53',
+  weightLbs: '42000',
+  pieces: '22',
+  commodityDescription: 'Industrial Components',
+  pickupFacilityName: 'ABC Factory',
+  pickupAddress1: '200 Industrial Rd',
+  pickupAddress2: '',
+  pickupCity: 'Aurora',
+  pickupState: 'IL',
+  pickupPostalCode: '60505',
+  pickupScheduledDateTime: '',
+  deliveryFacilityName: 'XYZ Warehouse',
+  deliveryAddress1: '900 Commerce St',
+  deliveryAddress2: '',
+  deliveryCity: 'Detroit',
+  deliveryState: 'MI',
+  deliveryPostalCode: '48201',
+  deliveryScheduledDateTime: '',
+  rejectionReasonCode: 'CAPACITY',
+  rejectionMessage: 'Synthetic carrier rejection.',
+};
+
 export function IntegrationLabPage() {
   const { token, handleApiError } = useOperationsSession();
+  const { runId } = useParams();
+  const navigate = useNavigate();
   const [readiness, setReadiness] = useState<LabReadiness | null>(null);
   const [runs, setRuns] = useState<LabRun[]>([]);
   const [selectedRun, setSelectedRun] = useState<LabRun | null>(null);
-  const [scenarioKey, setScenarioKey] = useState('FULL_SHIPMENT_LIFECYCLE');
-  const [loadId, setLoadId] = useState('');
+  const [form, setForm] = useState<LabFormState>(defaultForm);
   const [isLoading, setIsLoading] = useState(true);
   const [isWorking, setIsWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,15 +120,16 @@ export function IntegrationLabPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const [nextReadiness, nextRuns] = await Promise.all([
+      const [nextReadiness, nextRuns, detailRun] = await Promise.all([
         fetchLabReadiness(token),
         fetchLabRuns(token, { limit: 12, offset: 0 }),
+        runId ? fetchLabRun(token, runId) : Promise.resolve(null),
       ]);
       setReadiness(nextReadiness);
       setRuns(nextRuns.runs);
-      setSelectedRun((current) => current ?? nextRuns.runs[0] ?? null);
-      if (!nextReadiness.scenarios.some((scenario) => scenario.scenarioKey === scenarioKey)) {
-        setScenarioKey(nextReadiness.scenarios[0]?.scenarioKey ?? 'FULL_SHIPMENT_LIFECYCLE');
+      setSelectedRun(detailRun);
+      if (!nextReadiness.scenarios.some((scenario) => scenario.scenarioKey === form.scenarioKey)) {
+        setForm((current) => ({ ...current, scenarioKey: nextReadiness.scenarios[0]?.scenarioKey ?? 'FULL_SHIPMENT_LIFECYCLE' }));
       }
     } catch (nextError) {
       handleApiError(nextError);
@@ -54,25 +137,22 @@ export function IntegrationLabPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [handleApiError, scenarioKey, token]);
+  }, [form.scenarioKey, handleApiError, runId, token]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   async function createRun() {
-    if (!token) return;
+    if (!token || readiness?.status !== 'ready') return;
     setIsWorking(true);
     setError(null);
     try {
-      const run = await createLabRun(token, {
-        scenarioKey,
-        loadId: loadId.trim() || undefined,
-      });
+      const run = await createLabRun(token, toCreateRequest(form));
       setSelectedRun(run);
-      setLoadId('');
       const nextRuns = await fetchLabRuns(token, { limit: 12, offset: 0 });
       setRuns(nextRuns.runs);
+      navigate(`/lab/runs/${run.id}`);
     } catch (nextError) {
       handleApiError(nextError);
       setError(nextError instanceof ApiError ? nextError.message : 'Run could not be created.');
@@ -140,8 +220,6 @@ export function IntegrationLabPage() {
     }
   }
 
-  const selectedScenario = readiness?.scenarios.find((scenario) => scenario.scenarioKey === scenarioKey);
-
   return (
     <section className="page-stack" data-testid="integration-lab-page">
       <PageTitle eyebrow="Integration Lab" title="Scenario Workbench">
@@ -159,30 +237,10 @@ export function IntegrationLabPage() {
           <section className="content-grid two-column">
             <article className="panel">
               <div className="panel-header">
-                <h2>New Run</h2>
+                <h2>Readiness</h2>
                 <StatusBadge value={readiness.status} />
               </div>
-              <div className="editor-stack">
-                <label>
-                  Scenario
-                  <select value={scenarioKey} onChange={(event) => setScenarioKey(event.target.value)}>
-                    {readiness.scenarios.map((scenario) => (
-                      <option key={scenario.scenarioKey} value={scenario.scenarioKey}>
-                        {scenario.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {selectedScenario && <ScenarioSummary scenario={selectedScenario} />}
-                <label>
-                  Load ID
-                  <input value={loadId} onChange={(event) => setLoadId(event.target.value)} placeholder="Auto-generate" />
-                </label>
-                <button className="primary-button" type="button" disabled={isWorking} onClick={createRun}>
-                  <Play size={16} />
-                  Create Run
-                </button>
-              </div>
+              <ReadinessPanel readiness={readiness} />
             </article>
 
             <article className="panel">
@@ -194,25 +252,33 @@ export function IntegrationLabPage() {
               ) : (
                 <div className="compact-list">
                   {runs.map((run) => (
-                    <button
-                      key={run.id}
-                      className={`compact-row lab-run-row ${selectedRun?.id === run.id ? 'active' : ''}`}
-                      type="button"
-                      onClick={() => setSelectedRun(run)}
-                    >
+                    <Link key={run.id} className={`compact-row lab-run-row ${selectedRun?.id === run.id ? 'active' : ''}`} to={`/lab/runs/${run.id}`}>
                       <div>
                         <strong>{run.businessIdentifier}</strong>
                         <span>{run.scenarioKey}</span>
                       </div>
                       <StatusBadge value={run.status} />
-                    </button>
+                    </Link>
                   ))}
                 </div>
               )}
             </article>
           </section>
 
-          {selectedRun && (
+          <section className="panel">
+            <div className="panel-header">
+              <h2>New Run</h2>
+              <span>Synthetic Integration Test</span>
+            </div>
+            <ScenarioCards
+              scenarios={readiness.scenarios}
+              selected={form.scenarioKey}
+              onSelect={(scenarioKey) => setForm((current) => ({ ...current, scenarioKey }))}
+            />
+            <LabRunForm form={form} readiness={readiness} isWorking={isWorking} onChange={setForm} onCreate={createRun} />
+          </section>
+
+          {selectedRun ? (
             <RunDetail
               run={selectedRun}
               isWorking={isWorking}
@@ -223,6 +289,10 @@ export function IntegrationLabPage() {
                 stopAfterCurrent.current = true;
               }}
             />
+          ) : (
+            <article className="panel">
+              <EmptyBlock title="Select a run to inspect" />
+            </article>
           )}
         </>
       )}
@@ -230,12 +300,150 @@ export function IntegrationLabPage() {
   );
 }
 
-function ScenarioSummary({ scenario }: { scenario: LabScenario }) {
+function ReadinessPanel({ readiness }: { readiness: LabReadiness }) {
+  const dependencies = asRecord(readiness.dependencies) ?? {};
+  const items = [
+    ['FreightBridge', asRecord(dependencies.freightBridge)],
+    ['Apex Simulator', asRecord(dependencies.apexSimulator)],
+    ['Midwest Simulator', asRecord(dependencies.midwestSimulator)],
+    ['Midwest SFTP', asRecord(dependencies.midwestSftp)],
+  ] as const;
+
   return (
-    <div className="lab-scenario-summary">
-      <strong>{scenario.scenarioKey}</strong>
-      <span>{scenario.description}</span>
-      <small>{scenario.stepCount} steps</small>
+    <>
+      <dl className="definition-grid">
+        {items.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd><StatusBadge value={value?.status === 'ready' ? 'Ready' : 'Not Ready'} /></dd>
+          </div>
+        ))}
+      </dl>
+      {readiness.status !== 'ready' && <p className="muted-text">Create Run is disabled until every dependency is Ready.</p>}
+    </>
+  );
+}
+
+function ScenarioCards({
+  scenarios,
+  selected,
+  onSelect,
+}: {
+  scenarios: LabScenario[];
+  selected: string;
+  onSelect: (scenarioKey: string) => void;
+}) {
+  return (
+    <div className="content-grid two-column">
+      {scenarios.map((scenario) => {
+        const meta = scenarioMeta[scenario.scenarioKey] ?? {
+          title: scenario.name,
+          path: scenario.scenarioKey,
+          endState: 'Scenario complete',
+        };
+        return (
+          <button
+            className={`compact-row lab-run-row ${selected === scenario.scenarioKey ? 'active' : ''}`}
+            key={scenario.scenarioKey}
+            type="button"
+            onClick={() => onSelect(scenario.scenarioKey)}
+          >
+            <div>
+              <strong>{meta.title}</strong>
+              <span>{scenario.description}</span>
+              <span>{meta.path}</span>
+              <small>{scenario.stepCount} steps / {meta.endState}</small>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function LabRunForm({
+  form,
+  readiness,
+  isWorking,
+  onChange,
+  onCreate,
+}: {
+  form: LabFormState;
+  readiness: LabReadiness;
+  isWorking: boolean;
+  onChange: (form: LabFormState) => void;
+  onCreate: () => void;
+}) {
+  const setField = (field: keyof LabFormState, value: string) => onChange({ ...form, [field]: value });
+  const createDisabled = isWorking || readiness.status !== 'ready';
+
+  return (
+    <div className="editor-stack">
+      <label>
+        Scenario
+        <select value={form.scenarioKey} onChange={(event) => setField('scenarioKey', event.target.value)}>
+          {Object.entries(scenarioMeta).map(([key, meta]) => (
+            <option key={key} value={key}>{meta.title}</option>
+          ))}
+        </select>
+      </label>
+
+      <section className="content-grid two-column">
+        <div className="editor-stack">
+          <h3>General</h3>
+          <label>Load ID<input value={form.loadId} onChange={(event) => setField('loadId', event.target.value)} placeholder="Auto-generate" /></label>
+          <label>BOL<input value={form.bolNumber} onChange={(event) => setField('bolNumber', event.target.value)} placeholder="Auto-generate" /></label>
+          <label>PO<input value={form.purchaseOrderNumber} onChange={(event) => setField('purchaseOrderNumber', event.target.value)} placeholder="Auto-generate" /></label>
+          <label>Customer Reference<input value={form.customerReference} onChange={(event) => setField('customerReference', event.target.value)} placeholder="Auto-generate" /></label>
+          <label>
+            Equipment
+            <select value={form.equipmentType} onChange={(event) => setField('equipmentType', event.target.value)}>
+              <option value="VAN_53">VAN_53</option>
+              <option value="REEFER_53">REEFER_53</option>
+              <option value="FLATBED">FLATBED</option>
+            </select>
+          </label>
+          <label>Weight<input type="number" value={form.weightLbs} onChange={(event) => setField('weightLbs', event.target.value)} /></label>
+          <label>Pieces<input type="number" value={form.pieces} onChange={(event) => setField('pieces', event.target.value)} /></label>
+          <label>Commodity<input value={form.commodityDescription} onChange={(event) => setField('commodityDescription', event.target.value)} /></label>
+        </div>
+
+        <div className="editor-stack">
+          <h3>Pickup</h3>
+          <label>Facility Name<input value={form.pickupFacilityName} onChange={(event) => setField('pickupFacilityName', event.target.value)} /></label>
+          <label>Address 1<input value={form.pickupAddress1} onChange={(event) => setField('pickupAddress1', event.target.value)} /></label>
+          <label>Address 2<input value={form.pickupAddress2} onChange={(event) => setField('pickupAddress2', event.target.value)} /></label>
+          <label>City<input value={form.pickupCity} onChange={(event) => setField('pickupCity', event.target.value)} /></label>
+          <label>State<input value={form.pickupState} onChange={(event) => setField('pickupState', event.target.value.toUpperCase())} maxLength={2} /></label>
+          <label>Postal Code<input value={form.pickupPostalCode} onChange={(event) => setField('pickupPostalCode', event.target.value)} /></label>
+          <label>Scheduled Date/Time<input type="datetime-local" value={form.pickupScheduledDateTime} onChange={(event) => setField('pickupScheduledDateTime', event.target.value)} /></label>
+        </div>
+
+        <div className="editor-stack">
+          <h3>Delivery</h3>
+          <label>Facility Name<input value={form.deliveryFacilityName} onChange={(event) => setField('deliveryFacilityName', event.target.value)} /></label>
+          <label>Address 1<input value={form.deliveryAddress1} onChange={(event) => setField('deliveryAddress1', event.target.value)} /></label>
+          <label>Address 2<input value={form.deliveryAddress2} onChange={(event) => setField('deliveryAddress2', event.target.value)} /></label>
+          <label>City<input value={form.deliveryCity} onChange={(event) => setField('deliveryCity', event.target.value)} /></label>
+          <label>State<input value={form.deliveryState} onChange={(event) => setField('deliveryState', event.target.value.toUpperCase())} maxLength={2} /></label>
+          <label>Postal Code<input value={form.deliveryPostalCode} onChange={(event) => setField('deliveryPostalCode', event.target.value)} /></label>
+          <label>Scheduled Date/Time<input type="datetime-local" value={form.deliveryScheduledDateTime} onChange={(event) => setField('deliveryScheduledDateTime', event.target.value)} /></label>
+        </div>
+
+        {form.scenarioKey === 'TENDER_REJECTED' && (
+          <div className="editor-stack">
+            <h3>Rejection</h3>
+            <label>Reason Code<input value={form.rejectionReasonCode} onChange={(event) => setField('rejectionReasonCode', event.target.value)} /></label>
+            <label>Message<input value={form.rejectionMessage} onChange={(event) => setField('rejectionMessage', event.target.value)} /></label>
+          </div>
+        )}
+      </section>
+
+      <button className="primary-button" type="button" disabled={createDisabled} onClick={onCreate}>
+        <Play size={16} />
+        Create Run
+      </button>
+      {readiness.status !== 'ready' && <small>Complete dependency readiness before creating a run.</small>}
     </div>
   );
 }
@@ -263,8 +471,8 @@ function RunDetail({
   const events = Array.isArray(run.resultSummary.shipmentEvents) ? run.resultSummary.shipmentEvents : [];
   const apexPayload = findApexPayload(run);
   const canonicalShipment = findCanonicalShipment(run);
-  const transactions = transactionIds(run);
   const technicalAckDetail = asRecord(run.resultSummary.technicalAcknowledgmentDetail);
+  const nextRunnableKey = nextRunnableStepKey(run.steps);
 
   return (
     <section className="page-stack" data-testid="lab-run-detail">
@@ -274,54 +482,23 @@ function RunDetail({
           <StatusBadge value={run.status} />
         </div>
         <dl className="definition-grid">
-          <div>
-            <dt>Scenario</dt>
-            <dd>{run.scenarioKey}</dd>
-          </div>
-          <div>
-            <dt>Run Status</dt>
-            <dd><StatusBadge value={run.status} /></dd>
-          </div>
-          <div>
-            <dt>Load ID</dt>
-            <dd>{run.businessIdentifier}</dd>
-          </div>
-          <div>
-            <dt>997 Technical Ack</dt>
-            <dd>{technicalAck}</dd>
-          </div>
+          <div><dt>Label</dt><dd>Synthetic Integration Test</dd></div>
+          <div><dt>Scenario</dt><dd>{run.scenarioKey}</dd></div>
+          <div><dt>Run Status</dt><dd><StatusBadge value={run.status} /></dd></div>
+          <div><dt>Load ID</dt><dd>{run.businessIdentifier}</dd></div>
+          <div><dt>997 Technical Ack</dt><dd>{technicalAck}</dd></div>
           {technicalAckDetail && (
             <>
-              <div>
-                <dt>AK5</dt>
-                <dd>{String(technicalAckDetail.ak5 ?? 'Pending')}</dd>
-              </div>
-              <div>
-                <dt>AK9</dt>
-                <dd>{String(technicalAckDetail.ak9 ?? 'Pending')}</dd>
-              </div>
+              <div><dt>AK5</dt><dd>{String(technicalAckDetail.ak5 ?? 'Pending')}</dd></div>
+              <div><dt>AK9</dt><dd>{String(technicalAckDetail.ak9 ?? 'Pending')}</dd></div>
             </>
           )}
-          <div>
-            <dt>990 Business Response</dt>
-            <dd>{tenderStatus}</dd>
-          </div>
-          <div>
-            <dt>Shipment Status</dt>
-            <dd>{shipmentStatus}</dd>
-          </div>
-          <div>
-            <dt>Steps</dt>
-            <dd>{completed} / {run.steps.length}</dd>
-          </div>
-          <div>
-            <dt>Created</dt>
-            <dd>{formatDateTime(run.createdAt)}</dd>
-          </div>
-          <div>
-            <dt>Completed</dt>
-            <dd>{run.completedAt ? formatDateTime(run.completedAt) : 'Pending'}</dd>
-          </div>
+          <div><dt>990 Business Response</dt><dd>{tenderStatus}</dd></div>
+          <div><dt>Shipment Status</dt><dd>{shipmentStatus}</dd></div>
+          <div><dt>Steps</dt><dd>{completed} / {run.steps.length}</dd></div>
+          <div><dt>Created</dt><dd>{formatDateTime(run.createdAt)}</dd></div>
+          <div><dt>Started</dt><dd>{run.startedAt ? formatDateTime(run.startedAt) : 'Pending'}</dd></div>
+          <div><dt>Completed</dt><dd>{run.completedAt ? formatDateTime(run.completedAt) : 'Pending'}</dd></div>
         </dl>
         <div className="lab-actions">
           <button className="primary-button" type="button" disabled={isWorking || run.status === 'SUCCEEDED'} onClick={onRunNext}>
@@ -336,23 +513,25 @@ function RunDetail({
             <Square size={16} />
             Stop After Current Step
           </button>
-          <Link className="secondary-button" to={`/trace/${encodeURIComponent(run.businessIdentifier)}`}>
-            Business Trace
-          </Link>
+          <Link className="secondary-button" to={`/trace/${encodeURIComponent(run.businessIdentifier)}`}>Business Trace</Link>
         </div>
       </article>
 
       <section className="lab-lanes" aria-label="Integration path">
         {lanes.map((lane) => (
           <article className="panel" key={lane}>
-            <div className="panel-header">
-              <h2>{lane}</h2>
-            </div>
+            <div className="panel-header"><h2>{lane}</h2></div>
             <div className="compact-list">
               {run.steps
                 .filter((step) => step.sender === lane || step.receiver === lane)
                 .map((step) => (
-                  <StepCard key={step.id} step={step} isWorking={isWorking} onRunStep={onRunStep} />
+                  <StepCard
+                    key={step.id}
+                    step={step}
+                    isWorking={isWorking}
+                    canRun={step.stepKey === nextRunnableKey}
+                    onRunStep={onRunStep}
+                  />
                 ))}
             </div>
           </article>
@@ -361,51 +540,23 @@ function RunDetail({
 
       <section className="content-grid two-column">
         <article className="panel">
-          <div className="panel-header">
-            <h2>Apex Load Tender</h2>
-          </div>
+          <div className="panel-header"><h2>Apex Load Tender</h2></div>
           <dl className="definition-grid">
-            <div>
-              <dt>Load ID</dt>
-              <dd>{String(apexPayload.loadId ?? run.businessIdentifier)}</dd>
-            </div>
-            <div>
-              <dt>Equipment</dt>
-              <dd>{String(apexPayload.equipmentType ?? 'Pending')}</dd>
-            </div>
-            <div>
-              <dt>Pickup</dt>
-              <dd>{locationLine(asRecord(apexPayload.pickup))}</dd>
-            </div>
-            <div>
-              <dt>Delivery</dt>
-              <dd>{locationLine(asRecord(apexPayload.delivery))}</dd>
-            </div>
+            <div><dt>Load ID</dt><dd>{String(apexPayload.loadId ?? run.businessIdentifier)}</dd></div>
+            <div><dt>Equipment</dt><dd>{String(apexPayload.equipmentType ?? 'Pending')}</dd></div>
+            <div><dt>Pickup</dt><dd>{locationLine(asRecord(apexPayload.pickup))}</dd></div>
+            <div><dt>Delivery</dt><dd>{locationLine(asRecord(apexPayload.delivery))}</dd></div>
           </dl>
           <pre className="lab-preview" aria-label="Apex Load Tender JSON">{JSON.stringify(apexPayload, null, 2)}</pre>
         </article>
 
         <article className="panel">
-          <div className="panel-header">
-            <h2>Canonical Shipment</h2>
-          </div>
+          <div className="panel-header"><h2>Canonical Shipment</h2></div>
           <dl className="definition-grid">
-            <div>
-              <dt>Shipment</dt>
-              <dd>{String(canonicalShipment.shipmentNumber ?? run.businessIdentifier)}</dd>
-            </div>
-            <div>
-              <dt>Weight</dt>
-              <dd>{String(canonicalShipment.weightLbs ?? 'Pending')}</dd>
-            </div>
-            <div>
-              <dt>Pieces</dt>
-              <dd>{String(canonicalShipment.pieces ?? 'Pending')}</dd>
-            </div>
-            <div>
-              <dt>Commodity</dt>
-              <dd>{String(canonicalShipment.commodityDescription ?? 'Pending')}</dd>
-            </div>
+            <div><dt>Shipment</dt><dd>{String(canonicalShipment.shipmentNumber ?? run.businessIdentifier)}</dd></div>
+            <div><dt>Weight</dt><dd>{String(canonicalShipment.weightLbs ?? 'Pending')}</dd></div>
+            <div><dt>Pieces</dt><dd>{String(canonicalShipment.pieces ?? 'Pending')}</dd></div>
+            <div><dt>Commodity</dt><dd>{String(canonicalShipment.commodityDescription ?? 'Pending')}</dd></div>
           </dl>
           <pre className="lab-preview" aria-label="Canonical Shipment Summary">{JSON.stringify(canonicalShipment, null, 2)}</pre>
         </article>
@@ -413,9 +564,7 @@ function RunDetail({
 
       <section className="content-grid two-column">
         <article className="panel">
-          <div className="panel-header">
-            <h2>Midwest 204</h2>
-          </div>
+          <div className="panel-header"><h2>Midwest 204</h2></div>
           {preview ? (
             <>
               <dl className="definition-grid">
@@ -436,30 +585,13 @@ function RunDetail({
         </article>
 
         <article className="panel">
-          <div className="panel-header">
-            <h2>Transactions</h2>
-          </div>
-          {!transactions.length ? (
-            <EmptyBlock title="No transactions yet" />
-          ) : (
-            <div className="compact-list">
-              {transactions.map((transactionId) => (
-                <Link className="compact-row" key={transactionId} to={`/transactions/${transactionId}`}>
-                  <div>
-                    <strong>View Transaction</strong>
-                    <span>{transactionId}</span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
+          <div className="panel-header"><h2>Transactions</h2></div>
+          <StepTransactions run={run} />
         </article>
       </section>
 
       <article className="panel">
-        <div className="panel-header">
-          <h2>214 Progression</h2>
-        </div>
+        <div className="panel-header"><h2>214 Progression</h2></div>
         {!events.length ? (
           <EmptyBlock title="No shipment events received" />
         ) : (
@@ -481,9 +613,19 @@ function RunDetail({
   );
 }
 
-function StepCard({ step, isWorking, onRunStep }: { step: LabStep; isWorking: boolean; onRunStep: (step: LabStep) => void }) {
+function StepCard({
+  step,
+  isWorking,
+  canRun,
+  onRunStep,
+}: {
+  step: LabStep;
+  isWorking: boolean;
+  canRun: boolean;
+  onRunStep: (step: LabStep) => void;
+}) {
   const failed = step.status === 'FAILED';
-  const runnable = step.status === 'PENDING' || failed;
+  const runnable = (step.status === 'PENDING' || failed) && canRun;
 
   return (
     <div className="compact-row lab-step-card">
@@ -491,6 +633,7 @@ function StepCard({ step, isWorking, onRunStep }: { step: LabStep; isWorking: bo
         <strong>{step.displayName}</strong>
         <span>{step.sender} to {step.receiver} / {step.documentType} / {step.transport}</span>
         {step.errorCode && <span>{step.errorCode}: {step.safeMessage}</span>}
+        {!runnable && step.status === 'PENDING' && <span>Complete previous step first.</span>}
       </div>
       <div className="lab-step-actions">
         <StatusBadge value={step.status} />
@@ -501,6 +644,98 @@ function StepCard({ step, isWorking, onRunStep }: { step: LabStep; isWorking: bo
       </div>
     </div>
   );
+}
+
+function StepTransactions({ run }: { run: LabRun }) {
+  const rows = run.steps.filter((step) => step.relatedTransactionIds.length > 0);
+  if (!rows.length) return <EmptyBlock title="No transactions yet" />;
+  return (
+    <div className="compact-list">
+      {rows.map((step) => (
+        <div className="compact-row" key={step.id}>
+          <div>
+            <strong>{step.documentType}</strong>
+            <span>{step.displayName}</span>
+            {step.relatedTransactionIds.map((transactionId) => (
+              <Link key={transactionId} to={`/transactions/${transactionId}`}>View Transaction {transactionId.slice(0, 8)}</Link>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function toCreateRequest(form: LabFormState): LabRunCreateRequest {
+  const request: LabRunCreateRequest = {
+    scenarioKey: form.scenarioKey,
+    loadId: optionalText(form.loadId),
+    bolNumber: optionalText(form.bolNumber),
+    purchaseOrderNumber: optionalText(form.purchaseOrderNumber),
+    customerReference: optionalText(form.customerReference),
+    equipmentType: form.equipmentType,
+    weightLbs: optionalNumber(form.weightLbs),
+    pieces: optionalNumber(form.pieces),
+    commodityDescription: optionalText(form.commodityDescription),
+    pickup: {
+      facilityName: optionalText(form.pickupFacilityName),
+      address1: optionalText(form.pickupAddress1),
+      address2: optionalText(form.pickupAddress2),
+      city: optionalText(form.pickupCity),
+      state: optionalText(form.pickupState),
+      postalCode: optionalText(form.pickupPostalCode),
+      scheduledDateTime: optionalDateTime(form.pickupScheduledDateTime),
+    },
+    delivery: {
+      facilityName: optionalText(form.deliveryFacilityName),
+      address1: optionalText(form.deliveryAddress1),
+      address2: optionalText(form.deliveryAddress2),
+      city: optionalText(form.deliveryCity),
+      state: optionalText(form.deliveryState),
+      postalCode: optionalText(form.deliveryPostalCode),
+      scheduledDateTime: optionalDateTime(form.deliveryScheduledDateTime),
+    },
+  };
+  if (form.scenarioKey === 'TENDER_REJECTED') {
+    request.rejectionReasonCode = optionalText(form.rejectionReasonCode);
+    request.rejectionMessage = optionalText(form.rejectionMessage);
+  }
+  return stripUndefined(request) as LabRunCreateRequest;
+}
+
+function optionalText(value: string): string | undefined {
+  return value.trim() || undefined;
+}
+
+function optionalNumber(value: string): number | undefined {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function optionalDateTime(value: string): string | undefined {
+  return value ? new Date(value).toISOString() : undefined;
+}
+
+function stripUndefined(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripUndefined);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, item]) => item !== undefined)
+        .map(([key, item]) => [key, stripUndefined(item)]),
+    );
+  }
+  return value;
+}
+
+function nextRunnableStepKey(steps: LabStep[]): string | null {
+  const succeeded = new Set(steps.filter((step) => step.status === 'SUCCEEDED').map((step) => step.stepKey));
+  for (const step of steps) {
+    if (step.status !== 'PENDING' && step.status !== 'FAILED') continue;
+    const prior = steps.filter((candidate) => candidate.sequence < step.sequence);
+    if (prior.every((candidate) => succeeded.has(candidate.stepKey))) return step.stepKey;
+  }
+  return null;
 }
 
 function find204Preview(run: LabRun): Record<string, unknown> | null {
@@ -525,10 +760,6 @@ function findCanonicalShipment(run: LabRun): Record<string, unknown> {
   const fromSummary = asRecord(run.resultSummary.canonicalShipment);
   const fromDispatch = asRecord(find204Dispatch(run)?.canonicalShipment);
   return fromSummary ?? fromDispatch ?? {};
-}
-
-function transactionIds(run: LabRun): string[] {
-  return Array.from(new Set(run.steps.flatMap((step) => step.relatedTransactionIds)));
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

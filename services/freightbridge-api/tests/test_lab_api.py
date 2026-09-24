@@ -206,6 +206,181 @@ def test_lab_sftp_target_matching_requires_exact_filename() -> None:
   assert service._processed_file(response, 'missing.edi') is None
 
 
+def test_lab_freightbridge_poll_requires_target_archived_status() -> None:
+  service = IntegrationLabService(repository=None)  # type: ignore[arg-type]
+  run = lab_run_with_sftp_file('expected.edi')
+  service._poll_freightbridge_sftp = lambda correlation_id: {  # type: ignore[method-assign]
+    'processed': [{'fileName': 'expected.edi', 'status': 'ARCHIVED'}]
+  }
+
+  result = service._verified_freightbridge_poll(
+    run,
+    'corr',
+    expected_file_name='expected.edi',
+    document_type='997',
+    business_identifier='LAB900',
+  )
+
+  assert result['targetProcessed']['status'] == 'ARCHIVED'
+
+
+@pytest.mark.parametrize(
+  ('target_status', 'error_code'),
+  [
+    ('MOVED_TO_ERROR', 'LAB_SFTP_TARGET_PROCESSING_FAILED'),
+    ('LEFT_FOR_RETRY', 'LAB_SFTP_TARGET_RETRY_PENDING'),
+  ],
+)
+def test_lab_freightbridge_poll_rejects_unsuccessful_target_status(target_status: str, error_code: str) -> None:
+  service = IntegrationLabService(repository=None)  # type: ignore[arg-type]
+  run = lab_run_with_sftp_file('expected.edi')
+  service._poll_freightbridge_sftp = lambda correlation_id: {  # type: ignore[method-assign]
+    'processed': [{'fileName': 'expected.edi', 'status': target_status}]
+  }
+
+  with pytest.raises(LabExecutionError) as exc:
+    service._verified_freightbridge_poll(
+      run,
+      'corr',
+      expected_file_name='expected.edi',
+      document_type='997',
+      business_identifier='LAB900',
+    )
+
+  assert exc.value.code == error_code
+
+
+def test_lab_midwest_204_receive_requires_archived_target_and_ack() -> None:
+  service = IntegrationLabService(repository=None)  # type: ignore[arg-type]
+  run = lab_run_with_sftp_file('expected.edi')
+
+  result = service._verified_midwest_receive_204(
+    run,
+    {
+      'processed': [
+        {
+          'fileName': 'expected.edi',
+          'status': 'ARCHIVED',
+          'functionalAcknowledgmentDocumentId': 'ack-1',
+        }
+      ]
+    },
+  )
+
+  assert result['functionalAcknowledgmentDocumentId'] == 'ack-1'
+
+
+def test_lab_midwest_204_receive_rejects_target_moved_to_error() -> None:
+  service = IntegrationLabService(repository=None)  # type: ignore[arg-type]
+  run = lab_run_with_sftp_file('expected.edi')
+
+  with pytest.raises(LabExecutionError) as exc:
+    service._verified_midwest_receive_204(
+      run,
+      {
+        'processed': [
+          {
+            'fileName': 'expected.edi',
+            'status': 'MOVED_TO_ERROR',
+            'functionalAcknowledgmentDocumentId': 'ack-1',
+          }
+        ]
+      },
+    )
+
+  assert exc.value.code == 'LAB_SFTP_TARGET_PROCESSING_FAILED'
+
+
+def test_lab_unrelated_archived_file_does_not_succeed_without_specific_reconciliation() -> None:
+  service = IntegrationLabService(repository=None)  # type: ignore[arg-type]
+  run = lab_run_with_sftp_file('expected.edi')
+  service._poll_freightbridge_sftp = lambda correlation_id: {  # type: ignore[method-assign]
+    'processed': [{'fileName': 'unrelated.edi', 'status': 'ARCHIVED'}]
+  }
+  service._has_matching_functional_ack = lambda candidate: False  # type: ignore[method-assign]
+
+  with pytest.raises(LabExecutionError) as exc:
+    service._verified_freightbridge_poll(
+      run,
+      'corr',
+      expected_file_name='expected.edi',
+      document_type='997',
+      business_identifier='LAB900',
+    )
+
+  assert exc.value.code == 'LAB_SFTP_TARGET_FILE_NOT_FOUND'
+
+
+def test_lab_214_reconciliation_requires_matching_specific_event() -> None:
+  service = IntegrationLabService(repository=None)  # type: ignore[arg-type]
+  run = lab_run_with_214_create('IN_TRANSIT')
+  service.apex = FakeApexStatusClient(
+    [
+      {
+        'status': 'PICKED_UP',
+        'occurredAt': '2026-09-25T15:00:00+00:00',
+        'city': 'Aurora',
+        'state': 'IL',
+      }
+    ]
+  )
+
+  assert service._has_matching_shipment_status(run, 'IN_TRANSIT') is False
+
+  service.apex = FakeApexStatusClient(
+    [
+      {
+        'status': 'IN_TRANSIT',
+        'occurredAt': '2026-09-25T23:00:00+00:00',
+        'city': 'South Bend',
+        'state': 'IN',
+      }
+    ]
+  )
+
+  assert service._has_matching_shipment_status(run, 'IN_TRANSIT') is True
+
+
+def test_lab_990_reconciliation_requires_expected_tender_outcome() -> None:
+  service = IntegrationLabService(repository=None)  # type: ignore[arg-type]
+  run = lab_run_with_sftp_file('expected.edi', scenario_key='TENDER_REJECTED')
+  service.apex = FakeApexTenderClient('ACCEPTED')
+
+  assert service._has_expected_tender_outcome(run) is False
+
+  service.apex = FakeApexTenderClient('REJECTED')
+
+  assert service._has_expected_tender_outcome(run) is True
+
+
+def test_lab_997_reconciliation_requires_matching_204_controls(monkeypatch) -> None:
+  service = IntegrationLabService(repository=None)  # type: ignore[arg-type]
+  run = lab_run_with_sftp_file('expected.edi')
+
+  class FakeIntegrationRepository:
+    def __init__(self, connection) -> None:
+      pass
+
+    def fetch_latest_functional_acknowledgment_for_shipment(self, shipment_number: str):
+      return {
+        'acknowledged_group_control_number': 'DIFFERENT',
+        'acknowledged_transaction_control_number': '0009',
+        'status': 'ACCEPTED',
+      }
+
+  class FakeConnection:
+    def __enter__(self):
+      return self
+
+    def __exit__(self, exc_type, exc, tb):
+      return None
+
+  monkeypatch.setattr('app.integrations.lab.connect', lambda: FakeConnection())
+  monkeypatch.setattr('app.integrations.lab.IntegrationRepository', FakeIntegrationRepository)
+
+  assert service._has_matching_functional_ack(run) is False
+
+
 def test_lab_running_step_returns_deterministic_conflict() -> None:
   app.dependency_overrides[get_lab_service] = lambda: FakeLabService(in_progress=True)
 
@@ -216,6 +391,59 @@ def test_lab_running_step_returns_deterministic_conflict() -> None:
 
   assert response.status_code == 409
   assert response.json()['detail']['error']['code'] == 'LAB_STEP_IN_PROGRESS'
+
+
+def lab_run_with_sftp_file(file_name: str, *, scenario_key: str = 'FULL_SHIPMENT_LIFECYCLE') -> dict[str, object]:
+  return {
+    **lab_run(status='RUNNING'),
+    'scenario_key': scenario_key,
+    'steps': [
+      {
+        **lab_step(step_key='DISPATCH_204_SFTP', status='SUCCEEDED'),
+        'response_summary': {
+          'fileName': file_name,
+          'x12Preview': {
+            'groupControlNumber': '901',
+            'transactionControlNumber': '0001',
+          },
+        },
+      }
+    ],
+  }
+
+
+def lab_run_with_214_create(status: str) -> dict[str, object]:
+  return {
+    **lab_run(status='RUNNING'),
+    'steps': [
+      {
+        **lab_step(step_key=f'CREATE_214_{status}', status='SUCCEEDED'),
+        'response_summary': {
+          'eventId': 'event-1',
+          'status': status,
+          'occurredAt': '2026-09-25T23:00:00+00:00',
+          'city': 'South Bend',
+          'state': 'IN',
+        },
+      }
+    ],
+  }
+
+
+class FakeApexStatusClient:
+  def __init__(self, events: list[dict[str, object]]) -> None:
+    self.events = events
+
+  def get(self, path: str) -> dict[str, object]:
+    return {'events': self.events, 'currentStatus': self.events[-1]['status'] if self.events else 'PLANNED'}
+
+
+class FakeApexTenderClient:
+  def __init__(self, decision: str) -> None:
+    self.decision = decision
+
+  def get(self, path: str) -> dict[str, object]:
+    return {'currentTenderDecision': self.decision}
 
 
 class FakeLabService:

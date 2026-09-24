@@ -3,7 +3,9 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
+import re
 import sys
+import time
 from typing import Any
 
 if __package__ in (None, ''):
@@ -70,13 +72,19 @@ class Milestone18Acceptance:
 
         page.get_by_role('link', name='Integration Lab').first.click()
         expect(page.get_by_test_id('integration-lab-page')).to_be_visible(timeout=20000)
+        for label in ('FreightBridge', 'Apex Simulator', 'Midwest Simulator', 'Midwest SFTP', 'Ready'):
+          expect_text(page, label)
         page.get_by_label('Scenario').select_option('FULL_SHIPMENT_LIFECYCLE')
         page.get_by_label('Load ID').fill(self.load_id)
         page.get_by_role('button', name='Create Run').click()
         expect(page.get_by_test_id('lab-run-detail')).to_be_visible(timeout=20000)
+        run_id = page.url.split('/lab/runs/')[-1].split('?')[0].split('#')[-1]
+        assert_truth(bool(run_id), 'Analyst UI Integration Lab flow', 'Lab run ID could not be captured from browser URL.')
         expect_text(page, self.load_id)
         page.get_by_role('button', name='Run Step').first.click()
+        self._wait_for_lab_step(run_id, 'CREATE_APEX_LOAD', 'SUCCEEDED')
         expect_text(page, 'Create Apex load')
+        expect_text(page, 'Complete previous step first')
         page.get_by_role('button', name='Run All Remaining').click()
         expect_text(page, 'SUCCEEDED', timeout=180000)
         for required in (
@@ -101,17 +109,49 @@ class Milestone18Acceptance:
           'IN_TRANSIT',
           'ARRIVED',
           'DELIVERED',
+          'Synthetic Integration Test',
+          'Started',
         ):
           expect_text(page, required, timeout=30000)
+        page.get_by_role('link', name=re.compile(r'View Transaction')).first.click()
+        expect(page.get_by_test_id('transaction-detail-page')).to_be_visible(timeout=30000)
+        expect_text(page, self.load_id)
+        page.goto(f'{self.analyst_ui_base_url}/#/lab/runs/{run_id}', wait_until='domcontentloaded')
+        expect(page.get_by_test_id('lab-run-detail')).to_be_visible(timeout=30000)
+        page.get_by_role('link', name='CANONICAL_TO_MWCX_204').first.click()
+        expect(page.get_by_test_id('mapping-detail-page')).to_be_visible(timeout=30000)
+        expect_text(page, 'CANONICAL_TO_MWCX_204')
+        page.goto(f'{self.analyst_ui_base_url}/#/lab', wait_until='domcontentloaded')
+        expect(page.get_by_test_id('integration-lab-page')).to_be_visible(timeout=30000)
+        expect_text(page, self.load_id, timeout=30000)
+        page.get_by_role('link', name=self.load_id).first.click()
+        expect(page.get_by_test_id('lab-run-detail')).to_be_visible(timeout=30000)
+        assert_truth(
+          f'/lab/runs/{run_id}' in page.url,
+          'Analyst UI Integration Lab flow',
+          'Recent Lab run did not navigate to the run detail URL.',
+        )
         page.get_by_role('link', name='Business Trace').click()
         expect(page.get_by_test_id('trace-detail-page')).to_be_visible(timeout=30000)
         for document_type in ('APEX_LOAD_TENDER', '204', '997', '990', '214'):
           expect_text(page, document_type, timeout=30000)
         page.get_by_role('link', name='Integration Lab').first.click()
         expect_text(page, self.load_id, timeout=30000)
-        return {'load_id': self.load_id}
+        return {'load_id': self.load_id, 'run_id': run_id}
       finally:
         browser.close()
+
+  def _wait_for_lab_step(self, run_id: str, step_key: str, expected_status: str) -> dict[str, Any]:
+    step_name = f'Wait for Lab step {step_key}'
+    last_run: dict[str, Any] | None = None
+    for _ in range(60):
+      run = self.freightbridge.get(f'/api/lab/runs/{run_id}', token=self.operations_token, step=step_name)
+      last_run = run
+      step = next((item for item in run.get('steps', []) if item.get('stepKey') == step_key), None)
+      if isinstance(step, dict) and step.get('status') == expected_status:
+        return step
+      time.sleep(2)
+    raise AcceptanceFailure(step_name, f'{step_key} did not reach {expected_status}.', response_body=last_run)
 
   def _verify_trace(self) -> dict[str, Any]:
     body = self.freightbridge.get(
@@ -122,6 +162,8 @@ class Milestone18Acceptance:
     document_types = {transaction.get('documentType') for transaction in body.get('transactions', [])}
     for expected in ('APEX_LOAD_TENDER', '204', '997', '990', '214'):
       assert_truth(expected in document_types, 'Verify Integration Lab business trace', f'Missing {expected} transaction.')
+    shipment_events = [transaction for transaction in body.get('transactions', []) if transaction.get('documentType') == '214']
+    assert_truth(len(shipment_events) >= 4, 'Verify Integration Lab business trace', 'Business trace did not include at least four 214 shipment-status transactions.')
     return body
 
   def _verify_history(self) -> dict[str, Any]:
