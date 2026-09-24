@@ -55,6 +55,8 @@ Operations endpoints are exposed under `/api/operations`. They return safe trans
 
 Configuration endpoints are exposed under `/api/configuration` and use the same `OPERATIONS_API_BEARER_TOKEN`. They return safe partner metadata, capabilities, mapping profiles, mapping rules, and configuration change history. They do not expose partner bearer tokens, SSH keys, private keys, database URLs, or arbitrary connection-secret editors.
 
+Integration Lab endpoints are exposed under `/api/lab` and use the same operations bearer token. They create synthetic scenario runs and execute the real implemented Apex/FreightBridge/Midwest paths from the backend. The browser never receives Apex simulator tokens, Midwest simulator tokens, inbound partner tokens, SFTP keys, database URLs, or Supabase secrets.
+
 ## Expected Message Flows
 
 Current implemented flow:
@@ -70,6 +72,8 @@ Current implemented flow:
 9. FreightBridge transforms the tender decision and forwards JSON to Apex.
 10. Midwest later sends 214 shipment statuses over SFTP.
 11. FreightBridge appends canonical ShipmentEvent history, updates current status using canonical progression, and forwards JSON to Apex.
+
+The Integration Lab can execute this path as controlled scenarios. `TECHNICAL_ACK_ONLY` stops after the 997, `TENDER_ACCEPTED` and `TENDER_REJECTED` stop after the business 990, and `FULL_SHIPMENT_LIFECYCLE` completes the 214 progression.
 
 ## Synchronous vs. Asynchronous Behavior
 

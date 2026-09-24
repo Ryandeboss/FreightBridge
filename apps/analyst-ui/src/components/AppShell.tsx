@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, BarChart3, GitBranch, Handshake, Lock, Route, Search, ShieldCheck } from 'lucide-react';
+import { Activity, AlertTriangle, BarChart3, Beaker, GitBranch, Handshake, Lock, Route, Search, ShieldCheck } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { fetchSystemStatus, type SystemStatus } from '../api/health';
@@ -9,6 +9,7 @@ const navItems = [
   { to: '/transactions', label: 'Transactions', icon: Activity },
   { to: '/failures', label: 'Failures', icon: AlertTriangle },
   { to: '/trace', label: 'Business Trace', icon: Route },
+  { to: '/lab', label: 'Integration Lab', icon: Beaker },
   { to: '/partners', label: 'Partners', icon: Handshake },
   { to: '/mappings', label: 'Mappings', icon: GitBranch },
 ];

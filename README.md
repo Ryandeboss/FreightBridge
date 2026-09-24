@@ -1,6 +1,6 @@
 # FreightBridge
 
-FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current state includes the FreightBridge foundation, independent Apex and Midwest simulators, Apex-to-FreightBridge canonical shipment ingestion, a generic X12 structural foundation, Midwest 204 generation/direct delivery, Midwest 997 functional acknowledgment processing, Midwest 990 tender-response return processing, Midwest 214 shipment-status processing, operations transaction/error observability APIs, a protected Analyst Console UI, versioned partner/mapping configuration management, and a real Railway/SFTPGo SFTP exchange path for Midwest files.
+FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current state includes the FreightBridge foundation, independent Apex and Midwest simulators, Apex-to-FreightBridge canonical shipment ingestion, a generic X12 structural foundation, Midwest 204 generation/direct delivery, Midwest 997 functional acknowledgment processing, Midwest 990 tender-response return processing, Midwest 214 shipment-status processing, operations transaction/error observability APIs, a protected Analyst Console UI, versioned partner/mapping configuration management, an Analyst Integration Lab, and a real Railway/SFTPGo SFTP exchange path for Midwest files.
 
 ## Planned Architecture
 
@@ -43,7 +43,7 @@ FreightBridge
   [stores technical acks; forwards business tender/status updates to Apex]
 ```
 
-Operations support can inspect the same transaction/log/error records through secured `/api/operations` endpoints and the protected Analyst Console. Partner capabilities and mapping profiles are managed through `/api/configuration` and the same console token. See [Operational observability and failure queue](docs/operations/observability-and-failure-queue.md), [Idempotency, replay, and manual retry](docs/operations/idempotency-and-retry.md), [Trading partner configuration](docs/operations/trading-partner-configuration.md), [Mapping change control](docs/operations/mapping-change-control.md), and [Analyst Console](docs/operations/analyst-console.md).
+Operations support can inspect the same transaction/log/error records through secured `/api/operations` endpoints and the protected Analyst Console. Partner capabilities and mapping profiles are managed through `/api/configuration` and the same console token. The Integration Lab uses `/api/lab` to create and execute controlled end-to-end scenarios without exposing partner credentials to the browser. See [Operational observability and failure queue](docs/operations/observability-and-failure-queue.md), [Idempotency, replay, and manual retry](docs/operations/idempotency-and-retry.md), [Trading partner configuration](docs/operations/trading-partner-configuration.md), [Mapping change control](docs/operations/mapping-change-control.md), [Integration Lab](docs/operations/integration-lab.md), and [Analyst Console](docs/operations/analyst-console.md).
 
 See [docs/architecture/initial-architecture.md](docs/architecture/initial-architecture.md) for the first architecture diagram.
 
@@ -146,6 +146,12 @@ Milestone 17 acceptance verifies deployed partner/mapping configuration APIs, ma
 
 ```bash
 python scripts/acceptance/milestone17.py
+```
+
+Milestone 18 acceptance verifies the deployed Integration Lab full-lifecycle browser workflow:
+
+```bash
+python scripts/acceptance/milestone18.py
 ```
 
 See [deployed acceptance harness](docs/testing/deployed-acceptance-harness.md) for required environment variables, GitHub Actions secrets, optional DB verification, and failure reporting. Postman collections remain available for individual route debugging.

@@ -1,0 +1,102 @@
+from datetime import datetime
+from typing import Literal
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+RunStatus = Literal['READY', 'RUNNING', 'SUCCEEDED', 'FAILED']
+StepStatus = Literal['PENDING', 'RUNNING', 'SUCCEEDED', 'FAILED', 'SKIPPED']
+
+
+class LabModel(BaseModel):
+  model_config = ConfigDict(populate_by_name=True)
+
+
+class LabLocationInput(LabModel):
+  facility_name: str | None = Field(default=None, alias='facilityName', max_length=120)
+  address_line_1: str | None = Field(default=None, alias='addressLine1', max_length=160)
+  city: str | None = Field(default=None, max_length=80)
+  state: str | None = Field(default=None, min_length=2, max_length=2)
+  postal_code: str | None = Field(default=None, alias='postalCode', max_length=20)
+  scheduled_date_time: datetime | None = Field(default=None, alias='scheduledDateTime')
+
+
+class CreateLabRunRequest(LabModel):
+  scenario_key: str = Field(alias='scenarioKey', min_length=1, max_length=80)
+  load_id: str | None = Field(default=None, alias='loadId', min_length=6, max_length=30)
+  equipment_type: str | None = Field(default='VAN_53', alias='equipmentType')
+  weight_lbs: int | None = Field(default=42000, alias='weightLbs', gt=0)
+  pieces: int | None = Field(default=24, gt=0)
+  commodity_description: str | None = Field(default='Synthetic consumer goods', alias='commodityDescription')
+  bol_number: str | None = Field(default=None, alias='bolNumber', min_length=3, max_length=40)
+  purchase_order_number: str | None = Field(default=None, alias='purchaseOrderNumber', min_length=3, max_length=40)
+  customer_reference: str | None = Field(default=None, alias='customerReference', max_length=80)
+  pickup: LabLocationInput | None = None
+  delivery: LabLocationInput | None = None
+  rejection_reason_code: str | None = Field(default='CAPACITY', alias='rejectionReasonCode', max_length=40)
+  rejection_message: str | None = Field(default='Synthetic carrier rejection.', alias='rejectionMessage', max_length=240)
+
+
+class LabScenarioView(LabModel):
+  scenario_key: str = Field(alias='scenarioKey')
+  name: str
+  description: str
+  step_count: int = Field(alias='stepCount')
+
+
+class LabStepView(LabModel):
+  id: UUID
+  run_id: UUID = Field(alias='runId')
+  step_key: str = Field(alias='stepKey')
+  sequence: int
+  display_name: str = Field(alias='displayName')
+  sender: str
+  receiver: str
+  transport: str
+  message_format: str = Field(alias='messageFormat')
+  document_type: str = Field(alias='documentType')
+  status: StepStatus
+  attempt_count: int = Field(alias='attemptCount')
+  request_summary: dict[str, object] = Field(alias='requestSummary')
+  response_summary: dict[str, object] = Field(alias='responseSummary')
+  related_transaction_ids: list[str] = Field(alias='relatedTransactionIds')
+  error_code: str | None = Field(alias='errorCode')
+  safe_message: str | None = Field(alias='safeMessage')
+  created_at: datetime = Field(alias='createdAt')
+  updated_at: datetime = Field(alias='updatedAt')
+  started_at: datetime | None = Field(alias='startedAt')
+  completed_at: datetime | None = Field(alias='completedAt')
+
+
+class LabRunView(LabModel):
+  id: UUID
+  scenario_key: str = Field(alias='scenarioKey')
+  business_identifier: str = Field(alias='businessIdentifier')
+  status: RunStatus
+  input_snapshot: dict[str, object] = Field(alias='inputSnapshot')
+  result_summary: dict[str, object] = Field(alias='resultSummary')
+  created_at: datetime = Field(alias='createdAt')
+  updated_at: datetime = Field(alias='updatedAt')
+  started_at: datetime | None = Field(alias='startedAt')
+  completed_at: datetime | None = Field(alias='completedAt')
+  steps: list[LabStepView] = Field(default_factory=list)
+
+
+class LabRunListResponse(LabModel):
+  limit: int
+  offset: int
+  count: int
+  runs: list[LabRunView]
+
+
+class LabReadinessResponse(LabModel):
+  status: str
+  scenarios: list[LabScenarioView]
+  dependencies: dict[str, object]
+
+
+class LabStepExecutionResponse(LabModel):
+  run: LabRunView
+  step: LabStepView | None = None
+  already_completed: bool = Field(default=False, alias='alreadyCompleted')

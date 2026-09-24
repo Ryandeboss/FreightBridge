@@ -1,0 +1,173 @@
+from __future__ import annotations
+
+import argparse
+import os
+from pathlib import Path
+import sys
+from typing import Any
+
+if __package__ in (None, ''):
+  sys.path.append(str(Path(__file__).resolve().parents[2]))
+
+from scripts.acceptance.common import (  # noqa: E402
+  AcceptanceConfig,
+  AcceptanceFailure,
+  SafeHttpClient,
+  StepRecorder,
+  assert_truth,
+  generate_load_id,
+  print_required_env,
+)
+
+
+class Milestone18Acceptance:
+  def __init__(self, *, config: AcceptanceConfig, analyst_ui_base_url: str, load_id: str, recorder: StepRecorder) -> None:
+    if not config.operations_bearer_token:
+      raise AcceptanceFailure('Load configuration', 'OPERATIONS_API_BEARER_TOKEN is required for Milestone 18.')
+    if not analyst_ui_base_url:
+      raise AcceptanceFailure('Load configuration', 'ANALYST_UI_BASE_URL is required for Milestone 18.')
+    self.config = config
+    self.analyst_ui_base_url = analyst_ui_base_url.rstrip('/')
+    self.load_id = load_id
+    self.recorder = recorder
+    self.freightbridge = SafeHttpClient(name='FreightBridge', base_url=config.freightbridge_base_url, verbose=recorder.verbose)
+
+  def close(self) -> None:
+    self.freightbridge.close()
+
+  @property
+  def operations_token(self) -> str:
+    return self.config.operations_bearer_token or ''
+
+  def run(self) -> int:
+    print('FreightBridge Milestone 18 Deployed Acceptance')
+    print(f'Load: {self.load_id}')
+    print('')
+    self.recorder.run('Integration Lab API readiness', self._readiness)
+    self.recorder.run('Analyst UI Integration Lab flow', self._run_browser_flow)
+    self.recorder.run('Verify Integration Lab business trace', self._verify_trace)
+    self.recorder.run('Verify Integration Lab history', self._verify_history)
+    return self.recorder.finish()
+
+  def _readiness(self) -> dict[str, Any]:
+    body = self.freightbridge.get('/api/lab/readiness', token=self.operations_token, step='Integration Lab API readiness')
+    keys = {scenario.get('scenarioKey') for scenario in body.get('scenarios', [])}
+    assert_truth('FULL_SHIPMENT_LIFECYCLE' in keys, 'Integration Lab API readiness', 'Full lifecycle scenario is missing.')
+    assert_truth('secret' not in str(body).lower(), 'Integration Lab API readiness', 'Readiness exposed secret-like content.')
+    return body
+
+  def _run_browser_flow(self) -> dict[str, Any]:
+    from playwright.sync_api import expect, sync_playwright
+
+    with sync_playwright() as playwright:
+      browser = playwright.chromium.launch(headless=True)
+      try:
+        page = browser.new_page()
+        page.goto(self.analyst_ui_base_url, wait_until='domcontentloaded')
+        page.get_by_label('Operations bearer token').fill(self.operations_token)
+        page.get_by_role('button', name='Unlock Console').click()
+        expect(page.get_by_test_id('dashboard-page')).to_be_visible(timeout=20000)
+
+        page.get_by_role('link', name='Integration Lab').first.click()
+        expect(page.get_by_test_id('integration-lab-page')).to_be_visible(timeout=20000)
+        page.get_by_label('Scenario').select_option('FULL_SHIPMENT_LIFECYCLE')
+        page.get_by_label('Load ID').fill(self.load_id)
+        page.get_by_role('button', name='Create Run').click()
+        expect(page.get_by_test_id('lab-run-detail')).to_be_visible(timeout=20000)
+        expect_text(page, self.load_id)
+        page.get_by_role('button', name='Run Step').first.click()
+        expect_text(page, 'Create Apex load')
+        page.get_by_role('button', name='Run All Remaining').click()
+        expect_text(page, 'SUCCEEDED', timeout=180000)
+        for required in (
+          'Midwest 204 Preview',
+          'ISA13',
+          'GS06',
+          'ST02',
+          '997 Technical Ack',
+          '990 Business Response',
+          'ACCEPTED',
+          'DELIVERED',
+          'PICKED_UP',
+          'IN_TRANSIT',
+          'ARRIVED',
+          'DELIVERED',
+        ):
+          expect_text(page, required, timeout=30000)
+        page.get_by_role('link', name='Business Trace').click()
+        expect(page.get_by_test_id('trace-detail-page')).to_be_visible(timeout=30000)
+        for document_type in ('APEX_LOAD_TENDER', '204', '997', '990', '214'):
+          expect_text(page, document_type, timeout=30000)
+        page.get_by_role('link', name='Integration Lab').first.click()
+        expect_text(page, self.load_id, timeout=30000)
+        return {'load_id': self.load_id}
+      finally:
+        browser.close()
+
+  def _verify_trace(self) -> dict[str, Any]:
+    body = self.freightbridge.get(
+      f'/api/operations/business/{self.load_id}/trace',
+      token=self.operations_token,
+      step='Verify Integration Lab business trace',
+    )
+    document_types = {transaction.get('documentType') for transaction in body.get('transactions', [])}
+    for expected in ('APEX_LOAD_TENDER', '204', '997', '990', '214'):
+      assert_truth(expected in document_types, 'Verify Integration Lab business trace', f'Missing {expected} transaction.')
+    return body
+
+  def _verify_history(self) -> dict[str, Any]:
+    body = self.freightbridge.get(
+      f'/api/lab/runs?businessIdentifier={self.load_id}&limit=10',
+      token=self.operations_token,
+      step='Verify Integration Lab history',
+    )
+    runs = body.get('runs') or []
+    assert_truth(any(run.get('businessIdentifier') == self.load_id for run in runs), 'Verify Integration Lab history', 'Run history does not include the created Lab run.')
+    return body
+
+
+def expect_text(page: Any, text: str, *, timeout: int = 15000) -> None:
+  from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
+  try:
+    page.get_by_text(text, exact=False).first.wait_for(timeout=timeout)
+  except PlaywrightTimeoutError as exc:
+    raise AcceptanceFailure('Analyst UI Integration Lab flow', f'Missing UI text: {text}') from exc
+
+
+def parse_args() -> argparse.Namespace:
+  parser = argparse.ArgumentParser(description='Run FreightBridge Milestone 18 deployed acceptance.')
+  parser.add_argument('--load-id', default=None)
+  parser.add_argument('--verbose', action='store_true')
+  parser.add_argument('--keep-going', action='store_true')
+  parser.add_argument('--print-required-env', action='store_true')
+  return parser.parse_args()
+
+
+def main() -> int:
+  args = parse_args()
+  if args.print_required_env:
+    print_required_env()
+    return 0
+  try:
+    config = AcceptanceConfig.from_env()
+    recorder = StepRecorder(keep_going=args.keep_going, verbose=args.verbose)
+    acceptance = Milestone18Acceptance(
+      config=config,
+      analyst_ui_base_url=os.environ.get('ANALYST_UI_BASE_URL', ''),
+      load_id=args.load_id or generate_load_id(),
+      recorder=recorder,
+    )
+    try:
+      return acceptance.run()
+    finally:
+      acceptance.close()
+  except AcceptanceFailure as exc:
+    print(exc.format())
+    print('')
+    print('RESULT: FAIL')
+    return 1
+
+
+if __name__ == '__main__':
+  raise SystemExit(main())

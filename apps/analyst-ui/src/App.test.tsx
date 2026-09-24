@@ -208,6 +208,110 @@ const abandonedDraftMapping = {
   status: 'ABANDONED',
 };
 
+const labRun = {
+  id: '99999999-9999-4999-8999-999999999999',
+  scenarioKey: 'FULL_SHIPMENT_LIFECYCLE',
+  businessIdentifier: 'LAB900',
+  status: 'READY',
+  inputSnapshot: {
+    loadId: 'LAB900',
+    bolNumber: 'BOLLAB900',
+    purchaseOrderNumber: 'POLAB900',
+    equipmentType: 'VAN_53',
+  },
+  resultSummary: {
+    technicalAcknowledgment: 'PENDING',
+    tenderStatus: 'PENDING',
+    shipmentStatus: 'PENDING',
+    shipmentEvents: [],
+  },
+  createdAt: '2026-09-24T15:00:00Z',
+  updatedAt: '2026-09-24T15:00:00Z',
+  startedAt: null,
+  completedAt: null,
+  steps: [
+    {
+      id: 'step-1',
+      runId: '99999999-9999-4999-8999-999999999999',
+      stepKey: 'CREATE_APEX_LOAD',
+      sequence: 1,
+      displayName: 'Create Apex load',
+      sender: 'Analyst',
+      receiver: 'Apex Logistics',
+      transport: 'REST',
+      messageFormat: 'JSON',
+      documentType: 'APEX_LOAD_TENDER',
+      status: 'PENDING',
+      attemptCount: 0,
+      requestSummary: {},
+      responseSummary: {},
+      relatedTransactionIds: [],
+      errorCode: null,
+      safeMessage: null,
+      createdAt: '2026-09-24T15:00:00Z',
+      updatedAt: '2026-09-24T15:00:00Z',
+      startedAt: null,
+      completedAt: null,
+    },
+    {
+      id: 'step-2',
+      runId: '99999999-9999-4999-8999-999999999999',
+      stepKey: 'DISPATCH_204_SFTP',
+      sequence: 2,
+      displayName: 'Dispatch Midwest 204',
+      sender: 'FreightBridge',
+      receiver: 'Midwest Carrier',
+      transport: 'SFTP',
+      messageFormat: 'X12',
+      documentType: '204',
+      status: 'PENDING',
+      attemptCount: 0,
+      requestSummary: {},
+      responseSummary: {},
+      relatedTransactionIds: [],
+      errorCode: null,
+      safeMessage: null,
+      createdAt: '2026-09-24T15:00:00Z',
+      updatedAt: '2026-09-24T15:00:00Z',
+      startedAt: null,
+      completedAt: null,
+    },
+  ],
+};
+
+const completedLabRun = {
+  ...labRun,
+  status: 'SUCCEEDED',
+  resultSummary: {
+    technicalAcknowledgment: 'RECEIVED',
+    tenderStatus: 'ACCEPTED',
+    shipmentStatus: 'DELIVERED',
+    shipmentEvents: [
+      { status: 'PICKED_UP', occurredAt: '2026-09-24T16:00:00Z', city: 'Aurora', state: 'IL' },
+      { status: 'DELIVERED', occurredAt: '2026-09-25T16:00:00Z', city: 'Detroit', state: 'MI' },
+    ],
+  },
+  completedAt: '2026-09-24T15:15:00Z',
+  steps: labRun.steps.map((step, index) => ({
+    ...step,
+    status: 'SUCCEEDED',
+    attemptCount: 1,
+    relatedTransactionIds: index === 1 ? [transactionId] : [],
+    responseSummary: index === 1
+      ? {
+          fileName: 'MW204_000000901.edi',
+          x12Preview: {
+            interchangeControlNumber: '000000901',
+            groupControlNumber: '901',
+            transactionControlNumber: '0001',
+            mappingSpecVersion: '1',
+            x12: 'ISA*00*          *00*          *ZZ*FREIGHTBRIDGE   *ZZ*MWCX           *260924*1500*U*00401*000000901*0*T*:~GS*SM*FREIGHTBRIDGE*MWCX*20260924*1500*901*X*004010~ST*204*0001~SE*3*0001~GE*1*901~IEA*1*000000901~',
+          },
+        }
+      : { status: 'ACCEPTED_FOR_PROCESSING' },
+  })),
+};
+
 function jsonResponse(payload: unknown, status = 200) {
   return Promise.resolve(
     new Response(JSON.stringify(payload), {
@@ -219,6 +323,7 @@ function jsonResponse(payload: unknown, status = 200) {
 
 function installFetchMock() {
   let currentDraftMapping: Record<string, unknown> = draftMapping;
+  let currentLabRun: Record<string, unknown> = labRun;
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     const path = url.pathname;
@@ -226,7 +331,10 @@ function installFetchMock() {
       ? init.headers.get('Authorization')
       : (init?.headers as Record<string, string> | undefined)?.Authorization;
 
-    if ((path.startsWith('/api/operations') || path.startsWith('/api/configuration')) && auth !== `Bearer ${token}`) {
+    if (
+      (path.startsWith('/api/operations') || path.startsWith('/api/configuration') || path.startsWith('/api/lab'))
+      && auth !== `Bearer ${token}`
+    ) {
       return jsonResponse(
         { detail: { error: { code: 'AUTHENTICATION_ERROR', message: 'Missing or invalid operations bearer token.' } } },
         401,
@@ -438,6 +546,57 @@ function installFetchMock() {
           },
         ],
       });
+    }
+
+    if (path === '/api/lab/readiness') {
+      return jsonResponse({
+        status: 'ready',
+        dependencies: {
+          apexSimulatorConfigured: true,
+          midwestSimulatorConfigured: true,
+          sftpConfigured: true,
+        },
+        scenarios: [
+          {
+            scenarioKey: 'FULL_SHIPMENT_LIFECYCLE',
+            name: 'Full shipment lifecycle',
+            description: 'Accepted tender plus picked up, in transit, arrived, and delivered 214 updates.',
+            stepCount: 21,
+          },
+          {
+            scenarioKey: 'TECHNICAL_ACK_ONLY',
+            name: 'Technical acknowledgment only',
+            description: 'Apex tender through Midwest 204 and 997 technical acknowledgment.',
+            stepCount: 6,
+          },
+        ],
+      });
+    }
+
+    if (path === '/api/lab/runs') {
+      if (init?.method === 'POST') {
+        currentLabRun = labRun;
+        return jsonResponse(currentLabRun, 201);
+      }
+      return jsonResponse({ limit: 12, offset: 0, count: 1, runs: [currentLabRun] });
+    }
+
+    if (path === `/api/lab/runs/${labRun.id}`) {
+      return jsonResponse(currentLabRun);
+    }
+
+    if (path === `/api/lab/runs/${labRun.id}/run-next`) {
+      currentLabRun = completedLabRun;
+      return jsonResponse({ run: currentLabRun, step: completedLabRun.steps[1], alreadyCompleted: false });
+    }
+
+    if (path === `/api/lab/runs/${labRun.id}/steps/CREATE_APEX_LOAD/execute`) {
+      currentLabRun = {
+        ...labRun,
+        status: 'RUNNING',
+        steps: labRun.steps.map((step, index) => index === 0 ? { ...step, status: 'SUCCEEDED', attemptCount: 1 } : step),
+      };
+      return jsonResponse({ run: currentLabRun, step: (currentLabRun.steps as unknown[])[0], alreadyCompleted: false });
     }
 
     return jsonResponse({ message: `Unhandled ${path}` }, 404);
@@ -686,6 +845,41 @@ describe('Analyst Console', () => {
         expect.objectContaining({ method: 'POST' }),
       );
     });
+  });
+
+  test('runs an Integration Lab scenario with real workflow controls and read-only previews', async () => {
+    const fetchMock = installFetchMock();
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/lab';
+    render(<App />);
+
+    expect(await screen.findByTestId('integration-lab-page')).toBeInTheDocument();
+    expect(screen.getByText(/Full shipment lifecycle/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Integration Lab/i).length).toBeGreaterThan(0);
+    await userEvent.click(screen.getByRole('button', { name: /create run/i }));
+    expect(await screen.findByTestId('lab-run-detail')).toBeInTheDocument();
+    expect(screen.getAllByText(/LAB900/i).length).toBeGreaterThan(0);
+    await userEvent.click(screen.getAllByRole('button', { name: /run step/i })[0]);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/api/lab/runs/99999999-9999-4999-8999-999999999999/steps/CREATE_APEX_LOAD/execute'),
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /run next step/i }));
+    expect((await screen.findAllByText(/RECEIVED/i)).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/ACCEPTED/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/DELIVERED/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/997 Technical Ack/i)).toBeInTheDocument();
+    expect(screen.getByText(/990 Business Response/i)).toBeInTheDocument();
+    expect(screen.getByText(/ISA13/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/000000901/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/MW204_000000901.edi/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/PICKED_UP/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: /Business Trace/i }).length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText(/bearer token/i)).not.toBeInTheDocument();
   });
 
   test('transaction detail links to the mapping profile that processed it', async () => {

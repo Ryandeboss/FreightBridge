@@ -6,6 +6,7 @@ import { BusinessTraceDetailPage, TraceSearchPage } from './pages/BusinessTraceP
 import { DashboardPage } from './pages/DashboardPage';
 import { FailureDetailPage } from './pages/FailureDetailPage';
 import { FailuresPage } from './pages/FailuresPage';
+import { IntegrationLabPage } from './pages/IntegrationLabPage';
 import { MappingDetailPage, MappingsPage } from './pages/MappingsPage';
 import { PartnerDetailPage, PartnersPage } from './pages/PartnersPage';
 import { TransactionDetailPage } from './pages/TransactionDetailPage';
@@ -30,6 +31,7 @@ function AppRoutes() {
           <Route path="/failures/:errorId" element={<FailureDetailPage />} />
           <Route path="/trace" element={<TraceSearchPage />} />
           <Route path="/trace/:businessIdentifier" element={<BusinessTraceDetailPage />} />
+          <Route path="/lab" element={<IntegrationLabPage />} />
           <Route path="/partners" element={<PartnersPage />} />
           <Route path="/partners/:partnerCode" element={<PartnerDetailPage />} />
           <Route path="/mappings" element={<MappingsPage />} />

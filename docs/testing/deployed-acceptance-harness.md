@@ -6,7 +6,7 @@ The deployed acceptance harness is a production-like black-box runner for the al
 - FreightBridge API
 - Midwest Partner Simulator
 - Railway/SFTPGo transport through the deployed services
-- Vercel Analyst UI for Milestone 16
+- Vercel Analyst UI for Milestones 16, 17, and 18
 
 It replaces the long manual Postman sequence for full milestone acceptance. Postman collections remain useful for debugging individual requests.
 
@@ -89,7 +89,14 @@ python -m playwright install chromium
 python scripts/acceptance/milestone16.py
 ```
 
-Milestones 14, 15, and 16 require `OPERATIONS_API_BEARER_TOKEN`. Milestone 16 also requires `ANALYST_UI_BASE_URL`. Milestones 12 and 13 do not require the operations token.
+Run Milestone 18:
+
+```bash
+python -m playwright install chromium
+python scripts/acceptance/milestone18.py
+```
+
+Milestones 14, 15, 16, 17, and 18 require `OPERATIONS_API_BEARER_TOKEN`. Milestones 16, 17, and 18 also require `ANALYST_UI_BASE_URL`. Milestones 12 and 13 do not require the operations token.
 
 Useful options:
 
@@ -103,7 +110,7 @@ python scripts/acceptance/milestone12.py --print-env
 
 Milestone 15 also uses safe custom headers for `Idempotency-Key`; the shared HTTP client rejects custom `Authorization` overrides so bearer tokens are controlled only by the configured token arguments.
 
-Milestone 16 uses Playwright to type the operations token into the deployed Analyst Console. The token remains a GitHub Actions secret and is not passed to Vite or printed in output.
+Milestones 16 through 18 use Playwright to type the operations token into the deployed Analyst Console. The token remains a GitHub Actions secret and is not passed to Vite or printed in output.
 
 When `--load-id` is omitted, the harness generates a fresh ID like:
 
@@ -200,7 +207,7 @@ The workflow is `workflow_dispatch` only because it mutates shared deployed test
 
 Supported inputs:
 
-- `milestone`: `milestone12`, `milestone13`, `milestone14`, `milestone15`, `milestone16`, or `milestone17`
+- `milestone`: `milestone12`, `milestone13`, `milestone14`, `milestone15`, `milestone16`, `milestone17`, or `milestone18`
 - `load_id`: optional, blank means generate a fresh load ID
 - `run_db_verification`: passes `DATABASE_URL` only when enabled
 - `verbose`: prints safe request progress
@@ -221,13 +228,13 @@ DATABASE_URL
 OPERATIONS_API_BEARER_TOKEN
 ```
 
-Create this repository Actions variable for Milestones 16 and 17:
+Create this repository Actions variable for Milestones 16, 17, and 18:
 
 ```text
 ANALYST_UI_BASE_URL
 ```
 
-`APEX_READONLY_TOKEN`, `MIDWEST_READONLY_TOKEN`, and `DATABASE_URL` are optional. `OPERATIONS_API_BEARER_TOKEN` is required for Milestones 14, 15, 16, and 17. Add `DATABASE_URL` only if you want GitHub to run direct SQL verification.
+`APEX_READONLY_TOKEN`, `MIDWEST_READONLY_TOKEN`, and `DATABASE_URL` are optional. `OPERATIONS_API_BEARER_TOKEN` is required for Milestones 14, 15, 16, 17, and 18. Add `DATABASE_URL` only if you want GitHub to run direct SQL verification.
 
 To create repository secrets:
 
