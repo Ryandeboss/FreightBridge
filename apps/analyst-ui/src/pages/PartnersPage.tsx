@@ -3,13 +3,17 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import {
+  fetchConfigurationChanges,
   fetchPartner,
   fetchPartners,
   updateCapability,
   updatePartner,
+  type ConfigurationChange,
+  type Capability,
   type TradingPartner,
 } from '../api/configuration';
 import { PageTitle } from '../components/AppShell';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyBlock, ErrorBlock, LoadingBlock } from '../components/States';
 import { BooleanBadge, StatusBadge } from '../components/StatusBadge';
 import { useOperationsSession } from '../auth/OperationsSession';
@@ -101,7 +105,10 @@ export function PartnerDetailPage() {
   const { partnerCode = '' } = useParams();
   const { token, handleApiError } = useOperationsSession();
   const [partner, setPartner] = useState<TradingPartner | null>(null);
+  const [changes, setChanges] = useState<ConfigurationChange[]>([]);
   const [form, setForm] = useState({ name: '', description: '', supportContact: '', active: true });
+  const [confirmPartnerDisable, setConfirmPartnerDisable] = useState(false);
+  const [confirmCapability, setConfirmCapability] = useState<Capability | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -121,6 +128,8 @@ export function PartnerDetailPage() {
         supportContact: next.supportContact ?? '',
         active: next.active,
       });
+      const changeResult = await fetchConfigurationChanges(token, { entityId: next.id, limit: 25 });
+      setChanges(changeResult.changes);
     } catch (nextError) {
       handleApiError(nextError);
       setError(nextError instanceof ApiError ? nextError.message : 'Partner could not be loaded.');
@@ -138,6 +147,17 @@ export function PartnerDetailPage() {
     if (!token || !partner) {
       return;
     }
+    if (partner.active && !form.active) {
+      setConfirmPartnerDisable(true);
+      return;
+    }
+    await savePartner();
+  }
+
+  async function savePartner() {
+    if (!token || !partner) {
+      return;
+    }
     setMessage(null);
     try {
       const updated = await updatePartner(token, partner.partnerCode, {
@@ -147,7 +167,9 @@ export function PartnerDetailPage() {
         active: form.active,
       });
       setPartner(updated);
+      setConfirmPartnerDisable(false);
       setMessage('Partner saved.');
+      await load();
     } catch (nextError) {
       handleApiError(nextError);
       setMessage(nextError instanceof ApiError ? nextError.message : 'Partner update failed.');
@@ -158,9 +180,22 @@ export function PartnerDetailPage() {
     if (!token || !partner) {
       return;
     }
+    const capability = partner.capabilities.find((item) => item.id === capabilityId);
+    if (capability?.enabled && !enabled) {
+      setConfirmCapability(capability);
+      return;
+    }
+    await saveCapability(capabilityId, enabled);
+  }
+
+  async function saveCapability(capabilityId: string, enabled: boolean) {
+    if (!token || !partner) {
+      return;
+    }
     setMessage(null);
     try {
       await updateCapability(token, capabilityId, enabled, 'Updated from Analyst Console');
+      setConfirmCapability(null);
       await load();
       setMessage('Capability updated.');
     } catch (nextError) {
@@ -220,6 +255,25 @@ export function PartnerDetailPage() {
             </form>
           </article>
 
+          <article className="panel">
+            <div className="panel-header">
+              <h2>Change History</h2>
+            </div>
+            {!changes.length ? (
+              <EmptyBlock title="No partner changes recorded" />
+            ) : (
+              <ol className="timeline">
+                {changes.map((change) => (
+                  <li key={change.id}>
+                    <span>{formatDateTime(change.createdAt)}</span>
+                    <strong>{change.action}</strong>
+                    <p>{change.note ?? change.entityType}</p>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </article>
+
           <article className="panel table-panel">
             <div className="panel-header">
               <h2>Capabilities</h2>
@@ -259,6 +313,26 @@ export function PartnerDetailPage() {
             </div>
           </article>
         </>
+      )}
+
+      {confirmPartnerDisable && (
+        <ConfirmDialog
+          title="Disable trading partner"
+          message="Disabling this trading partner can prevent new integration traffic."
+          confirmLabel="Disable Partner"
+          onCancel={() => setConfirmPartnerDisable(false)}
+          onConfirm={() => void savePartner()}
+        />
+      )}
+
+      {confirmCapability && (
+        <ConfirmDialog
+          title="Disable capability"
+          message="Disabling this capability will block this configured message flow."
+          confirmLabel="Disable Capability"
+          onCancel={() => setConfirmCapability(null)}
+          onConfirm={() => void saveCapability(confirmCapability.id, false)}
+        />
       )}
     </section>
   );

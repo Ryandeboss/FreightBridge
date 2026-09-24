@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
+import re
 import sys
 from typing import Any
 
@@ -19,6 +20,7 @@ from scripts.acceptance.common import (  # noqa: E402
   correlation_id,
   generate_load_id,
   print_required_env,
+  require_field,
 )
 from scripts.acceptance.milestone12 import apex_load_payload  # noqa: E402
 
@@ -84,10 +86,7 @@ class Milestone17Acceptance:
       assert_truth('secret' not in str(partners).lower(), 'List configured partners', 'Configuration API exposed secret-like content.')
 
     self.recorder.run('Read Midwest partner detail', lambda: self._read_partner('MWCX'))
-    self.recorder.run('Safe partner patch', self._safe_partner_patch)
-    self.recorder.run('Safe capability patch', self._safe_capability_patch)
     self.recorder.run('List active mappings', self._list_active_mappings)
-    self.recorder.run('Clone validate abandon mapping draft', self._draft_lifecycle)
 
   def _list_partners(self) -> list[dict[str, Any]]:
     body = self.freightbridge.get('/api/configuration/partners', token=self.operations_token, step='List configured partners')
@@ -101,72 +100,12 @@ class Milestone17Acceptance:
     assert_truth(bool(partner.get('capabilities')), 'Read Midwest partner detail', 'Partner capabilities were missing.')
     return partner
 
-  def _safe_partner_patch(self) -> dict[str, Any]:
-    partner = self._read_partner('MWCX')
-    patched = self.freightbridge.patch_json(
-      '/api/configuration/partners/MWCX',
-      {
-        'name': partner.get('name'),
-        'description': partner.get('description'),
-        'supportContact': partner.get('supportContact'),
-        'active': partner.get('active'),
-      },
-      token=self.operations_token,
-      step='Safe partner patch',
-    )
-    assert_equal(patched.get('partnerCode'), 'MWCX', 'Safe partner patch', 'partnerCode')
-    return patched
-
-  def _safe_capability_patch(self) -> dict[str, Any]:
-    partner = self._read_partner('MWCX')
-    capability = next((item for item in partner.get('capabilities', []) if item.get('documentType') == '204'), None)
-    assert_truth(isinstance(capability, dict), 'Safe capability patch', 'Missing Midwest 204 capability.')
-    return self.freightbridge.patch_json(
-      f"/api/configuration/capabilities/{capability['id']}",
-      {'enabled': capability.get('enabled'), 'note': 'Milestone 17 acceptance no-op capability verification'},
-      token=self.operations_token,
-      step='Safe capability patch',
-    )
-
   def _list_active_mappings(self) -> dict[str, Any]:
     body = self.freightbridge.get('/api/configuration/mappings?status=ACTIVE&limit=100', token=self.operations_token, step='List active mappings')
     keys = {item.get('mappingKey') for item in body.get('mappings', [])}
     missing = REQUIRED_MAPPING_KEYS - keys
     assert_truth(not missing, 'List active mappings', f'Missing active mapping keys: {sorted(missing)}')
     return body
-
-  def _draft_lifecycle(self) -> dict[str, Any]:
-    active = self._list_active_mappings()
-    source = next(item for item in active['mappings'] if item.get('mappingKey') == 'CANONICAL_TO_MWCX_204')
-    draft = self.freightbridge.post_json(
-      f"/api/configuration/mappings/{source['id']}/clone-draft",
-      {'changeNote': 'Milestone 17 deployed acceptance draft'},
-      token=self.operations_token,
-      expected=(201,),
-      step='Clone validate abandon mapping draft',
-    )
-    detail = self.freightbridge.get(f"/api/configuration/mappings/{draft['id']}", token=self.operations_token, step='Clone validate abandon mapping draft')
-    self.freightbridge.patch_json(
-      f"/api/configuration/mappings/{draft['id']}",
-      {'settings': detail.get('settings'), 'changeNote': 'Milestone 17 no-op settings verification'},
-      token=self.operations_token,
-      step='Clone validate abandon mapping draft',
-    )
-    validated = self.freightbridge.post_empty(
-      f"/api/configuration/mappings/{draft['id']}/validate",
-      token=self.operations_token,
-      step='Clone validate abandon mapping draft',
-    )
-    assert_equal(validated.get('validationStatus'), 'VALID', 'Clone validate abandon mapping draft', 'validationStatus')
-    abandoned = self.freightbridge.post_empty(
-      f"/api/configuration/mappings/{draft['id']}/abandon",
-      token=self.operations_token,
-      step='Clone validate abandon mapping draft',
-    )
-    assert_equal(abandoned.get('status'), 'ABANDONED', 'Clone validate abandon mapping draft', 'draft status')
-    changes = self.freightbridge.get('/api/configuration/changes?entityType=MAPPING_PROFILE&limit=25', token=self.operations_token, step='Clone validate abandon mapping draft')
-    assert_truth(changes.get('count', 0) >= 1, 'Clone validate abandon mapping draft', 'Expected mapping change history.')
-    return abandoned
 
   def create_runtime_transaction(self) -> None:
     create_step = 'Create Apex load'
@@ -192,7 +131,21 @@ class Milestone17Acceptance:
         correlation_id=correlation_id(self.load_id, dispatch_step),
       ),
     )
+    self.recorder.run('Dispatch Midwest 204 over SFTP', self._dispatch_204_to_midwest_sftp)
     self.recorder.run('Verify transaction mapping audit', self._verify_transaction_mapping_audit)
+
+  def _dispatch_204_to_midwest_sftp(self) -> dict[str, Any]:
+    step = 'Dispatch Midwest 204 over SFTP'
+    body = self.freightbridge.post_empty(
+      f'/api/integrations/midwest/load-tenders/{self.load_id}/dispatch-sftp',
+      expected=(202,),
+      step=step,
+      correlation_id=correlation_id(self.load_id, step),
+    )
+    assert_equal(body.get('documentType'), '204', step, 'documentType')
+    assert_equal(body.get('transport'), 'SFTP', step, 'transport')
+    require_field(body, 'fileName', step)
+    return body
 
   def _verify_transaction_mapping_audit(self) -> dict[str, Any]:
     body = self.freightbridge.get(
@@ -202,17 +155,29 @@ class Milestone17Acceptance:
     )
     transactions = body.get('transactions') or []
     assert_truth(bool(transactions), 'Verify transaction mapping audit', 'No operations transaction was found for the acceptance load.')
-    inbound = next((item for item in transactions if item.get('documentType') == 'APEX_LOAD_TENDER'), transactions[0])
-    assert_truth(bool(inbound.get('mappingKey')), 'Verify transaction mapping audit', 'Transaction missing mappingKey.')
-    assert_truth(bool(inbound.get('mappingProfileId')), 'Verify transaction mapping audit', 'Transaction missing mappingProfileId.')
-    assert_truth(bool(inbound.get('mappingProfileVersion')), 'Verify transaction mapping audit', 'Transaction missing mappingProfileVersion.')
-    return inbound
+    inbound = next((item for item in transactions if item.get('documentType') == 'APEX_LOAD_TENDER'), None)
+    outbound_204 = next((item for item in transactions if item.get('documentType') == '204' and item.get('direction') == 'OUTBOUND'), None)
+    assert_truth(isinstance(inbound, dict), 'Verify transaction mapping audit', 'APEX_LOAD_TENDER transaction was not found.')
+    assert_truth(isinstance(outbound_204, dict), 'Verify transaction mapping audit', 'Outbound 204 transaction was not found.')
+    self._assert_transaction_mapping(inbound, 'APEX_LOAD_TO_CANONICAL', 'Verify transaction mapping audit')
+    self._assert_transaction_mapping(outbound_204, 'CANONICAL_TO_MWCX_204', 'Verify transaction mapping audit')
+    return {'apex': inbound, 'outbound204': outbound_204}
+
+  def _assert_transaction_mapping(self, transaction: dict[str, Any], expected_key: str, step: str) -> None:
+    assert_equal(transaction.get('mappingKey'), expected_key, step, f'{expected_key} mappingKey')
+    assert_truth(bool(transaction.get('mappingProfileId')), step, f'{expected_key} mappingProfileId missing.')
+    assert_truth(bool(transaction.get('mappingProfileVersion')), step, f'{expected_key} mappingProfileVersion missing.')
 
   def exercise_console(self) -> None:
     self.recorder.run('Analyst UI configuration flow', self._run_browser_flow)
 
   def _run_browser_flow(self) -> dict[str, Any]:
     from playwright.sync_api import sync_playwright
+
+    original_partner = self._read_partner('MWCX')
+    original_support_contact = original_partner.get('supportContact')
+    unique_support_contact = f'milestone17-{self.load_id.lower()}@example.com'
+    partner_mutated = False
 
     with sync_playwright() as playwright:
       browser = playwright.chromium.launch(headless=True)
@@ -226,27 +191,115 @@ class Milestone17Acceptance:
 
         page.get_by_role('link', name='Partners').click()
         expect_test_id(page, 'partners-page')
+        expect_text(page, 'APEX')
         expect_text(page, 'MWCX')
         page.get_by_role('link', name='MWCX').first.click()
         expect_test_id(page, 'partner-detail-page')
+        expect_text(page, 'MOTOR_CARRIER')
+        expect_text(page, 'X12_SFTP')
         expect_text(page, 'Capabilities')
+        for document_type in ('204', '997', '990', '214'):
+          expect_text(page, document_type)
+        for credential_label in (
+          r'bearer token configuration',
+          r'ssh private key',
+          r'database url',
+          r'supabase secret',
+          r'sftp password',
+        ):
+          expect_no_label(page, credential_label)
+
+        page.get_by_label('Support Contact').fill(unique_support_contact)
+        page.get_by_role('button', name='Save').click()
+        expect_text(page, 'Partner saved.')
+        partner_mutated = True
+        verified_partner = self._read_partner('MWCX')
+        assert_equal(
+          verified_partner.get('supportContact'),
+          unique_support_contact,
+          'Analyst UI configuration flow',
+          'MWCX supportContact',
+        )
+        expect_text(page, 'UPDATE')
 
         page.get_by_role('link', name='Mappings').click()
         expect_test_id(page, 'mappings-page')
+        page.get_by_label('Mapping Key').fill('CANONICAL_TO_MWCX_204')
+        page.get_by_label('Partner').fill('MWCX')
+        page.get_by_role('button', name='Apply Filters').click()
         expect_text(page, 'CANONICAL_TO_MWCX_204')
         page.get_by_role('link', name='CANONICAL_TO_MWCX_204').first.click()
         expect_test_id(page, 'mapping-detail-page')
-        expect_text(page, 'Settings')
+        expect_text(page, 'Profile Configuration')
+        expect_text(page, 'senderId')
+        expect_no_text(page, 'Profile Settings JSON')
+        expect_no_text(page, 'Rule Configuration JSON')
         expect_text(page, 'Versions')
+        page.get_by_role('button', name='Create Draft').click()
+        page.get_by_role('button', name='Save Draft').wait_for(timeout=15000)
+        draft_id = page.url.split('/mappings/')[-1].split('?')[0].split('#')[-1]
+        assert_truth(bool(draft_id), 'Analyst UI configuration flow', 'Draft ID could not be captured from browser URL.')
+        page.get_by_label('Change Note').fill(f'Milestone 17 acceptance {self.load_id}')
+        page.get_by_label('Description').fill(f'Milestone 17 acceptance {self.load_id}')
+        page.get_by_label('Notes').first.fill(f'Milestone 17 acceptance {self.load_id}')
+        page.get_by_role('button', name='Save Draft').click()
+        expect_text(page, 'Draft saved.')
+        page.get_by_role('button', name='Validate Draft').click()
+        activate_button = page.get_by_role('button', name='Activate Mapping')
+        expect_enabled(activate_button)
+        page.get_by_role('button', name='Abandon Draft').click()
+        expect_text(page, 'Abandoning this draft preserves it in configuration history but prevents activation.')
+        page.get_by_role('button', name='Abandon Draft').last.click()
+        expect_text(page, 'ABANDONED')
+        for action in ('CREATE_DRAFT', 'VALIDATE', 'ABANDON'):
+          expect_text(page, action)
 
         page.get_by_role('link', name='Transactions').click()
         expect_test_id(page, 'transactions-page')
         page.get_by_label('Business ID').fill(self.load_id)
         page.get_by_role('button', name='Apply Filters').click()
         expect_text(page, self.load_id)
+        apex_row = page.locator('tr').filter(has_text='APEX_LOAD_TENDER').first
+        apex_row.get_by_role('link').first.click()
+        expect_test_id(page, 'transaction-detail-page')
+        expect_text(page, 'Mapping')
+        expect_text(page, 'Mapping Version')
+        expect_text(page, 'APEX_LOAD_TO_CANONICAL')
+        page.get_by_role('link', name=re.compile(r'[0-9a-f]{8}', re.IGNORECASE)).first.click()
+        expect_test_id(page, 'mapping-detail-page')
+        expect_text(page, 'APEX_LOAD_TO_CANONICAL')
 
-        return {'load_id': self.load_id}
+        page.get_by_role('link', name='Transactions').click()
+        expect_test_id(page, 'transactions-page')
+        page.get_by_label('Business ID').fill(self.load_id)
+        page.get_by_role('button', name='Apply Filters').click()
+        expect_text(page, '204')
+        outbound_row = page.locator('tr').filter(has_text='204').filter(has_text='SFTP').first
+        outbound_row.get_by_role('link').first.click()
+        expect_test_id(page, 'transaction-detail-page')
+        expect_text(page, 'CANONICAL_TO_MWCX_204')
+        expect_text(page, 'Mapping Version')
+        page.get_by_role('link', name=re.compile(r'[0-9a-f]{8}', re.IGNORECASE)).first.click()
+        expect_test_id(page, 'mapping-detail-page')
+        expect_text(page, 'CANONICAL_TO_MWCX_204')
+
+        return {'load_id': self.load_id, 'draft_id': draft_id}
       finally:
+        if partner_mutated:
+          try:
+            self.freightbridge.patch_json(
+              '/api/configuration/partners/MWCX',
+              {
+                'name': original_partner.get('name'),
+                'description': original_partner.get('description'),
+                'supportContact': original_support_contact,
+                'active': original_partner.get('active'),
+              },
+              token=self.operations_token,
+              step='Restore Midwest partner metadata',
+            )
+          except Exception:
+            pass
         browser.close()
 
 
@@ -257,6 +310,25 @@ def expect_text(page: Any, text: str) -> None:
     page.get_by_text(text, exact=False).first.wait_for(timeout=15000)
   except PlaywrightTimeoutError as exc:
     raise AcceptanceFailure('Analyst UI configuration flow', f'Missing UI text: {text}') from exc
+
+
+def expect_no_text(page: Any, text: str) -> None:
+  if page.get_by_text(text, exact=False).count() > 0:
+    raise AcceptanceFailure('Analyst UI configuration flow', f'Unexpected UI text: {text}')
+
+
+def expect_no_label(page: Any, label_pattern: str) -> None:
+  if page.get_by_label(re.compile(label_pattern, re.IGNORECASE)).count() > 0:
+    raise AcceptanceFailure('Analyst UI configuration flow', f'Unexpected credential editor label: {label_pattern}')
+
+
+def expect_enabled(locator: Any) -> None:
+  from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, expect
+
+  try:
+    expect(locator).to_be_enabled(timeout=15000)
+  except PlaywrightTimeoutError as exc:
+    raise AcceptanceFailure('Analyst UI configuration flow', 'Expected control to be enabled.') from exc
 
 
 def expect_test_id(page: Any, test_id: str) -> None:

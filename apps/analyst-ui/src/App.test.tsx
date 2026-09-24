@@ -87,6 +87,29 @@ const partner = {
   updatedAt: '2026-09-23T15:00:00Z',
 };
 
+const mappingSettings204 = {
+  senderId: 'FREIGHTBRIDGE',
+  receiverId: 'MWCX',
+  x12Version: '004010',
+  isaControlVersion: '00401',
+  functionalIdentifier: 'SM',
+  transactionSet: '204',
+  usageIndicator: 'T',
+  paymentMethod: 'PP',
+  bolQualifier: 'BM',
+  poQualifier: 'PO',
+  pickupDateQualifier: '37',
+  pickupTimeQualifier: 'I',
+  deliveryDateQualifier: '38',
+  deliveryTimeQualifier: 'K',
+  pickupStopReason: 'LD',
+  deliveryStopReason: 'UL',
+  shipperEntityIdentifier: 'SH',
+  consigneeEntityIdentifier: 'CN',
+  weightQualifier: 'G',
+  timestampPolicy: 'UTC',
+};
+
 const mapping = {
   id: '55555555-5555-4555-8555-555555555555',
   partnerId: partner.id,
@@ -102,7 +125,7 @@ const mapping = {
   targetDocumentType: '204',
   versionNumber: 1,
   status: 'ACTIVE',
-  settings: { senderId: 'FREIGHTBRIDGE', receiverId: 'MWCX' },
+  settings: mappingSettings204,
   validationStatus: 'VALID',
   validationErrors: [],
   basedOnProfileId: null,
@@ -129,7 +152,60 @@ const mapping = {
       updatedAt: '2026-09-23T15:00:00Z',
     },
   ],
-  versions: [],
+  versions: [
+    {
+      id: '55555555-5555-4555-8555-555555555555',
+      versionNumber: 1,
+      status: 'ACTIVE',
+      changeNote: null,
+      name: 'Canonical shipment to Midwest 204',
+    },
+    {
+      id: '66666666-6666-4666-8666-666666666666',
+      versionNumber: 2,
+      status: 'DRAFT',
+      changeNote: 'Draft in progress',
+      name: 'Canonical shipment to Midwest 204',
+    },
+    {
+      id: '77777777-7777-4777-8777-777777777777',
+      versionNumber: 0,
+      status: 'ARCHIVED',
+      changeNote: 'Archived profile',
+      name: 'Canonical shipment to Midwest 204',
+    },
+    {
+      id: '88888888-8888-4888-8888-888888888888',
+      versionNumber: 3,
+      status: 'ABANDONED',
+      changeNote: 'Abandoned profile',
+      name: 'Canonical shipment to Midwest 204',
+    },
+  ],
+};
+
+const draftMapping = {
+  ...mapping,
+  id: '66666666-6666-4666-8666-666666666666',
+  status: 'DRAFT',
+  versionNumber: 2,
+  validationStatus: 'NOT_VALIDATED',
+  validatedAt: null,
+  activatedAt: null,
+  basedOnProfileId: mapping.id,
+  changeNote: 'Draft in progress',
+  rules: [{ ...mapping.rules[0], mappingProfileId: '66666666-6666-4666-8666-666666666666' }],
+};
+
+const validDraftMapping = {
+  ...draftMapping,
+  validationStatus: 'VALID',
+  validatedAt: '2026-09-23T15:05:00Z',
+};
+
+const abandonedDraftMapping = {
+  ...validDraftMapping,
+  status: 'ABANDONED',
 };
 
 function jsonResponse(payload: unknown, status = 200) {
@@ -142,6 +218,7 @@ function jsonResponse(payload: unknown, status = 200) {
 }
 
 function installFetchMock() {
+  let currentDraftMapping: Record<string, unknown> = draftMapping;
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     const path = url.pathname;
@@ -270,6 +347,9 @@ function installFetchMock() {
     }
 
     if (path === '/api/configuration/partners/MWCX') {
+      if (init?.method === 'PATCH') {
+        return jsonResponse({ ...partner, active: false, description: 'Updated safely.' });
+      }
       return jsonResponse(partner);
     }
 
@@ -286,11 +366,35 @@ function installFetchMock() {
     }
 
     if (path === `/api/configuration/mappings/${mapping.id}/clone-draft`) {
-      return jsonResponse({ ...mapping, id: '66666666-6666-4666-8666-666666666666', status: 'DRAFT', versionNumber: 2 }, 201);
+      currentDraftMapping = draftMapping;
+      return jsonResponse(currentDraftMapping, 201);
     }
 
     if (path === '/api/configuration/mappings/66666666-6666-4666-8666-666666666666') {
-      return jsonResponse({ ...mapping, id: '66666666-6666-4666-8666-666666666666', status: 'DRAFT', versionNumber: 2 });
+      if (init?.method === 'PATCH') {
+        currentDraftMapping = { ...currentDraftMapping, validationStatus: 'NOT_VALIDATED', description: 'Edited draft profile.' };
+        return jsonResponse(currentDraftMapping);
+      }
+      return jsonResponse(currentDraftMapping);
+    }
+
+    if (path === '/api/configuration/mappings/66666666-6666-4666-8666-666666666666/rules/rule-1') {
+      return jsonResponse({ ...draftMapping.rules[0], notes: 'Edited rule notes.' });
+    }
+
+    if (path === '/api/configuration/mappings/66666666-6666-4666-8666-666666666666/validate') {
+      currentDraftMapping = validDraftMapping;
+      return jsonResponse(currentDraftMapping);
+    }
+
+    if (path === '/api/configuration/mappings/66666666-6666-4666-8666-666666666666/activate') {
+      currentDraftMapping = { ...validDraftMapping, status: 'ACTIVE' };
+      return jsonResponse(currentDraftMapping);
+    }
+
+    if (path === '/api/configuration/mappings/66666666-6666-4666-8666-666666666666/abandon') {
+      currentDraftMapping = abandonedDraftMapping;
+      return jsonResponse(currentDraftMapping);
     }
 
     if (path === '/api/configuration/changes') {
@@ -303,12 +407,34 @@ function installFetchMock() {
             id: 'change-1',
             entityType: 'MAPPING_PROFILE',
             entityId: mapping.id,
-            action: 'ACTIVATE',
+            action: 'CREATE_DRAFT',
             beforeSnapshot: null,
             afterSnapshot: {},
             note: 'Initial profile.',
             source: 'ANALYST_CONSOLE',
             createdAt: '2026-09-23T15:00:00Z',
+          },
+          {
+            id: 'change-2',
+            entityType: 'MAPPING_PROFILE',
+            entityId: '66666666-6666-4666-8666-666666666666',
+            action: 'VALIDATE',
+            beforeSnapshot: null,
+            afterSnapshot: {},
+            note: 'Validated draft.',
+            source: 'ANALYST_CONSOLE',
+            createdAt: '2026-09-23T15:02:00Z',
+          },
+          {
+            id: 'change-3',
+            entityType: 'TRADING_PARTNER',
+            entityId: partner.id,
+            action: 'UPDATE',
+            beforeSnapshot: null,
+            afterSnapshot: {},
+            note: 'Partner update.',
+            source: 'ANALYST_CONSOLE',
+            createdAt: '2026-09-23T15:03:00Z',
           },
         ],
       });
@@ -419,7 +545,13 @@ describe('Analyst Console', () => {
     await userEvent.click(await screen.findByRole('link', { name: /MWCX/i }));
     expect(await screen.findByTestId('partner-detail-page')).toBeInTheDocument();
     expect(screen.queryByText(/secret/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/bearer token/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/ssh private key/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/database url/i)).not.toBeInTheDocument();
     await userEvent.click(screen.getByLabelText(/toggle 204/i));
+    expect(await screen.findByRole('dialog', { name: /disable capability/i })).toBeInTheDocument();
+    expect(screen.getByText(/disabling this capability will block this configured message flow/i)).toBeInTheDocument();
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /disable capability/i }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -429,21 +561,123 @@ describe('Analyst Console', () => {
     });
   });
 
-  test('lists mappings and clones an active profile to draft', async () => {
+  test('requires confirmation before deactivating a trading partner', async () => {
+    const fetchMock = installFetchMock();
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/partners/MWCX';
+    render(<App />);
+
+    expect(await screen.findByTestId('partner-detail-page')).toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText(/^active$/i));
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    expect(await screen.findByRole('dialog', { name: /disable trading partner/i })).toBeInTheDocument();
+    expect(screen.getByText(/disabling this trading partner can prevent new integration traffic/i)).toBeInTheDocument();
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /disable partner/i }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/api/configuration/partners/MWCX'),
+        expect.objectContaining({ method: 'PATCH' }),
+      );
+    });
+  });
+
+  test('renders active mappings as structured read-only profiles and creates drafts', async () => {
     const fetchMock = installFetchMock();
     window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
     window.location.hash = '#/mappings';
     render(<App />);
 
     expect(await screen.findByTestId('mappings-page')).toBeInTheDocument();
+    await userEvent.clear(screen.getByLabelText(/mapping key/i));
+    await userEvent.type(screen.getByLabelText(/mapping key/i), 'CANONICAL_TO_MWCX_204');
+    await userEvent.clear(screen.getByLabelText(/partner/i));
+    await userEvent.type(screen.getByLabelText(/partner/i), 'MWCX');
+    await userEvent.clear(screen.getByLabelText(/document type/i));
+    await userEvent.type(screen.getByLabelText(/document type/i), '204');
+    await userEvent.click(screen.getByRole('button', { name: /apply filters/i }));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('mappingKey=CANONICAL_TO_MWCX_204'),
+        expect.any(Object),
+      );
+    });
     await userEvent.click(await screen.findByRole('link', { name: /CANONICAL_TO_MWCX_204/i }));
     expect(await screen.findByTestId('mapping-detail-page')).toBeInTheDocument();
+    expect(screen.getByLabelText(/senderId/i)).toHaveValue('FREIGHTBRIDGE');
+    expect(screen.getByLabelText(/x12Version/i)).toHaveValue('004010');
+    expect(screen.queryByText(/profile settings json/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/rule configuration json/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /save draft/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/active mappings are read-only/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/ARCHIVED/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/ABANDONED/i).length).toBeGreaterThan(0);
     await userEvent.type(screen.getByLabelText(/change note/i), 'Tune envelope profile');
-    await userEvent.click(screen.getByRole('button', { name: /clone draft/i }));
+    await userEvent.click(screen.getByRole('button', { name: /create draft/i }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         expect.stringContaining('/api/configuration/mappings/55555555-5555-4555-8555-555555555555/clone-draft'),
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+  });
+
+  test('edits draft mappings with structured controls and guarded lifecycle actions', async () => {
+    const fetchMock = installFetchMock();
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/mappings/66666666-6666-4666-8666-666666666666';
+    render(<App />);
+
+    expect(await screen.findByTestId('mapping-detail-page')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /activate mapping/i })).toBeDisabled();
+    expect(screen.getByLabelText(/senderId/i)).toHaveValue('FREIGHTBRIDGE');
+    await userEvent.clear(screen.getByLabelText(/description/i));
+    await userEvent.type(screen.getByLabelText(/description/i), 'Edited draft profile.');
+    await userEvent.clear(screen.getByLabelText(/^notes$/i));
+    await userEvent.type(screen.getByLabelText(/^notes$/i), 'Edited rule notes.');
+    await userEvent.click(screen.getByRole('button', { name: /save rule/i }));
+    await userEvent.click(screen.getByRole('button', { name: /save draft/i }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/api/configuration/mappings/66666666-6666-4666-8666-666666666666'),
+        expect.objectContaining({ method: 'PATCH' }),
+      );
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /validate draft/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /activate mapping/i })).toBeEnabled());
+    await userEvent.click(screen.getByRole('button', { name: /activate mapping/i }));
+    expect(await screen.findByRole('dialog', { name: /activate mapping/i })).toBeInTheDocument();
+    expect(screen.getByText(/activating this mapping will archive the current active version/i)).toBeInTheDocument();
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /activate mapping/i }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/api/configuration/mappings/66666666-6666-4666-8666-666666666666/activate'),
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+  });
+
+  test('confirms draft abandonment and displays configuration change history', async () => {
+    const fetchMock = installFetchMock();
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/mappings/66666666-6666-4666-8666-666666666666';
+    render(<App />);
+
+    expect(await screen.findByTestId('mapping-detail-page')).toBeInTheDocument();
+    expect(await screen.findByText(/CREATE_DRAFT/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/VALIDATE/i).length).toBeGreaterThan(0);
+    await userEvent.click(screen.getByRole('button', { name: /abandon draft/i }));
+    expect(await screen.findByRole('dialog', { name: /abandon draft/i })).toBeInTheDocument();
+    expect(screen.getByText(/abandoning this draft preserves it in configuration history/i)).toBeInTheDocument();
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /abandon draft/i }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/api/configuration/mappings/66666666-6666-4666-8666-666666666666/abandon'),
         expect.objectContaining({ method: 'POST' }),
       );
     });
@@ -456,6 +690,8 @@ describe('Analyst Console', () => {
     render(<App />);
 
     expect(await screen.findByTestId('transaction-detail-page')).toBeInTheDocument();
+    expect(screen.getByText(/CANONICAL_TO_MWCX_204/i)).toBeInTheDocument();
+    expect(screen.getByText(/v1/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('link', { name: /55555555/i }));
 
     expect(await screen.findByTestId('mapping-detail-page')).toBeInTheDocument();
