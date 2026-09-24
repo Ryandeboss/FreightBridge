@@ -423,7 +423,11 @@ function LabRunForm({
     <div className="editor-stack">
       <label>
         Scenario
-        <select value={form.scenarioKey} onChange={(event) => setField('scenarioKey', event.target.value)}>
+        <select
+  data-testid="lab-scenario-select"
+  value={form.scenarioKey}
+  onChange={(event) => setField('scenarioKey', event.target.value)}
+>
           {readiness.scenarios
             .filter((scenario) => (scenario.kind ?? 'HAPPY_PATH') === (isFailureDrill ? 'FAILURE_DRILL' : 'HAPPY_PATH'))
             .map((scenario) => (

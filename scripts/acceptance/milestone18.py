@@ -75,7 +75,9 @@ class Milestone18Acceptance:
         expect(page.get_by_test_id('integration-lab-page')).to_be_visible(timeout=20000)
         for label in ('FreightBridge', 'Apex Simulator', 'Midwest Simulator', 'Midwest SFTP', 'Ready'):
           expect_text(page, label)
-        page.get_by_label('Scenario').select_option('FULL_SHIPMENT_LIFECYCLE')
+        page.get_by_test_id('lab-scenario-select').select_option(
+  'FULL_SHIPMENT_LIFECYCLE'
+)
         page.get_by_label('Load ID').fill(self.load_id)
         page.get_by_role('button', name='Create Run').click()
         expect(page).to_have_url(re.compile(r'.*/#/lab/runs/[0-9a-fA-F-]{36}$'), timeout=30000)
