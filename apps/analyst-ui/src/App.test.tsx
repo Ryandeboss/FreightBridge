@@ -412,6 +412,7 @@ const completedFailureLabRun = {
         errorId,
         transactionId,
         correlationId: 'lab-failure-contract',
+        businessIdentifier: null,
         errorCode: 'INVALID_APEX_LOAD',
         category: 'BUSINESS_VALIDATION_ERROR',
         stage: 'VALIDATION',
@@ -469,6 +470,7 @@ const completedFailureLabRun = {
         observedFailure: {
           errorId,
           transactionId,
+          businessIdentifier: null,
           errorCode: 'INVALID_APEX_LOAD',
           category: 'BUSINESS_VALIDATION_ERROR',
           stage: 'VALIDATION',
@@ -477,6 +479,30 @@ const completedFailureLabRun = {
       },
     },
   ],
+};
+
+const completedFailureLabRunWithObservedBusinessId = {
+  ...completedFailureLabRun,
+  resultSummary: {
+    ...completedFailureLabRun.resultSummary,
+    failureDrill: {
+      ...completedFailureLabRun.resultSummary.failureDrill,
+      observed: {
+        ...completedFailureLabRun.resultSummary.failureDrill.observed,
+        businessIdentifier: 'TXLOAD900',
+      },
+    },
+  },
+  steps: completedFailureLabRun.steps.map((step) => ({
+    ...step,
+    responseSummary: {
+      ...step.responseSummary,
+      observedFailure: {
+        ...step.responseSummary.observedFailure,
+        businessIdentifier: 'TXLOAD900',
+      },
+    },
+  })),
 };
 
 function jsonResponse(payload: unknown, status = 200) {
@@ -1312,7 +1338,12 @@ describe('Analyst Console', () => {
     expect(screen.getByLabelText(/Read-only failure payload preview/i)).toHaveTextContent('REMOVED');
     expect(screen.getByRole('link', { name: /View Failure/i })).toHaveAttribute('href', `#/failures/${errorId}`);
     expect(screen.getByRole('link', { name: /View Failed Transaction/i })).toHaveAttribute('href', `#/transactions/${transactionId}`);
-    expect(screen.getByRole('link', { name: /Open Failure Queue/i })).toHaveAttribute('href', expect.stringContaining('#/failures?'));
+    expect(screen.getByText(/Observed Business ID/i)).toBeInTheDocument();
+    expect(screen.getByText(/Not available - failure occurred before business identification/i)).toBeInTheDocument();
+    const queueHref = screen.getByRole('link', { name: /Open Failure Queue/i }).getAttribute('href') ?? '';
+    expect(queueHref).toContain('#/failures?');
+    expect(queueHref).toContain('errorCode=INVALID_APEX_LOAD');
+    expect(queueHref).not.toContain('businessIdentifier=LABFAIL900');
     await waitFor(() => {
       const createCall = fetchMock.mock.calls.find(([input, init]) => String(input).endsWith('/api/lab/runs') && init?.method === 'POST');
       expect(createCall).toBeTruthy();
@@ -1320,6 +1351,20 @@ describe('Analyst Console', () => {
       expect(body.scenarioKey).toBe('APEX_INVALID_CONTRACT');
       expect(JSON.stringify(body).toLowerCase()).not.toContain('token');
     });
+  });
+
+  test('uses observed failure business identifier for failure queue filtering when available', async () => {
+    installFetchMock({ initialLabRun: completedFailureLabRunWithObservedBusinessId });
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = `#/lab/runs/${completedFailureLabRun.id}`;
+    render(<App />);
+
+    expect(await screen.findByTestId('failure-drill-result')).toBeInTheDocument();
+    expect(screen.getByText(/TXLOAD900/i)).toBeInTheDocument();
+    const queueHref = screen.getByRole('link', { name: /Open Failure Queue/i }).getAttribute('href') ?? '';
+    expect(queueHref).toContain('errorCode=INVALID_APEX_LOAD');
+    expect(queueHref).toContain('businessIdentifier=TXLOAD900');
+    expect(queueHref).not.toContain('businessIdentifier=LABFAIL900');
   });
 
   test('disables Integration Lab run creation until readiness is healthy', async () => {

@@ -26,6 +26,7 @@ def test_failure_drill_apex_bad_auth_succeeds_when_expected_persisted_failure_is
       error_id=ERROR_ID,
       transaction_id=TRANSACTION_ID,
       correlation_id='corr-auth',
+      business_identifier=None,
       error_code='AUTHENTICATION_ERROR',
       category='AUTHENTICATION_ERROR',
       stage='AUTHENTICATION',
@@ -42,6 +43,7 @@ def test_failure_drill_apex_bad_auth_succeeds_when_expected_persisted_failure_is
   assert request['expectedFailure']['errorCode'] == 'AUTHENTICATION_ERROR'
   assert response['drillOutcome'] == EXPECTED_OUTCOME
   assert response['_relatedTransactionIds'] == [TRANSACTION_ID]
+  assert response['_resultSummary']['failureDrill']['observed']['businessIdentifier'] is None
   assert response['_resultSummary']['failureDrill']['observed']['processingStatus'] == 'FAILED'
   assert 'freightbridge-fault-lab-invalid' not in str(request)
   assert 'Bearer' not in str(request)
@@ -62,6 +64,7 @@ def test_failure_drill_unexpected_classification_fails_lab_step() -> None:
       error_id=ERROR_ID,
       transaction_id=TRANSACTION_ID,
       correlation_id='corr-contract',
+      business_identifier=None,
       error_code='INVALID_JSON',
       category='SYNTAX_ERROR',
       stage='PARSING',
@@ -85,6 +88,7 @@ def test_invalid_contract_drill_uses_valid_json_with_pickup_postal_code_removed(
       error_id=ERROR_ID,
       transaction_id=TRANSACTION_ID,
       correlation_id='corr-contract',
+      business_identifier=None,
       error_code='INVALID_APEX_LOAD',
       category='BUSINESS_VALIDATION_ERROR',
       stage='VALIDATION',
@@ -102,6 +106,60 @@ def test_invalid_contract_drill_uses_valid_json_with_pickup_postal_code_removed(
   assert isinstance(preview, dict)
   assert 'postalCode' not in preview['pickup']
   assert response['observedFailure']['errorCode'] == 'INVALID_APEX_LOAD'
+
+
+@pytest.mark.parametrize(
+  ('persisted_business_identifier', 'expected_business_identifier'),
+  ((None, None), ('LOAD900', 'LOAD900')),
+)
+def test_observed_failure_uses_only_persisted_transaction_business_identifier(
+  monkeypatch,
+  persisted_business_identifier,
+  expected_business_identifier,
+) -> None:
+  detail = {
+    'transaction': {
+      'id': TRANSACTION_ID,
+      'correlation_id': 'corr-observed',
+      'business_identifier': persisted_business_identifier,
+      'processing_status': 'FAILED',
+      'document_type': 'APEX_LOAD_TENDER',
+      'transport': 'REST',
+    },
+    'errors': [
+      {
+        'id': ERROR_ID,
+        'error_code': 'INVALID_APEX_LOAD',
+        'category': 'BUSINESS_VALIDATION_ERROR',
+        'stage': 'VALIDATION',
+        'retryable': False,
+        'safe_message': 'Contract validation failed.',
+      }
+    ],
+  }
+
+  class FakeConnection:
+    def __enter__(self):
+      return self
+
+    def __exit__(self, exc_type, exc, tb):
+      return None
+
+  class FakeOperationsRepository:
+    def __init__(self, connection) -> None:
+      self.connection = connection
+
+    def get_transaction_detail(self, transaction_id: UUID):
+      assert transaction_id == UUID(TRANSACTION_ID)
+      return detail
+
+  monkeypatch.setattr('app.integrations.failure_drills.connect', lambda: FakeConnection())
+  monkeypatch.setattr('app.integrations.failure_drills.OperationsRepository', FakeOperationsRepository)
+
+  observed = ControlledFailureDrillService()._observed_from_transaction(TRANSACTION_ID)
+
+  assert observed.business_identifier == expected_business_identifier
+  assert observed.view()['businessIdentifier'] == expected_business_identifier
 
 
 def test_x12_control_mismatch_factory_produces_targeted_envelope_failure() -> None:
@@ -154,6 +212,7 @@ def test_sftp_host_key_drill_records_pre_ingestion_observation_without_transacti
   assert request['expectedFailure']['errorCode'] == 'SFTP_HOST_KEY_MISMATCH'
   assert response['drillOutcome'] == EXPECTED_OUTCOME
   assert response['observedFailure']['transactionId'] is None
+  assert response['observedFailure']['businessIdentifier'] is None
   assert response['_relatedTransactionIds'] == []
 
 

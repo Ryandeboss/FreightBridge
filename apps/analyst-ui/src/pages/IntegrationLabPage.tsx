@@ -706,9 +706,13 @@ function FailureDrillResult({ run, drill }: { run: LabRun; drill: Record<string,
   const observed = asRecord(drill.observed) ?? {};
   const errorId = typeof observed.errorId === 'string' ? observed.errorId : null;
   const transactionId = typeof observed.transactionId === 'string' ? observed.transactionId : null;
+  const observedBusinessIdentifier =
+    typeof observed.businessIdentifier === 'string' && observed.businessIdentifier.trim()
+      ? observed.businessIdentifier.trim()
+      : null;
   const errorCode = String(observed.errorCode ?? expected.errorCode ?? '');
   const queueQuery = new URLSearchParams({ errorCode });
-  if (run.businessIdentifier) queueQuery.set('businessIdentifier', run.businessIdentifier);
+  if (observedBusinessIdentifier) queueQuery.set('businessIdentifier', observedBusinessIdentifier);
   const payloadPreview = drill.payloadPreview;
 
   return (
@@ -722,6 +726,7 @@ function FailureDrillResult({ run, drill }: { run: LabRun; drill: Record<string,
           <div><dt>Result</dt><dd>EXPECTED FAILURE OBSERVED</dd></div>
           <div><dt>Lab Run</dt><dd><StatusBadge value={run.status} /></dd></div>
           <div><dt>Integration Transaction</dt><dd>{transactionId ? 'FAILED' : 'No transaction created'}</dd></div>
+          <div><dt>Observed Business ID</dt><dd>{observedBusinessIdentifier ?? 'Not available - failure occurred before business identification'}</dd></div>
           <div><dt>Injected Fault</dt><dd>{String(drill.injectedFault ?? 'Controlled synthetic fault')}</dd></div>
           <div><dt>Transport</dt><dd>{String(observed.transport ?? expected.transport ?? 'Pre-ingestion')}</dd></div>
           <div><dt>Document</dt><dd>{String(observed.documentType ?? expected.documentType ?? 'Transport probe')}</dd></div>

@@ -125,7 +125,7 @@ class Milestone19Acceptance:
           transaction_id = str(observed.get('transactionId') or '')
           if error_id:
             self.created_error_ids.add(error_id)
-          self._verify_detail_links(page, run_id, load_id, drill, error_id, transaction_id)
+          self._verify_detail_links(page, run_id, drill, error_id, transaction_id, observed.get('businessIdentifier'))
           completed.append({'scenario': drill['scenario'], 'run_id': run_id, 'error_id': error_id})
         return {'completed': completed}
       finally:
@@ -199,6 +199,7 @@ class Milestone19Acceptance:
     assert_equal(observed.get('processingStatus'), 'FAILED', step, 'integration transaction status')
     assert_truth(bool(observed.get('transactionId')), step, 'Observed failure did not include a transactionId.')
     assert_truth(bool(observed.get('errorId')), step, 'Observed failure did not include an errorId.')
+    assert_truth(observed.get('businessIdentifier') in (None, ''), step, 'Early failure should not invent a businessIdentifier.')
     related_ids = [transaction_id for lab_step in run.get('steps', []) for transaction_id in (lab_step.get('relatedTransactionIds') or [])]
     assert_truth(observed.get('transactionId') in related_ids, step, 'Failed transaction was not linked to the Lab step.')
     return observed
@@ -207,10 +208,10 @@ class Milestone19Acceptance:
     self,
     page: Any,
     run_id: str,
-    load_id: str,
     drill: dict[str, str],
     error_id: str,
     transaction_id: str,
+    observed_business_identifier: object,
   ) -> None:
     from playwright.sync_api import expect
 
@@ -235,8 +236,8 @@ class Milestone19Acceptance:
     page.get_by_role('link', name='Open Failure Queue').click()
     expect(page.get_by_test_id('failures-page')).to_be_visible(timeout=30000)
     expect_text(page, drill['code'], timeout=30000)
-    if drill['scenario'] != 'APEX_BAD_AUTH':
-      expect_text(page, load_id, timeout=30000)
+    if isinstance(observed_business_identifier, str) and observed_business_identifier.strip():
+      expect_text(page, observed_business_identifier.strip(), timeout=30000)
 
   def _cleanup_created_errors(self) -> None:
     for error_id in sorted(self.created_error_ids):

@@ -48,6 +48,7 @@ class ObservedFailure:
   error_id: str | None
   transaction_id: str | None
   correlation_id: str | None
+  business_identifier: str | None
   error_code: str
   category: str
   stage: str
@@ -62,6 +63,7 @@ class ObservedFailure:
       'errorId': self.error_id,
       'transactionId': self.transaction_id,
       'correlationId': self.correlation_id,
+      'businessIdentifier': self.business_identifier,
       'errorCode': self.error_code,
       'category': self.category,
       'stage': self.stage,
@@ -383,6 +385,7 @@ class ControlledFailureDrillService:
         error_id=None,
         transaction_id=None,
         correlation_id=None,
+        business_identifier=None,
         error_code='SFTP_HOST_KEY_MISMATCH',
         category='TRANSPORT_ERROR',
         stage='TRANSPORT_BOUNDARY',
@@ -420,6 +423,7 @@ class ControlledFailureDrillService:
       error_id=str(error['id']),
       transaction_id=str(transaction['id']),
       correlation_id=str(transaction['correlation_id']),
+      business_identifier=str(transaction['business_identifier']) if transaction.get('business_identifier') else None,
       error_code=str(error['error_code']),
       category=str(error['category']),
       stage=str(error['stage']),
