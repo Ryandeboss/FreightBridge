@@ -148,8 +148,13 @@ export function TransactionDetailPage() {
                       <div>
                         <strong>{item.errorCode}</strong>
                         <span>{item.safeMessage}</span>
+                        <small>{item.category} / {item.stage}</small>
                       </div>
-                      <BooleanBadge value={item.retryable} trueLabel="Retryable" falseLabel="Not retryable" />
+                      <BooleanBadge
+                        value={item.retryable}
+                        trueLabel="Retryable"
+                        falseLabel="Not retryable"
+                      />
                     </Link>
                   ))}
                 </div>
