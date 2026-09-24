@@ -141,8 +141,9 @@ class Milestone18Acceptance:
           'Analyst UI Integration Lab flow',
           'Recent Lab run did not navigate to the run detail URL.',
         )
-        page.get_by_role('link', name='Business Trace').click()
+        page.get_by_test_id('lab-run-detail').get_by_role('link', name='Business Trace', exact=True).click()
         expect(page.get_by_test_id('trace-detail-page')).to_be_visible(timeout=30000)
+        expect(page).to_have_url(re.compile(rf'.*/#/trace/{re.escape(self.load_id)}$'), timeout=30000)
         for document_type in ('APEX_LOAD_TENDER', '204', '997', '990', '214'):
           expect_text(page, document_type, timeout=30000)
         page.get_by_role('link', name='Integration Lab').first.click()
