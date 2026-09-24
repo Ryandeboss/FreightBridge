@@ -1,5 +1,7 @@
 # Initial Architecture
 
+Historical design record. Later implementation status is summarized in the repository [README](../../README.md) and [portfolio architecture](../portfolio/architecture.md).
+
 This diagram captures the current FreightBridge direction. Apex now dispatches REST/JSON load tenders into FreightBridge, where they are authenticated, audited, mapped, and persisted as canonical shipments. FreightBridge can generate a Midwest X12 204 preview from canonical data. SFTP delivery, Midwest simulator behavior, and downstream EDI processing remain future work.
 
 ```mermaid

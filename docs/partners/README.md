@@ -1,6 +1,6 @@
 # Partner Documentation
 
-This folder contains synthetic partner contracts for the FreightBridge portfolio lab.
+This folder contains synthetic partner contracts for the FreightBridge portfolio lab. Apex Logistics and Midwest Carrier are fictional partners used to model real EDI/API integration patterns.
 
 ## Apex Logistics
 
@@ -23,4 +23,4 @@ This folder contains synthetic partner contracts for the FreightBridge portfolio
 - [Trading partner matrix](trading-partner-matrix.md)
 - [Error contract](error-contract.md)
 
-No partner simulator behavior, canonical mapping, EDI parsing, SFTP exchange, or database domain model is implemented in this milestone.
+Current implementation status is summarized in the top-level [README](../../README.md) and [portfolio documentation](../portfolio/README.md). Partner documents remain the field-level and protocol-level contract references.

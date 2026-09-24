@@ -14,7 +14,7 @@ paths:
   /v1/load-tenders:
     post:
       summary: Create and tender a load inside Apex
-      description: Apex-owned simulator/business action that creates or tenders a load within Apex Logistics. This is not the future FreightBridge inbound endpoint. Apex outbound delivery to FreightBridge is documented separately in outbound-load-tender-contract.md.
+      description: Apex-owned simulator/business action that creates or tenders a load within Apex Logistics. This is separate from the FreightBridge inbound endpoint. Apex outbound delivery to FreightBridge is documented separately in outbound-load-tender-contract.md.
       operationId: createApexLoadTender
       tags: [Load Tenders]
       security:

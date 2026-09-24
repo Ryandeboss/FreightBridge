@@ -7,6 +7,24 @@ on:
   pull_request:
 
 jobs:
+  documentation-validation:
+    name: Documentation validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run documentation validator tests
+        run: python -m unittest discover scripts/ci/tests
+
+      - name: Validate documentation links
+        run: python scripts/ci/validate_docs.py
+
   frontend-quality:
     name: Frontend quality
     runs-on: ubuntu-latest

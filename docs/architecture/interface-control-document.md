@@ -127,7 +127,7 @@ Implementation correlates:
 - Railway/SFTPGo hosts the Midwest SFTP exchange.
 - All current partner documents and fixtures are synthetic.
 
-## Future Happy Path
+## Current Happy Path
 
 ```mermaid
 sequenceDiagram

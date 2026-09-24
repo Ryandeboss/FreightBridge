@@ -52,9 +52,9 @@ Apex Logistics
         |
         v
 FreightBridge
-  future canonical transform
+  canonical transform and persistence
         |
         v
 Midwest Carrier
-  future X12 204 over SFTP
+  X12 204 over SFTP
 ```

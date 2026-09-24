@@ -1,84 +1,136 @@
 # FreightBridge
 
-FreightBridge is a portfolio integration lab for modeling logistics EDI and API workflows between two fictitious trading partners and a middleware layer. The current state includes the FreightBridge foundation, independent Apex and Midwest simulators, Apex-to-FreightBridge canonical shipment ingestion, a generic X12 structural foundation, Midwest 204 generation/direct delivery, Midwest 997 functional acknowledgment processing, Midwest 990 tender-response return processing, Midwest 214 shipment-status processing, operations transaction/error observability APIs, a protected Analyst Console UI, versioned partner/mapping configuration management, an Analyst Integration Lab, and a real Railway/SFTPGo SFTP exchange path for Midwest files.
+[![CI](https://github.com/Ryandeboss/FreightBridge/actions/workflows/ci.yml/badge.svg)](https://github.com/Ryandeboss/FreightBridge/actions/workflows/ci.yml)
 
-## Planned Architecture
+FreightBridge is a synthetic logistics integration platform that translates between a modern REST/JSON broker and an X12 004010 carrier. It demonstrates canonical shipment mapping, SFTP transport, technical and business acknowledgments, idempotency, retry, transaction observability, partner configuration, an Analyst Console, and an Integration Lab for happy-path and controlled-failure demos.
 
-FreightBridge connects an analyst-facing React UI, a FastAPI integration API, Supabase PostgreSQL, partner simulators, and a Railway/SFTPGo server for Midwest-style file exchange.
+This is a portfolio lab, not a production TMS. Apex Logistics and Midwest Carrier are fictional trading partners created for the project. The architecture and failure modes are modeled after real EDI/API integration work, but no real customer or partner data is involved.
 
-Current verified cloud path:
+## What It Demonstrates
 
-```text
-Browser
-  -> Vercel Analyst UI
-  -> HTTPS
-  -> Render FreightBridge API
-  -> PostgreSQL
-  -> Supabase
+- REST/JSON ingestion from a synthetic broker/3PL partner.
+- Canonical shipment modeling between partner-specific contracts.
+- Generic X12 parsing, validation, and serialization separate from business mapping.
+- Midwest X12 004010 transaction sets: `204`, `997`, `990`, and `214`.
+- SFTP exchange through SFTPGo with host-key verification, archive/error routing, and atomic upload/rename.
+- Bearer-token protected partner and operations APIs.
+- Idempotency-key replay, business duplicate detection, and stored-payload manual retry.
+- Versioned partner mapping profiles and runtime mapping audit metadata.
+- IntegrationTransaction, ProcessingLog, IntegrationError, business trace, and failure queue observability.
+- Analyst Console screens for dashboard, transactions, failures, trace, partners, mappings, and Integration Lab.
+- Controlled failure injection for troubleshooting demos.
+- Automated regression testing with contract, X12, UI, real PostgreSQL, and deployed acceptance layers.
+
+One important EDI concept is intentionally visible throughout the project: `997` is a technical functional acknowledgment that says an EDI document was syntactically received, while `990` is the business tender decision that accepts or rejects a load. FreightBridge records those separately so a technically accepted `204` does not accidentally become a business-accepted tender.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  Analyst[Analyst Console / Integration Lab]
+  Apex[Apex Logistics Simulator<br/>REST / JSON]
+  FB[FreightBridge API<br/>FastAPI]
+  Canonical[Canonical Domain<br/>Shipment / Tender / Event]
+  DB[(PostgreSQL / Supabase)]
+  Audit[IntegrationTransaction<br/>ProcessingLog<br/>IntegrationError]
+  Mapper[X12 Mapping / Generation<br/>004010]
+  SFTP[SFTPGo / Railway]
+  Midwest[Midwest Carrier Simulator<br/>X12 / SFTP]
+
+  Analyst -->|Operations, Configuration, Lab APIs| FB
+  Apex -->|Load tender JSON| FB
+  FB --> Canonical
+  FB --> DB
+  FB --> Audit
+  Canonical --> Mapper
+  Mapper -->|204| SFTP
+  SFTP --> Midwest
+  Midwest -->|997 technical ack<br/>990 tender response<br/>214 shipment status| SFTP
+  SFTP --> FB
+  FB -->|canonical state + audit| DB
+  FB -->|tender/status REST updates| Apex
 ```
 
-Current partner state:
+More detail: [portfolio architecture](docs/portfolio/architecture.md), [end-to-end flow](docs/portfolio/end-to-end-flow.md), and [technical decisions](docs/portfolio/technical-decisions.md).
 
-- Apex Logistics: implemented synthetic freight broker / 3PL simulator using HTTPS REST and JSON, with explicit dispatch to FreightBridge.
-- Midwest Carrier: synthetic motor carrier using X12 004010 over Railway/SFTPGo SFTP, with a temporary REST test harness retained for regression testing.
-- FreightBridge: implemented canonical foundation with Apex load tender ingestion, Midwest 204 outbound generation, and Midwest 990 inbound tender-response processing.
+## Successful Lifecycle
 
-```text
-Apex Simulator
-  [implemented]
-      |
-      | HTTPS REST/JSON + bearer
-      v
-FreightBridge
-  [implemented canonical ingestion + 204 outbound + 997/990/214 return flow]
-      |
-      | SFTP /inbound carrying X12 204
-      v
-Midwest
-  [implemented simulator]
-      |
-      | SFTP /outbound carrying X12 997, 990, and 214
-      v
-FreightBridge
-  [stores technical acks; forwards business tender/status updates to Apex]
+```mermaid
+sequenceDiagram
+  participant Analyst as Analyst / Integration Lab
+  participant Apex as Apex
+  participant FB as FreightBridge
+  participant DB as PostgreSQL
+  participant SFTP as SFTPGo
+  participant Midwest as Midwest
+
+  Analyst->>FB: Start Full Shipment Lifecycle
+  FB->>Apex: Create synthetic load
+  Apex->>FB: Dispatch load tender JSON
+  FB->>DB: Persist canonical shipment + transaction audit
+  FB->>FB: Generate Midwest 204
+  FB->>SFTP: Upload 204 .part, rename final
+  SFTP->>Midwest: Midwest polls inbound 204
+  Midwest->>SFTP: Return 997 technical acknowledgment
+  FB->>SFTP: Poll 997
+  FB->>DB: Correlate AK1/AK2 to original 204 controls
+  Midwest->>SFTP: Return 990 business tender response
+  FB->>SFTP: Poll 990
+  FB->>DB: Record business tender decision
+  FB->>Apex: Send tender status update
+  Midwest->>SFTP: Return 214 events: AF, X6, X1, D1
+  FB->>SFTP: Poll 214 files
+  FB->>DB: Append event history and compute current status
+  FB->>Apex: Send shipment status updates
+  Analyst->>FB: Inspect business trace
 ```
 
-Operations support can inspect the same transaction/log/error records through secured `/api/operations` endpoints and the protected Analyst Console. Partner capabilities and mapping profiles are managed through `/api/configuration` and the same console token. The Integration Lab uses `/api/lab` to create and execute controlled end-to-end happy-path scenarios and predefined troubleshooting failure drills without exposing partner credentials to the browser. See [Operational observability and failure queue](docs/operations/observability-and-failure-queue.md), [Idempotency, replay, and manual retry](docs/operations/idempotency-and-retry.md), [Trading partner configuration](docs/operations/trading-partner-configuration.md), [Mapping change control](docs/operations/mapping-change-control.md), [Integration Lab](docs/operations/integration-lab.md), and [Analyst Console](docs/operations/analyst-console.md).
+## Portfolio Reading Path
 
-See [docs/architecture/initial-architecture.md](docs/architecture/initial-architecture.md) for the first architecture diagram.
+- [Portfolio overview](docs/portfolio/README.md)
+- [Architecture](docs/portfolio/architecture.md)
+- [End-to-end flow](docs/portfolio/end-to-end-flow.md)
+- [Troubleshooting case study](docs/portfolio/troubleshooting-case-study.md)
+- [Evidence index](docs/portfolio/evidence.md)
+- [Demo script](docs/portfolio/demo-script.md)
+- [Interview guide](docs/portfolio/interview-guide.md)
+- [Full documentation index](docs/README.md)
 
-## Technology Stack
+## Testing Story
 
-- Frontend: React, TypeScript, Vite, ESLint, deployed to Vercel.
-- Backend: Python, FastAPI, pytest, deployed to Render.
-- Database: Supabase PostgreSQL.
-- Storage: Supabase Storage later for raw EDI payloads and documents if needed.
-- SFTP: Railway-hosted SFTPGo with public TCP proxying.
-- Source control and CI: GitHub and GitHub Actions.
+Coverage gates complement contract, integration, database, frontend, and deployed acceptance tests. Current normal CI includes:
 
-## Repository Structure
+- Frontend lint, Vitest coverage, and production build.
+- FreightBridge API, Apex simulator, and Midwest simulator pytest suites with coverage gates.
+- REST/API contract tests for stable FastAPI route and response surfaces.
+- Apex documented-contract checks against `docs/partners/apex/openapi.yaml`.
+- X12 regression tests for 204, 997, 990, and 214 behavior.
+- Ephemeral PostgreSQL 16 validation that applies migrations `001` through `011` from scratch, verifies schema/seed data, and runs real repository tests.
+- Acceptance harness unit tests.
+- Documentation link validation.
+
+Accepted Milestone 20 coverage evidence was approximately:
+
+- FreightBridge API: 76.62%
+- Apex simulator: 85.80%
+- Midwest simulator: 72.94%
+- Analyst UI line coverage: 73.22%
+
+Deployed regression is manual `workflow_dispatch` because it mutates shared synthetic test data. Milestone 20 runs the Milestone 18 full happy path and then the Milestone 19 controlled failure drills.
+
+## Repository Map
 
 ```text
-apps/
-  analyst-ui/             React + TypeScript protected operations console
-services/
-  freightbridge-api/      FastAPI integration API foundation
-  apex-partner-sim/       FastAPI Apex REST/JSON partner simulator
-  midwest-partner-sim/    FastAPI Midwest X12 partner simulator
-docs/
-  architecture/           System architecture notes
-  partners/               Synthetic partner contracts and profiles
-  mappings/               Future canonical/X12 mapping notes
-  testing/                Testing strategy notes
-  operations/             Deployment and runbook notes
-infrastructure/
-  railway/                SFTPGo/Railway setup and runbook
-  docker/                 Future container support
-  supabase/migrations/    Empty database migration area
-sample-data/
-  x12/                    Synthetic X12 payloads
-  json/                   Future synthetic JSON payloads
-scripts/                  Developer and deployed acceptance automation
+apps/analyst-ui/              React + TypeScript Analyst Console
+services/freightbridge-api/   FastAPI integration and operations API
+services/apex-partner-sim/    Synthetic Apex REST/JSON partner simulator
+services/midwest-partner-sim/ Synthetic Midwest X12 partner simulator
+docs/                         Portfolio, architecture, partner, operations, and testing docs
+infrastructure/supabase/      PostgreSQL migrations 001-011
+infrastructure/railway/       SFTPGo/Railway setup notes
+sample-data/                  Synthetic Apex JSON and Midwest X12 fixtures
+scripts/acceptance/           Deployed acceptance harnesses
+scripts/ci/                   CI helpers including migration and docs validation
 ```
 
 ## Local Development
@@ -94,14 +146,14 @@ npm run build
 npm run dev
 ```
 
-Backend:
+FreightBridge API:
 
 ```bash
 cd services/freightbridge-api
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-pytest
+python -m pytest
 uvicorn app.main:app --reload
 ```
 
@@ -112,7 +164,7 @@ cd services/apex-partner-sim
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-pytest
+python -m pytest
 uvicorn app.main:app --reload
 ```
 
@@ -123,217 +175,49 @@ cd services/midwest-partner-sim
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-pytest
+python -m pytest
 uvicorn app.main:app --reload
 ```
 
-The FreightBridge and Apex backends both expose `GET /health` and `GET /readiness`. Apex business endpoints require bearer-token authentication.
-
-Deployed Milestone 12 acceptance can be run without Postman once deployment environment variables are available:
+Documentation validation:
 
 ```bash
-python -m pip install -r scripts/acceptance/requirements.txt
-python scripts/acceptance/milestone12.py
+python scripts/ci/validate_docs.py
+python -m unittest discover scripts/ci/tests
 ```
 
-Milestone 14 acceptance verifies the operations failure queue with a real duplicate-shipment failure:
+## Sample Data
 
-```bash
-python scripts/acceptance/milestone14.py
-```
+- Apex JSON fixtures: [sample-data/json/apex](sample-data/json/apex/)
+- Midwest X12 fixtures: [sample-data/x12/midwest](sample-data/x12/midwest/)
+- Midwest mapping requirements: [docs/mappings](docs/mappings/README.md)
+- Partner contracts: [docs/partners](docs/partners/README.md)
 
-Milestone 17 acceptance verifies deployed partner/mapping configuration APIs, mapping audit metadata, and the Analyst Console configuration screens:
+## Security And Boundaries
 
-```bash
-python scripts/acceptance/milestone17.py
-```
+Partner credentials stay server-side. The frontend never receives partner bearer tokens, SFTP credentials, database URLs, or private keys. The operations token is entered at runtime by an authorized user and stored only in browser session storage. SFTP host keys are pinned, private keys remain server-side, and normal CI uses local processes plus an ephemeral PostgreSQL service rather than deployed production infrastructure.
 
-Milestone 18 acceptance verifies the deployed Integration Lab full-lifecycle browser workflow:
-
-```bash
-python scripts/acceptance/milestone18.py
-```
-
-Milestone 19 acceptance verifies three representative controlled failure drills through the deployed Analyst UI and resolves only the synthetic errors it creates:
-
-```bash
-python scripts/acceptance/milestone19.py
-```
-
-Milestone 20 hardens the automated QA story: normal CI now includes REST/API contract regression, Apex documented-contract checks, X12/EDI golden regression, integration-state tests, Analyst UI route/workflow regression, coverage gates, and a PostgreSQL 16 migration-chain job that applies migrations 001-011 from scratch. The deployed Milestone 20 pack reuses Milestone 18 and 19:
-
-```bash
-python scripts/acceptance/milestone20.py
-```
-
-See [deployed acceptance harness](docs/testing/deployed-acceptance-harness.md) for required environment variables, GitHub Actions secrets, optional DB verification, and failure reporting. Postman collections remain available for individual route debugging.
-
-## Environment Variables
-
-Copy each `.env.example` file to a local `.env` file when developing locally. Real values must be configured in hosting platforms and must not be committed.
-
-Frontend:
-
-- `VITE_API_BASE_URL`
-- `VITE_APP_ENV`
-
-Backend preferred:
-
-- `APP_ENV`
-- `ALLOWED_ORIGINS`
-- `SUPABASE_URL`
-- `SUPABASE_PUBLISHABLE_KEY`
-- `SUPABASE_SECRET_KEY`
-- `DATABASE_URL`
-- `APEX_INBOUND_BEARER_TOKEN`
-- `OPERATIONS_API_BEARER_TOKEN`
-- `MIDWEST_INBOUND_BEARER_TOKEN`
-- `APEX_SIM_BASE_URL`
-- `APEX_SIM_BEARER_TOKEN`
-- `MWCX_SFTP_HOST`
-- `MWCX_SFTP_PORT`
-- `MWCX_SFTP_USERNAME`
-- `MWCX_SFTP_PRIVATE_KEY_B64`
-- `MWCX_SFTP_HOST_KEY_SHA256`
-
-Backend legacy names temporarily accepted:
-
-- `SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-
-Create `SUPABASE_PUBLISHABLE_KEY` and `SUPABASE_SECRET_KEY` in Render when convenient. After Render has the new names and the API has redeployed successfully, the legacy names can be removed.
-
-Apex simulator:
-
-- `APP_ENV`
-- `DATABASE_URL`
-- `APEX_API_BEARER_TOKEN`
-- `APEX_API_READONLY_TOKEN`
-- `FREIGHTBRIDGE_API_BASE_URL`
-- `FREIGHTBRIDGE_APEX_BEARER_TOKEN`
-
-Midwest simulator:
-
-- `APP_ENV`
-- `DATABASE_URL`
-- `MIDWEST_API_BEARER_TOKEN`
-- `MIDWEST_API_READONLY_TOKEN`
-- `FREIGHTBRIDGE_API_BASE_URL`
-- `FREIGHTBRIDGE_MIDWEST_BEARER_TOKEN`
-- `MWCX_SFTP_HOST`
-- `MWCX_SFTP_PORT`
-- `MWCX_SFTP_USERNAME`
-- `MWCX_SFTP_PRIVATE_KEY_B64`
-- `MWCX_SFTP_HOST_KEY_SHA256`
-
-FreightBridge Midwest direct test harness:
-
-- `MIDWEST_SIM_BASE_URL`
-- `MIDWEST_SIM_BEARER_TOKEN`
-
-Railway/SFTPGo service:
-
-- Container image: `ghcr.io/drakkan/sftpgo:2.7.x`
-- Internal SFTP port: `2022`
-- Web Admin port: `8080`
-- Persistent volume: `/var/lib/sftpgo`
-- Runbook: [SFTPGo Railway runbook](docs/operations/sftpgo-railway-runbook.md)
-
-## Secret Boundaries
-
-Supabase secret keys, database URLs, private SSH keys, passwords, and Render/Railway/Vercel tokens belong only in secure platform secret stores. Browser-exposed frontend variables must use the `VITE_` prefix and should only contain values that are safe to expose publicly, such as a backend API URL and app environment label.
-
-Do not expose Supabase keys, database connection strings, or `OPERATIONS_API_BEARER_TOKEN` to Vercel frontend code. The Analyst Console token is entered at runtime and stored only in browser session storage.
-
-## Contract Documentation
-
-Major Milestone 3 contract files:
-
-- [Apex partner profile](docs/partners/apex/partner-profile.md)
-- [Apex data dictionary](docs/partners/apex/data-dictionary.md)
-- [Apex OpenAPI contract](docs/partners/apex/openapi.yaml)
-- [Apex outbound load tender contract](docs/partners/apex/outbound-load-tender-contract.md)
-- [Apex service catalog](docs/partners/apex/service-catalog.md)
-- [Midwest partner profile](docs/partners/midwest/partner-profile.md)
-- [Midwest data dictionary](docs/partners/midwest/data-dictionary.md)
-- [Midwest EDI implementation guide](docs/partners/midwest/edi-implementation-guide.md)
-- [Midwest connectivity specification](docs/partners/midwest/connectivity-specification.md)
-- [Midwest service catalog](docs/partners/midwest/service-catalog.md)
-- [Trading partner matrix](docs/partners/trading-partner-matrix.md)
-- [Error contract](docs/partners/error-contract.md)
-- [Interface control document](docs/architecture/interface-control-document.md)
-- [Contract decisions](docs/architecture/contract-decisions.md)
-- [Canonical data model](docs/architecture/canonical-data-model.md)
-- [Database schema](docs/architecture/database-schema.md)
-- [Generic X12 foundation](docs/architecture/x12-foundation.md)
-- [Midwest 204 generation architecture](docs/architecture/midwest-204-generation.md)
-- [Milestone 4 database acceptance](docs/testing/milestone-4-database-acceptance.md)
-- [Milestone 5 Apex acceptance](docs/testing/milestone-5-apex-acceptance.md)
-- [Apex load tender mapping](docs/mappings/apex-load-tender-to-canonical.md)
-- [Canonical shipment to Midwest 204 mapping](docs/mappings/canonical-to-midwest-204.md)
-- [Milestone 6 Apex -> FreightBridge acceptance](docs/testing/milestone-6-apex-freightbridge-integration.md)
-- [Milestone 7 Generic X12 foundation acceptance](docs/testing/milestone-7-x12-foundation.md)
-- [Milestone 8 Midwest 204 generation acceptance](docs/testing/milestone-8-midwest-204-generation.md)
-- [Milestone 9 Midwest simulator acceptance](docs/testing/milestone-9-midwest-simulator.md)
-- [Milestone 10 Midwest 990 return flow acceptance](docs/testing/milestone-10-midwest-990-return-flow.md)
-- [Milestone 11 Midwest SFTP transport acceptance](docs/testing/milestone-11-sftp-transport.md)
-- [Milestone 12 Midwest 214 status flow acceptance](docs/testing/milestone-12-midwest-214-status-flow.md)
-- [Milestone 13 997 functional acknowledgment acceptance](docs/testing/milestone-13-997-functional-acknowledgment.md)
-- [Deployed acceptance harness](docs/testing/deployed-acceptance-harness.md)
-- [Midwest 214 to canonical event mapping](docs/mappings/midwest-214-to-canonical-event.md)
-- [Midwest 997 functional acknowledgment mapping](docs/mappings/midwest-997-functional-acknowledgment.md)
-- [Analyst Console runbook](docs/operations/analyst-console.md)
-- [Milestone 16 Analyst Console acceptance](docs/testing/milestone-16-analyst-console.md)
-- [Milestone 19 Failure Injection acceptance](docs/testing/milestone-19-failure-injection.md)
-
-Sample contract fixtures:
-
-- Apex JSON examples: `sample-data/json/apex/`
-- Midwest X12 examples: `sample-data/x12/midwest/`
-
-## Planned Deployment Targets
-
-- Vercel: `apps/analyst-ui`
-- Render: `services/freightbridge-api`
-- Render: `services/apex-partner-sim`
-- Supabase: PostgreSQL and later Storage
-- Railway: SFTPGo for Midwest SFTP exchange
-
-## Current Milestone
+## Implemented Vs Deferred
 
 Implemented:
 
-- Cloud foundation and deployment structure.
-- API liveness and database readiness checks.
-- Protected Analyst Console with token gate, dashboard, transaction search/detail, failure queue/detail, business trace, and manual retry/resolve/reopen controls.
-- FreightBridge canonical domain models.
-- PostgreSQL domain schema once `infrastructure/supabase/migrations/20260920_001_create_freightbridge_domain.sql` is applied.
-- Apex Logistics REST/JSON simulator.
-- Apex logical PostgreSQL schema once `infrastructure/supabase/migrations/20260920_002_create_apex_simulator.sql` is applied.
-- Apex -> FreightBridge REST/JSON integration.
-- Apex partner authentication for FreightBridge inbound loads.
-- Apex -> canonical shipment mapping.
-- Integration transaction, processing log, and integration error audit for Apex ingestion.
-- Generic X12 parsing, envelope validation, and serialization foundation.
-- Midwest-specific canonical shipment -> X12 204 generation preview endpoint.
-- Independent Midwest Carrier simulator with temporary direct REST/X12 delivery harness.
-- Midwest tender decision endpoint, independent X12 990 generation, FreightBridge inbound 990 processing, and Apex tender-status readback.
-- Railway/SFTPGo-backed Midwest 204 and 990 file exchange with manual poll endpoints, archive/error routing, host-key verification, and atomic upload protection.
-- Midwest X12 214 shipment-status event creation, SFTP dispatch, FreightBridge canonical event history/current-status handling, and Apex shipment-status readback.
-- Midwest X12 997 functional acknowledgment generation, SFTP dispatch, FreightBridge AK1/AK2 correlation to outbound 204, and technical acknowledgment audit.
-- Reusable deployed acceptance harness for black-box testing against Apex, FreightBridge, Midwest, SFTPGo, and the Analyst UI through public HTTP/browser paths.
-- Controlled Integration Lab failure drills for authentication, JSON parsing, Apex contract validation, duplicate shipment detection, X12 214 envelope/mapping/version diagnosis, and SFTP host-key boundary diagnosis.
+- Apex REST/JSON load tender ingestion.
+- Canonical shipment, tender, and event persistence.
+- Midwest X12 204 generation and SFTP delivery.
+- Midwest 997 technical acknowledgment processing.
+- Midwest 990 tender response processing.
+- Midwest 214 shipment event processing.
+- Operations observability, failure queue, business trace, manual retry, partner configuration, mapping versioning, Analyst Console, Integration Lab, and regression hardening.
 
-Specified:
+Deferred / future:
 
-- Apex Logistics REST/JSON contract.
-- Midwest Carrier X12/SFTP contract.
-- Midwest 204 mapping requirements.
-- Partner comparison, interface control, error categories, and synthetic fixtures.
+- 210 Freight Invoice.
+- SOAP/XML third partner.
+- AS2 and MDN.
+- X12 999 and TA1.
+- Broad arbitrary graphical mapping designer.
+- Full production environment promotion and change-management workflow.
 
-Planned:
+## Known Limitations
 
-- Generic/configurable mapping engine.
-- Expanded analyst workflow features beyond the Milestone 16 read/triage console.
-
-Do not begin FreightBridge product features from this milestone.
+FreightBridge is intentionally scoped as a portfolio lab. It uses synthetic partners, supports a limited project-specific X12 004010 profile, and demonstrates production-style integration concerns without claiming full X12 standard coverage or production readiness.

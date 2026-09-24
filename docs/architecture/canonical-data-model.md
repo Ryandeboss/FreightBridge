@@ -1,5 +1,7 @@
 # Canonical Data Model
 
+Historical design record with current domain concepts. Later implementation status is summarized in the repository [README](../../README.md) and [portfolio architecture](../portfolio/architecture.md).
+
 FreightBridge uses an internal canonical model so partner-specific payloads do not become the application's core business model.
 
 The model is independent from:
@@ -30,7 +32,7 @@ Apex uses camelCase JSON such as `loadId`, `bolNumber`, and nested `pickup` / `d
 
 ## Not Midwest
 
-Midwest uses X12 concepts such as B2, L11, AT7, interchange control numbers, and future SFTP files. FreightBridge stores canonical business concepts and integration metadata without treating raw X12 segments as the domain model.
+Midwest uses X12 concepts such as B2, L11, AT7, interchange control numbers, and SFTP files. FreightBridge stores canonical business concepts and integration metadata without treating raw X12 segments as the domain model.
 
 ## Internal ID vs Business Number
 

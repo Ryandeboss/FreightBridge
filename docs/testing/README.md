@@ -1,30 +1,48 @@
-# Testing Notes
+# Testing Documentation
 
-Current test coverage:
+FreightBridge's current testing story is the Milestone 20 regression system: multiple test boundaries protect different classes of integration risk.
 
-- Frontend lint, Vitest console-flow tests, and production build.
-- Backend `/health` endpoint test with pytest.
-- FreightBridge domain model, repository, and readiness tests.
-- Apex simulator model, auth, business endpoint, status progression, error envelope, and readiness tests.
-- Apex -> FreightBridge ingestion, mapping, audit, dispatch, and transaction-persistence regression tests.
-- Generic X12 parsing, envelope validation, serializer, and structural fixture tests.
-- Midwest 204 generation tests, including LOAD500 fixture reproduction and business validation failures.
-- Midwest simulator receipt/extraction tests and FreightBridge direct-delivery audit tests.
-- Midwest 990 tender-response generation, FreightBridge inbound persistence/audit, Apex forwarding, and Apex tender-status readback tests.
-- Midwest SFTP 204/990 dispatch and poll tests for atomic upload, archive/error moves, remote audit metadata, host-key/auth/config/file-conflict error mapping, and REST-harness compatibility.
-- Midwest 214 shipment-status generation, SFTP dispatch/poll routing, canonical event persistence, out-of-order current-status protection, Apex forwarding, and Apex status-history readback tests.
-- Midwest 997 functional-acknowledgment generation, SFTP dispatch/poll routing, AK1/AK2 correlation to outbound 204, technical acknowledgment persistence, and 997-vs-990 regression tests.
-- Operations API authentication, transaction search/detail, business trace, correlation lookup, error queue, resolve/reopen, summary, and safe redaction tests.
-- Milestone 15 idempotency, replay, SFTP archive collision, identical-file reconciliation, and manual retry architecture tests.
-- Milestone 16 Analyst Console token-gate, dashboard, transaction, failure, business-trace, lock, and deployed browser acceptance tests.
-- Milestone 17 partner configuration, mapping profile/version workflow, runtime mapping audit, Analyst Console Partners/Mappings, and deployed browser acceptance tests.
-- Milestone 18 Integration Lab run/step APIs, Analyst Console scenario workflow, 204/997/990/214 inspection, and deployed browser acceptance tests.
-- Milestone 19 controlled failure drills for Apex auth/parsing/validation/duplicate failures, X12 214 envelope/status/version failures, SFTP host-key boundary behavior, SFTP poll `transactionId` observability, Analyst Console Failure Drills UI, and deployed browser acceptance tests.
-- Offline unit tests for the deployed acceptance harness helpers.
-- GitHub Actions workflow for frontend and backend checks.
-- Manual-only GitHub Actions workflow for deployed acceptance.
-- Milestone 20 route/response contract tests, Apex documented-contract checks, X12 golden regressions, frontend route checks, coverage gates, and PostgreSQL migration-chain regression.
+## Current Regression Structure
 
-For the regression architecture, see [test strategy](test-strategy.md), [traceability matrix](regression-traceability.md), and [Milestone 20](milestone-20-regression-hardening.md).
+- Unit tests: domain models, mappers, X12 parser/serializer, service helpers, failure classification, and simulator behavior.
+- API contract tests: protected route/method surfaces and important response fields.
+- Partner contract tests: Apex documented OpenAPI paths, schema fields, and enums.
+- X12 regression tests: deterministic 204 generation, 997 technical acknowledgment, 990 business response, 214 status events, envelope controls, and parser behavior.
+- Integration-state tests with fakes: idempotency, retry, SFTP behavior, mapping audit, Integration Lab, and failure drills.
+- Real database tests: GitHub Actions starts PostgreSQL 16, applies migrations `001` through `011`, verifies schema/seed data, and runs repository smoke tests.
+- Frontend tests: Analyst Console route and workflow regression with mocked HTTP at the API boundary.
+- Documentation tests: local Markdown links are validated by `scripts/ci/validate_docs.py`.
+- Deployed acceptance: manual black-box workflows against synthetic hosted environments.
 
-For full deployed milestone acceptance, prefer the Python harness documented in [deployed-acceptance-harness.md](deployed-acceptance-harness.md). Milestone-specific guides include [Milestone 12](milestone-12-midwest-214-status-flow.md), [Milestone 13](milestone-13-997-functional-acknowledgment.md), [Milestone 14](milestone-14-operational-observability.md), [Milestone 15](milestone-15-idempotency-retry.md), [Milestone 16](milestone-16-analyst-console.md), [Milestone 17](milestone-17-partner-mapping-configuration.md), [Milestone 18](milestone-18-integration-lab.md), [Milestone 19](milestone-19-failure-injection.md), and [Milestone 20](milestone-20-regression-hardening.md). The Postman collections remain useful for debugging individual routes.
+See [test strategy](test-strategy.md), [regression traceability](regression-traceability.md), and [Milestone 20 regression hardening](milestone-20-regression-hardening.md).
+
+## Deployed Acceptance
+
+The deployed acceptance harness remains manual because it mutates shared synthetic test data. See [deployed acceptance harness](deployed-acceptance-harness.md).
+
+Key current flows:
+
+- [Milestone 18 Integration Lab happy path](milestone-18-integration-lab.md)
+- [Milestone 19 controlled failure injection](milestone-19-failure-injection.md)
+- [Milestone 20 regression pack](milestone-20-regression-hardening.md)
+
+## Historical Milestone Records
+
+Earlier milestone documents remain linked as implementation history and acceptance evidence:
+
+- [Milestone 4 database acceptance](milestone-4-database-acceptance.md)
+- [Milestone 5 Apex acceptance](milestone-5-apex-acceptance.md)
+- [Milestone 6 Apex -> FreightBridge integration](milestone-6-apex-freightbridge-integration.md)
+- [Milestone 7 X12 foundation](milestone-7-x12-foundation.md)
+- [Milestone 8 Midwest 204 generation](milestone-8-midwest-204-generation.md)
+- [Milestone 9 Midwest simulator](milestone-9-midwest-simulator.md)
+- [Milestone 10 Midwest 990 return flow](milestone-10-midwest-990-return-flow.md)
+- [Milestone 11 SFTP transport](milestone-11-sftp-transport.md)
+- [Milestone 12 Midwest 214 status flow](milestone-12-midwest-214-status-flow.md)
+- [Milestone 13 997 functional acknowledgment](milestone-13-997-functional-acknowledgment.md)
+- [Milestone 14 operational observability](milestone-14-operational-observability.md)
+- [Milestone 15 idempotency and retry](milestone-15-idempotency-retry.md)
+- [Milestone 16 Analyst Console](milestone-16-analyst-console.md)
+- [Milestone 17 partner mapping configuration](milestone-17-partner-mapping-configuration.md)
+
+These files may describe features as future work relative to their milestone. The current system status is summarized in the repository [README](../../README.md) and [portfolio docs](../portfolio/README.md).

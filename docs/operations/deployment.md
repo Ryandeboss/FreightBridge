@@ -1,6 +1,6 @@
 # Deployment Notes
 
-This project is not ready for production traffic. These notes describe the intended hosting layout once platform accounts and secrets are available.
+This project is a portfolio lab and is not ready for production traffic. These notes describe the current hosting layout and secret boundaries.
 
 ## Vercel
 
@@ -32,12 +32,12 @@ This project is not ready for production traffic. These notes describe the inten
 
 ## Supabase
 
-- Create a Supabase project when the backend needs persistence.
-- Store database migrations under `infrastructure/supabase/migrations`.
+- Supabase hosts PostgreSQL for the deployed synthetic environment.
+- Database migrations live under `infrastructure/supabase/migrations`.
 - Keep `SUPABASE_SECRET_KEY` and `DATABASE_URL` backend-only.
 
 ## Railway
 
-- Future SFTPGo deployment belongs under Railway.
-- Use Railway public TCP proxying for SFTP ingress when that milestone begins.
+- SFTPGo runs on Railway for the Midwest SFTP exchange.
+- Railway public TCP proxying is used for SFTP ingress.
 - Required placeholders are documented in `infrastructure/railway/README.md`.

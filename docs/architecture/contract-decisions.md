@@ -1,5 +1,7 @@
 # Contract Decision Log
 
+Historical design record. Later implementation status is summarized in the repository [README](../../README.md) and [portfolio docs](../portfolio/README.md).
+
 These decisions apply to Milestone 3 contract design only. They do not implement the canonical model, mappings, EDI parser, SFTP exchange, simulators, or persistence.
 
 ## Apex Uses REST/JSON

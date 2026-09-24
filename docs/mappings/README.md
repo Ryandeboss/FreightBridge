@@ -1,6 +1,6 @@
 # Mapping Documentation
 
-This folder holds executable mapping requirements and future mapping notes.
+This folder holds the implemented partner-specific mapping references for FreightBridge.
 
 - [Apex load tender to canonical shipment](apex-load-tender-to-canonical.md)
 - [Canonical shipment to Midwest 204](canonical-to-midwest-204.md)
@@ -15,4 +15,4 @@ Milestone 17 stores the current partner-specific mapping profiles in the databas
 - `MWCX_214_TO_CANONICAL`
 - `MWCX_997_TO_ACK`
 
-Generic arbitrary mapping remains intentionally out of scope.
+Generic arbitrary mapping remains intentionally out of scope. FreightBridge supports explicit profile/version control for the mapping keys listed above, not an unrestricted mapping designer.
