@@ -5,16 +5,19 @@ import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
+from app.infrastructure.configuration_repository import IntegrationConfigurationRepository
 from app.infrastructure.database import DatabaseConnectivityError, connect
 from app.infrastructure.repositories import IntegrationRepository
+from app.integrations.configuration import load_active_mapping_profile
 from app.integrations.common.correlation import CORRELATION_HEADER, resolve_correlation_id
-from app.integrations.common.errors import IntegrationAPIError
+from app.integrations.common.errors import ClassifiedIntegrationFailure, IntegrationAPIError
 from app.integrations.midwest.dispatch_service import MidwestDirectDispatchService
 from app.integrations.midwest.errors import Midwest204MappingError, MidwestShipmentNotFoundError
 from app.integrations.midwest.inbound_990_service import Midwest990IngestionService
 from app.integrations.midwest.service import Midwest204DependencyError, Midwest204GenerationService
 from app.integrations.midwest.sftp_poll_service import MidwestSftpOutboundPollService, MidwestSftpReadinessService
 from app.integrations.midwest.transport import MidwestDeliveryError, MidwestHttpTestTransport, MidwestSftpTransport
+from app.models.configuration import Midwest204MappingConfig
 
 router = APIRouter(prefix='/api/integrations/midwest', tags=['midwest integrations'])
 
@@ -44,6 +47,7 @@ def get_midwest_direct_dispatch_service() -> Iterator[MidwestDirectDispatchServi
         audit_connection=audit_connection,
         business_connection=business_connection,
         transport=MidwestHttpTestTransport(),
+        configuration_repository=IntegrationConfigurationRepository(audit_connection),
       )
   except DatabaseConnectivityError as exc:
     raise HTTPException(
@@ -66,6 +70,7 @@ def get_midwest_sftp_dispatch_service() -> Iterator[MidwestDirectDispatchService
         audit_connection=audit_connection,
         business_connection=business_connection,
         transport=MidwestSftpTransport(),
+        configuration_repository=IntegrationConfigurationRepository(audit_connection),
       )
   except DatabaseConnectivityError as exc:
     raise HTTPException(
@@ -87,6 +92,7 @@ def get_midwest_990_ingestion_service() -> Iterator[Midwest990IngestionService]:
       yield Midwest990IngestionService(
         audit_connection=audit_connection,
         business_connection=business_connection,
+        configuration_repository=IntegrationConfigurationRepository(audit_connection),
       )
   except DatabaseConnectivityError as exc:
     raise HTTPException(
@@ -108,6 +114,7 @@ def get_midwest_sftp_outbound_poll_service() -> Iterator[MidwestSftpOutboundPoll
       yield MidwestSftpOutboundPollService(
         audit_connection=audit_connection,
         business_connection=business_connection,
+        configuration_repository=IntegrationConfigurationRepository(audit_connection),
       )
   except DatabaseConnectivityError as exc:
     raise HTTPException(
@@ -141,13 +148,38 @@ def get_integration_repository() -> Iterator:
     ) from exc
 
 
+def get_configuration_repository() -> Iterator:
+  try:
+    with connect() as connection:
+      yield IntegrationConfigurationRepository(connection)
+  except DatabaseConnectivityError as exc:
+    raise HTTPException(
+      status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+      detail={
+        'error': {
+          'code': 'DEPENDENCY_ERROR',
+          'message': 'A downstream dependency failed while reading configuration.',
+        }
+      },
+    ) from exc
+
+
 @router.post('/load-tenders/{shipment_number}/generate', status_code=status.HTTP_200_OK)
 def generate_midwest_load_tender_preview(
   shipment_number: str,
   service: Midwest204GenerationService = Depends(get_midwest_204_generation_service),
+  configuration_repository: IntegrationConfigurationRepository = Depends(get_configuration_repository),
 ) -> JSONResponse:
   try:
-    result = service.generate_for_shipment_number(shipment_number)
+    active_mapping = load_active_mapping_profile(
+      configuration_repository,
+      'CANONICAL_TO_MWCX_204',
+      Midwest204MappingConfig,
+    )
+    result = service.generate_for_shipment_number(
+      shipment_number,
+      config=active_mapping.config,
+    )
   except MidwestShipmentNotFoundError:
     return JSONResponse(
       status_code=status.HTTP_404_NOT_FOUND,
@@ -167,6 +199,16 @@ def generate_midwest_load_tender_preview(
           'message': exc.message,
           'detailCode': exc.code.value,
           'field': exc.field,
+        }
+      },
+    )
+  except ClassifiedIntegrationFailure as exc:
+    return JSONResponse(
+      status_code=exc.status_code,
+      content={
+        'error': {
+          'code': exc.code,
+          'message': exc.message,
         }
       },
     )

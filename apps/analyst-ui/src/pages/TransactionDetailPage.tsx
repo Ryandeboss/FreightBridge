@@ -98,6 +98,16 @@ export function TransactionDetailPage() {
               <Definition label="Transport" value={detail.transaction.transport} />
               <Definition label="Format" value={detail.transaction.messageFormat} />
               <Definition label="Stage" value={detail.transaction.processingStage} />
+              <Definition label="Mapping" value={detail.transaction.mappingKey} />
+              <Definition
+                label="Mapping Profile"
+                value={detail.transaction.mappingProfileId}
+                linkPrefix="/mappings/"
+              />
+              <Definition
+                label="Mapping Version"
+                value={detail.transaction.mappingProfileVersion ? `v${detail.transaction.mappingProfileVersion}` : null}
+              />
               <Definition label="Replay of" value={detail.transaction.replayOfTransactionId} linkPrefix="/transactions/" />
               <Definition label="Parent" value={detail.transaction.parentTransactionId} linkPrefix="/transactions/" />
               <Definition label="Created" value={formatLongDateTime(detail.transaction.createdAt)} />

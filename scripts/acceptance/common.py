@@ -218,6 +218,29 @@ class SafeHttpClient:
       retry=False,
     )
 
+  def patch_json(
+    self,
+    path: str,
+    payload: dict[str, Any],
+    *,
+    token: str | None = None,
+    expected: tuple[int, ...] = (200,),
+    step: str,
+    correlation_id: str | None = None,
+    extra_headers: dict[str, str] | None = None,
+  ) -> dict[str, Any]:
+    return self._request(
+      'PATCH',
+      path,
+      token=token,
+      json_payload=payload,
+      expected=expected,
+      step=step,
+      correlation_id=correlation_id,
+      extra_headers=extra_headers,
+      retry=False,
+    )
+
   def _request(
     self,
     method: str,

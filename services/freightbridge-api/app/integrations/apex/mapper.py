@@ -10,6 +10,7 @@ from app.domain import (
   ShipmentReference,
 )
 from app.integrations.apex.models import ApexEquipmentType, ApexInboundLoad, ApexReferenceType
+from app.models.configuration import ApexLoadMappingConfig
 
 
 class ApexMappingError(ValueError):
@@ -35,12 +36,27 @@ REFERENCE_MAP = {
 }
 
 
-def map_apex_load_to_canonical(load: ApexInboundLoad, source_partner_id: UUID | None = None) -> ApexMappingResult:
+def default_apex_load_mapping_config() -> ApexLoadMappingConfig:
+  return ApexLoadMappingConfig(
+    equipment_map={key.value: value for key, value in EQUIPMENT_MAP.items()},
+    reference_map={key.value: value for key, value in REFERENCE_MAP.items()},
+    ignored_reference_types=[ApexReferenceType.APPOINTMENT.value],
+  )
+
+
+def map_apex_load_to_canonical(
+  load: ApexInboundLoad,
+  source_partner_id: UUID | None = None,
+  *,
+  config: ApexLoadMappingConfig | None = None,
+) -> ApexMappingResult:
+  resolved_config = config or default_apex_load_mapping_config()
   try:
-    equipment_type = EQUIPMENT_MAP[load.equipment_type]
+    equipment_type = resolved_config.equipment_map[load.equipment_type.value]
   except KeyError as exc:
     raise ApexMappingError('Unsupported Apex equipment type.') from exc
 
+  configured_ignored_reference_types = set(resolved_config.ignored_reference_types)
   ignored_reference_types: set[str] = set()
   references: dict[tuple[ReferenceType, str], ShipmentReference] = {}
 
@@ -58,10 +74,14 @@ def map_apex_load_to_canonical(load: ApexInboundLoad, source_partner_id: UUID | 
   add_reference(ReferenceType.CUSTOMER_REFERENCE, load.customer_reference)
 
   for source_reference in load.references:
-    if source_reference.type == ApexReferenceType.APPOINTMENT:
+    if source_reference.type.value in configured_ignored_reference_types:
       ignored_reference_types.add(source_reference.type.value)
       continue
-    add_reference(REFERENCE_MAP[source_reference.type], source_reference.value)
+    try:
+      reference_type = resolved_config.reference_map[source_reference.type.value]
+    except KeyError as exc:
+      raise ApexMappingError('Unsupported Apex reference type.') from exc
+    add_reference(reference_type, source_reference.value)
 
   metadata: dict[str, object] = {
     'loadId': load.load_id,

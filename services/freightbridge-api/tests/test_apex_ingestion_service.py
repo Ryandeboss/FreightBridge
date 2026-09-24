@@ -143,6 +143,11 @@ class FakeIntegrationRepository:
   def update_business_identifier(self, transaction_id, business_identifier: str) -> None:
     self.state.transactions[transaction_id]['business_identifier'] = business_identifier
 
+  def update_mapping_audit(self, transaction_id, *, mapping_profile_id, mapping_profile_version, mapping_key) -> None:
+    self.state.transactions[transaction_id]['mapping_profile_id'] = mapping_profile_id
+    self.state.transactions[transaction_id]['mapping_profile_version'] = mapping_profile_version
+    self.state.transactions[transaction_id]['mapping_key'] = mapping_key
+
   def update_processing_state(self, transaction_id, status, stage, *, processed: bool = False) -> None:
     self.state.transactions[transaction_id]['status'] = status
     self.state.transactions[transaction_id]['stage'] = stage
@@ -231,6 +236,35 @@ class FakeIntegrationRepository:
     self.state.transactions[transaction_id]['business_identifier'] = business_identifier
 
 
+class FakeConfigurationRepository:
+  def __init__(self, *, capability_enabled: bool = True) -> None:
+    self.capability_enabled = capability_enabled
+    self.mapping_profile_id = uuid4()
+
+  def check_capability_enabled(self, **kwargs) -> bool:
+    return self.capability_enabled
+
+  def get_active_mapping(self, mapping_key: str) -> dict[str, object]:
+    return {
+      'id': self.mapping_profile_id,
+      'mapping_key': mapping_key,
+      'version_number': 7,
+      'settings': {
+        'equipmentMap': {
+          'VAN_53': 'DRY_VAN_53',
+          'REEFER_53': 'REFRIGERATED_53',
+          'FLATBED': 'FLATBED',
+        },
+        'referenceMap': {
+          'BOL': 'BOL',
+          'PO': 'PO',
+          'CUSTOMER_REF': 'CUSTOMER_REFERENCE',
+        },
+        'ignoredReferenceTypes': ['APPOINTMENT'],
+      },
+    }
+
+
 @pytest.fixture(autouse=True)
 def configure_token(monkeypatch) -> None:
   monkeypatch.setenv('APEX_INBOUND_BEARER_TOKEN', 'inbound-test-token')
@@ -245,6 +279,7 @@ def build_service(
   state: FakeState,
   *,
   fail_create: bool = False,
+  configuration_repository: FakeConfigurationRepository | None = None,
 ) -> tuple[ApexLoadTenderIngestionService, FakeConnection, FakeConnection]:
   audit_connection = FakeConnection('audit')
   business_connection = FakeConnection('business')
@@ -253,6 +288,7 @@ def build_service(
     business_connection=business_connection,
     freightbridge_repository=FakeFreightBridgeRepository(state, fail_create=fail_create),
     integration_repository=FakeIntegrationRepository(state),
+    configuration_repository=configuration_repository,
   )
   return service, audit_connection, business_connection
 
@@ -319,6 +355,42 @@ def test_successful_ingestion_creates_audit_logs_and_canonical_shipment() -> Non
   assert state.errors == []
   assert audit_connection.transaction_entries == 0
   assert business_connection.transaction_entries == 1
+
+
+def test_successful_ingestion_records_active_mapping_profile() -> None:
+  state = FakeState()
+  configuration_repository = FakeConfigurationRepository()
+  service, _, _ = build_service(state, configuration_repository=configuration_repository)
+
+  result = service.ingest(
+    raw_body=raw_payload(),
+    authorization_header=auth_header(),
+    correlation_id='corr-configured',
+  )
+
+  transaction = state.transactions[result.transaction_id]
+  assert transaction['mapping_profile_id'] == configuration_repository.mapping_profile_id
+  assert transaction['mapping_profile_version'] == 7
+  assert transaction['mapping_key'] == 'APEX_LOAD_TO_CANONICAL'
+
+
+def test_disabled_apex_capability_blocks_ingestion_with_deterministic_error() -> None:
+  state = FakeState()
+  service, _, _ = build_service(
+    state,
+    configuration_repository=FakeConfigurationRepository(capability_enabled=False),
+  )
+
+  with pytest.raises(IntegrationAPIError) as exc_info:
+    service.ingest(
+      raw_body=raw_payload(),
+      authorization_header=auth_header(),
+      correlation_id='corr-disabled-capability',
+    )
+
+  assert exc_info.value.status_code == 409
+  assert exc_info.value.code == 'PARTNER_CAPABILITY_DISABLED'
+  assert state.errors[0]['category'] == ErrorCategory.BUSINESS_VALIDATION_ERROR
 
 
 @pytest.mark.parametrize('authorization_header', [None, 'Bearer wrong-token'])

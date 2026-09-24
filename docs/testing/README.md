@@ -17,10 +17,11 @@ Current test coverage:
 - Operations API authentication, transaction search/detail, business trace, correlation lookup, error queue, resolve/reopen, summary, and safe redaction tests.
 - Milestone 15 idempotency, replay, SFTP archive collision, identical-file reconciliation, and manual retry architecture tests.
 - Milestone 16 Analyst Console token-gate, dashboard, transaction, failure, business-trace, lock, and deployed browser acceptance tests.
+- Milestone 17 partner configuration, mapping profile/version workflow, runtime mapping audit, Analyst Console Partners/Mappings, and deployed browser acceptance tests.
 - Offline unit tests for the deployed acceptance harness helpers.
 - GitHub Actions workflow for frontend and backend checks.
 - Manual-only GitHub Actions workflow for deployed acceptance.
 
-For full deployed milestone acceptance, prefer the Python harness documented in [deployed-acceptance-harness.md](deployed-acceptance-harness.md). Milestone-specific guides include [Milestone 12](milestone-12-midwest-214-status-flow.md), [Milestone 13](milestone-13-997-functional-acknowledgment.md), [Milestone 14](milestone-14-operational-observability.md), [Milestone 15](milestone-15-idempotency-retry.md), and [Milestone 16](milestone-16-analyst-console.md). The Postman collections remain useful for debugging individual routes.
+For full deployed milestone acceptance, prefer the Python harness documented in [deployed-acceptance-harness.md](deployed-acceptance-harness.md). Milestone-specific guides include [Milestone 12](milestone-12-midwest-214-status-flow.md), [Milestone 13](milestone-13-997-functional-acknowledgment.md), [Milestone 14](milestone-14-operational-observability.md), [Milestone 15](milestone-15-idempotency-retry.md), [Milestone 16](milestone-16-analyst-console.md), and [Milestone 17](milestone-17-partner-mapping-configuration.md). The Postman collections remain useful for debugging individual routes.
 
 Future milestones should add API contract tests, simulator tests, database tests, integration pipeline tests, and deployed acceptance scripts that reuse `scripts/acceptance/common.py`.

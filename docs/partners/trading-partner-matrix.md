@@ -42,3 +42,15 @@ The sample fixtures intentionally reuse these synthetic values:
 - Origin: ABC Factory, Aurora, IL
 - Destination: XYZ Warehouse, Detroit, MI
 - Midwest carrier code: `MWCX`
+
+## Configured Capabilities
+
+Milestone 17 seeds capability records for the currently supported flows:
+
+- Apex inbound `APEX_LOAD_TENDER` over REST/JSON v1
+- Apex outbound `APEX_TENDER_RESPONSE` over REST/JSON v1
+- Apex outbound `APEX_SHIPMENT_STATUS` over REST/JSON v1
+- Midwest outbound `204` over SFTP/X12 004010 and REST/X12 test harness
+- Midwest inbound `990` over SFTP/X12 004010 and REST/X12 test harness
+- Midwest inbound `214` over SFTP/X12 004010
+- Midwest inbound `997` over SFTP/X12 004010

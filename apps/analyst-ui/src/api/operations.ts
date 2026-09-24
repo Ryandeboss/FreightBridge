@@ -19,6 +19,9 @@ export type TransactionSummary = {
   retryCount: number;
   parentTransactionId: string | null;
   replayOfTransactionId: string | null;
+  mappingProfileId: string | null;
+  mappingProfileVersion: number | null;
+  mappingKey: string | null;
   receivedAt: string | null;
   processedAt: string | null;
   createdAt: string;

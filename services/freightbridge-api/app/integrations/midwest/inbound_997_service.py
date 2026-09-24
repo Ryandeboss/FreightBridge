@@ -15,12 +15,15 @@ from app.domain import (
   ProcessingStatus,
   Transport,
 )
+from app.infrastructure.configuration_repository import IntegrationConfigurationRepository
 from app.infrastructure.repositories import FreightBridgeRepository, IntegrationRepository
+from app.integrations.configuration import ensure_partner_capability_enabled, load_active_mapping_profile
 from app.integrations.common.errors import ClassifiedIntegrationFailure, IntegrationAPIError
 from app.integrations.common.ingestion import payload_sha256
 from app.integrations.midwest.constants import MIDWEST_PARTNER_CODE
 from app.integrations.midwest.mapping_997 import Midwest997MappingError, map_midwest_997
 from app.integrations.x12 import X12Error, parse_x12, validate_x12_envelopes
+from app.models.configuration import Midwest997MappingConfig
 
 
 MIDWEST_997_DOCUMENT_TYPE = '997'
@@ -61,6 +64,7 @@ class Midwest997IngestionService:
     connection=None,
     freightbridge_repository: FreightBridgeRepository | None = None,
     integration_repository: IntegrationRepository | None = None,
+    configuration_repository: IntegrationConfigurationRepository | None = None,
   ) -> None:
     resolved_audit_connection = audit_connection or connection
     resolved_business_connection = business_connection or connection
@@ -71,6 +75,7 @@ class Midwest997IngestionService:
     self.business_connection = resolved_business_connection
     self.freightbridge_repository = freightbridge_repository or FreightBridgeRepository(resolved_business_connection)
     self.integration_repository = integration_repository or IntegrationRepository(resolved_audit_connection)
+    self.configuration_repository = configuration_repository
 
   def ingest(
     self,
@@ -115,6 +120,7 @@ class Midwest997IngestionService:
         'Midwest SFTP authentication completed by SSH transport boundary.',
         {'transport': transport.value},
       )
+      self._ensure_inbound_capability_enabled(transport)
       mapped = self._parse_validate_and_map(transaction_id, raw_body)
       self.integration_repository.update_x12_metadata(
         transaction_id,
@@ -245,6 +251,19 @@ class Midwest997IngestionService:
       acknowledged_transaction_id=UUID(str(existing.get('parent_transaction_id') or existing['id'])),
     )
 
+  def _ensure_inbound_capability_enabled(self, transport: Transport) -> None:
+    if self.configuration_repository is None:
+      return
+    ensure_partner_capability_enabled(
+      self.configuration_repository,
+      partner_code=MIDWEST_PARTNER_CODE,
+      direction=IntegrationDirection.INBOUND.value,
+      document_type=MIDWEST_997_DOCUMENT_TYPE,
+      transport=transport.value,
+      message_format=MessageFormat.X12.value,
+      protocol_version='004010',
+    )
+
   def _parse_validate_and_map(self, transaction_id: UUID, raw_body: bytes):
     self.integration_repository.update_processing_state(
       transaction_id,
@@ -270,7 +289,23 @@ class Midwest997IngestionService:
       ProcessingStage.MAPPING,
     )
     try:
-      mapped = map_midwest_997(interchange)
+      active_mapping = None
+      if self.configuration_repository is not None:
+        active_mapping = load_active_mapping_profile(
+          self.configuration_repository,
+          'MWCX_997_TO_ACK',
+          Midwest997MappingConfig,
+        )
+        self.integration_repository.update_mapping_audit(
+          transaction_id,
+          mapping_profile_id=active_mapping.id,
+          mapping_profile_version=active_mapping.version_number,
+          mapping_key=active_mapping.mapping_key,
+        )
+      mapped = map_midwest_997(
+        interchange,
+        config=active_mapping.config if active_mapping is not None else None,
+      )
     except Midwest997MappingError as exc:
       raise ClassifiedIntegrationFailure(
         status_code=422,
@@ -289,6 +324,7 @@ class Midwest997IngestionService:
         'acknowledged_group_control_number': mapped.acknowledged_group_control_number,
         'acknowledged_transaction_control_number': mapped.acknowledged_transaction_control_number,
         'acknowledgment_status': mapped.status.value,
+        **(active_mapping.audit_metadata() if active_mapping is not None else {}),
       },
     )
     return mapped

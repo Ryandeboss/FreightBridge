@@ -466,10 +466,13 @@ class IntegrationRepository:
             retry_count,
             parent_transaction_id,
             replay_of_transaction_id,
+            mapping_profile_id,
+            mapping_profile_version,
+            mapping_key,
             received_at,
             processed_at
           )
-          VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+          VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
           RETURNING id
         """,
         (
@@ -491,6 +494,9 @@ class IntegrationRepository:
           transaction.retry_count,
           transaction.parent_transaction_id,
           transaction.replay_of_transaction_id,
+          transaction.mapping_profile_id,
+          transaction.mapping_profile_version,
+          transaction.mapping_key,
           transaction.received_at,
           transaction.processed_at,
         ),
@@ -696,6 +702,27 @@ class IntegrationRepository:
           WHERE id = %s
         """,
         (business_identifier, transaction_id),
+      )
+
+  def update_mapping_audit(
+    self,
+    transaction_id: UUID,
+    *,
+    mapping_profile_id: UUID,
+    mapping_profile_version: int,
+    mapping_key: str,
+  ) -> None:
+    with self.connection.cursor() as cursor:
+      cursor.execute(
+        """
+          UPDATE integration_transactions
+          SET mapping_profile_id = %s,
+              mapping_profile_version = %s,
+              mapping_key = %s,
+              updated_at = now()
+          WHERE id = %s
+        """,
+        (mapping_profile_id, mapping_profile_version, mapping_key, transaction_id),
       )
 
   def update_x12_metadata(

@@ -53,6 +53,8 @@ Midwest Carrier
 
 Operations endpoints are exposed under `/api/operations`. They return safe transaction summaries, transaction details, business traces, correlation lookups, error queue records, error resolution/reopen actions, and operational summary counts. They do not return raw payload bodies or secrets.
 
+Configuration endpoints are exposed under `/api/configuration` and use the same `OPERATIONS_API_BEARER_TOKEN`. They return safe partner metadata, capabilities, mapping profiles, mapping rules, and configuration change history. They do not expose partner bearer tokens, SSH keys, private keys, database URLs, or arbitrary connection-secret editors.
+
 ## Expected Message Flows
 
 Current implemented flow:
@@ -98,6 +100,9 @@ Implementation correlates:
 - Midwest SFTP archive moves use replay-safe names when the original archive file already exists.
 - Manual retry is limited to failed outbound SFTP X12 204 transactions with exact stored payload snapshots.
 - Retry ownership is explicit: FreightBridge does not run automatic retry workers in the current milestone.
+- Partner capabilities can block a flow with `PARTNER_CAPABILITY_DISABLED`.
+- Missing active mapping profiles fail with `ACTIVE_MAPPING_NOT_FOUND`.
+- Invalid active mapping profiles fail with `INVALID_MAPPING_CONFIGURATION`.
 
 ## Failure Responsibility by Layer
 

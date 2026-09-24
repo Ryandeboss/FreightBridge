@@ -200,7 +200,7 @@ The workflow is `workflow_dispatch` only because it mutates shared deployed test
 
 Supported inputs:
 
-- `milestone`: `milestone12`, `milestone13`, `milestone14`, `milestone15`, or `milestone16`
+- `milestone`: `milestone12`, `milestone13`, `milestone14`, `milestone15`, `milestone16`, or `milestone17`
 - `load_id`: optional, blank means generate a fresh load ID
 - `run_db_verification`: passes `DATABASE_URL` only when enabled
 - `verbose`: prints safe request progress
@@ -221,13 +221,13 @@ DATABASE_URL
 OPERATIONS_API_BEARER_TOKEN
 ```
 
-Create this repository Actions variable for Milestone 16:
+Create this repository Actions variable for Milestones 16 and 17:
 
 ```text
 ANALYST_UI_BASE_URL
 ```
 
-`APEX_READONLY_TOKEN`, `MIDWEST_READONLY_TOKEN`, and `DATABASE_URL` are optional. `OPERATIONS_API_BEARER_TOKEN` is required for Milestones 14, 15, and 16. Add `DATABASE_URL` only if you want GitHub to run direct SQL verification.
+`APEX_READONLY_TOKEN`, `MIDWEST_READONLY_TOKEN`, and `DATABASE_URL` are optional. `OPERATIONS_API_BEARER_TOKEN` is required for Milestones 14, 15, 16, and 17. Add `DATABASE_URL` only if you want GitHub to run direct SQL verification.
 
 To create repository secrets:
 

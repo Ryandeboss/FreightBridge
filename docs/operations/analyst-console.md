@@ -31,6 +31,10 @@ The UI uses `HashRouter` so the deployed static app works without server-side ro
 - `#/failures/:errorId`
 - `#/trace`
 - `#/trace/:businessIdentifier`
+- `#/partners`
+- `#/partners/:partnerCode`
+- `#/mappings`
+- `#/mappings/:mappingId`
 
 ## Console Areas
 
@@ -39,8 +43,10 @@ The UI uses `HashRouter` so the deployed static app works without server-side ro
 - Transaction detail: metadata, copy controls, timeline logs, errors, parent/child/replay links, retry attempts, and a manual retry dialog for eligible failed 204 transactions.
 - Failures: server-backed queue filters, failure detail, resolve, and reopen.
 - Business Trace: business ID search with transaction chain and relationship links.
+- Partners: safe partner-field edits and capability toggles without exposing secrets.
+- Mappings: active profile inspection, draft clone/edit/validate/activate/abandon workflow, rules, versions, and change history.
 
-The console never renders raw payload bodies. Payload locations and hashes may be displayed when already returned by Operations API detail endpoints.
+The console never renders raw payload bodies or secrets. Payload locations, hashes, and mapping profile identifiers may be displayed when already returned by Operations API detail endpoints.
 
 ## Deployment Notes
 

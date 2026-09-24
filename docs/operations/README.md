@@ -9,3 +9,5 @@ Current notes:
 - [Operational observability and failure queue](observability-and-failure-queue.md)
 - [Idempotency, replay, and manual retry](idempotency-and-retry.md)
 - [Analyst Console](analyst-console.md)
+- [Trading partner configuration](trading-partner-configuration.md)
+- [Mapping change control](mapping-change-control.md)

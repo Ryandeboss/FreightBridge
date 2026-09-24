@@ -4,6 +4,7 @@ import re
 
 from app.domain import ReferenceType, ShipmentStatus
 from app.integrations.x12 import X12Interchange, X12Segment
+from app.models.configuration import Midwest214MappingConfig
 
 
 AT7_STATUS_MAP: dict[str, ShipmentStatus] = {
@@ -41,8 +42,28 @@ class Midwest214MappingError(Exception):
     super().__init__(message)
 
 
-def map_midwest_214(interchange: X12Interchange) -> Midwest214MappingResult:
-  _validate_profile(interchange)
+def default_midwest_214_mapping_config() -> Midwest214MappingConfig:
+  return Midwest214MappingConfig(
+    expected_sender='MWCX',
+    expected_receiver='FREIGHTBRIDGE',
+    x12_version='004010',
+    isa_control_version='00401',
+    functional_identifier='QM',
+    transaction_set='214',
+    status_code_map=AT7_STATUS_MAP,
+    event_time_code='UT',
+    bol_qualifier='BM',
+    po_qualifier='PO',
+  )
+
+
+def map_midwest_214(
+  interchange: X12Interchange,
+  *,
+  config: Midwest214MappingConfig | None = None,
+) -> Midwest214MappingResult:
+  resolved_config = config or default_midwest_214_mapping_config()
+  _validate_profile(interchange, resolved_config)
   group = interchange.functional_groups[0]
   transaction = group.transaction_sets[0]
   b10 = _required_segment(transaction.segments, 'B10')
@@ -55,7 +76,7 @@ def map_midwest_214(interchange: X12Interchange) -> Midwest214MappingResult:
   }
 
   at7_code = _require(at7.element(1), 'MISSING_STATUS_CODE', 'AT7-01 is required.')
-  if at7_code not in AT7_STATUS_MAP:
+  if at7_code not in resolved_config.status_code_map:
     raise Midwest214MappingError('UNSUPPORTED_AT7_CODE', 'Unsupported Midwest 214 AT7 status code.')
 
   state = _require(ms1.element(2), 'MISSING_LOCATION_STATE', 'MS1-02 is required.')
@@ -66,13 +87,13 @@ def map_midwest_214(interchange: X12Interchange) -> Midwest214MappingResult:
     shipment_number=_require(b10.element(2), 'MISSING_SHIPMENT_NUMBER', 'B10-02 is required.'),
     carrier_load_number=_require(b10.element(1), 'MISSING_CARRIER_LOAD_NUMBER', 'B10-01 is required.'),
     carrier_code=_require(b10.element(3), 'MISSING_CARRIER_CODE', 'B10-03 is required.'),
-    status=AT7_STATUS_MAP[at7_code],
+    status=resolved_config.status_code_map[at7_code],
     at7_code=at7_code,
-    occurred_at=_event_time(at7.element(5), at7.element(6), at7.element(7)),
+    occurred_at=_event_time(at7.element(5), at7.element(6), at7.element(7), resolved_config.event_time_code),
     city=_require(ms1.element(1), 'MISSING_LOCATION_CITY', 'MS1-01 is required.'),
     state=state,
-    bol_reference=references.get(ReferenceType.BOL.value) or references.get('BM'),
-    po_reference=references.get(ReferenceType.PO.value) or references.get('PO'),
+    bol_reference=references.get(ReferenceType.BOL.value) or references.get(resolved_config.bol_qualifier),
+    po_reference=references.get(ReferenceType.PO.value) or references.get(resolved_config.po_qualifier),
     x12_version=group.version_release or '',
     interchange_control_number=interchange.interchange_control_number or '',
     group_control_number=group.control_number or '',
@@ -80,18 +101,18 @@ def map_midwest_214(interchange: X12Interchange) -> Midwest214MappingResult:
   )
 
 
-def _validate_profile(interchange: X12Interchange) -> None:
-  if interchange.interchange_control_version != '00401':
+def _validate_profile(interchange: X12Interchange, config: Midwest214MappingConfig) -> None:
+  if interchange.interchange_control_version != config.isa_control_version:
     raise Midwest214MappingError('UNSUPPORTED_X12_VERSION', 'Unsupported Midwest ISA version.')
-  if interchange.isa_segment.element(6).strip() != 'MWCX':
+  if interchange.isa_segment.element(6).strip() != config.expected_sender:
     raise Midwest214MappingError('INVALID_PARTNER_PROFILE', 'Unexpected Midwest 214 sender.')
-  if interchange.isa_segment.element(8).strip() != 'FREIGHTBRIDGE':
+  if interchange.isa_segment.element(8).strip() != config.expected_receiver:
     raise Midwest214MappingError('INVALID_PARTNER_PROFILE', 'Unexpected Midwest 214 receiver.')
   group = interchange.functional_groups[0]
   transaction = group.transaction_sets[0]
-  if group.functional_identifier != 'QM' or group.version_release != '004010':
+  if group.functional_identifier != config.functional_identifier or group.version_release != config.x12_version:
     raise Midwest214MappingError('INVALID_PARTNER_PROFILE', 'Unexpected Midwest 214 functional group.')
-  if transaction.transaction_set_identifier != '214':
+  if transaction.transaction_set_identifier != config.transaction_set:
     raise Midwest214MappingError('UNEXPECTED_TRANSACTION_SET', 'Expected Midwest 214 transaction set.')
 
 
@@ -102,10 +123,15 @@ def _required_segment(segments: tuple[X12Segment, ...], segment_id: str) -> X12S
   return segment
 
 
-def _event_time(date_value: str | None, time_value: str | None, time_code: str | None) -> datetime:
+def _event_time(
+  date_value: str | None,
+  time_value: str | None,
+  time_code: str | None,
+  expected_time_code: str,
+) -> datetime:
   if not date_value or not time_value or not time_code:
     raise Midwest214MappingError('MISSING_EVENT_TIMESTAMP', 'AT7 date, time, and time code are required.')
-  if time_code != 'UT':
+  if time_code != expected_time_code:
     raise Midwest214MappingError('UNSUPPORTED_TIME_CODE', 'Midwest 214 requires UTC AT7 time code UT.')
   try:
     return datetime.strptime(date_value + time_value, '%Y%m%d%H%M').replace(tzinfo=timezone.utc)

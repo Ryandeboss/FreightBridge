@@ -35,6 +35,9 @@ class IntegrationTransaction(BaseModel):
   retry_count: int = Field(default=0, ge=0)
   parent_transaction_id: UUID | None = None
   replay_of_transaction_id: UUID | None = None
+  mapping_profile_id: UUID | None = None
+  mapping_profile_version: int | None = Field(default=None, ge=1)
+  mapping_key: str | None = Field(default=None, max_length=120)
   received_at: AwareDatetime | None = None
   processed_at: AwareDatetime | None = None
   created_at: AwareDatetime | None = None

@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 import hashlib
 
 from app.domain import Transport
+from app.infrastructure.configuration_repository import IntegrationConfigurationRepository
 from app.infrastructure.repositories import FreightBridgeRepository, IntegrationRepository
 from app.integrations.common.errors import IntegrationAPIError
 from app.integrations.midwest.inbound_214_service import Midwest214IngestionService
@@ -63,6 +64,7 @@ class MidwestSftpOutboundPollService:
     client_factory=MidwestSftpClient,
     freightbridge_repository: FreightBridgeRepository | None = None,
     integration_repository: IntegrationRepository | None = None,
+    configuration_repository: IntegrationConfigurationRepository | None = None,
     ingestion_service: Midwest990IngestionService | None = None,
     shipment_status_ingestion_service: Midwest214IngestionService | None = None,
     functional_acknowledgment_ingestion_service: Midwest997IngestionService | None = None,
@@ -73,12 +75,14 @@ class MidwestSftpOutboundPollService:
       business_connection=business_connection,
       freightbridge_repository=freightbridge_repository,
       integration_repository=integration_repository,
+      configuration_repository=configuration_repository,
     )
     self.shipment_status_ingestion_service = shipment_status_ingestion_service or Midwest214IngestionService(
       audit_connection=audit_connection,
       business_connection=business_connection,
       freightbridge_repository=freightbridge_repository,
       integration_repository=integration_repository,
+      configuration_repository=configuration_repository,
     )
     self.functional_acknowledgment_ingestion_service = (
       functional_acknowledgment_ingestion_service
@@ -87,6 +91,7 @@ class MidwestSftpOutboundPollService:
         business_connection=business_connection,
         freightbridge_repository=freightbridge_repository,
         integration_repository=integration_repository,
+        configuration_repository=configuration_repository,
       )
     )
 

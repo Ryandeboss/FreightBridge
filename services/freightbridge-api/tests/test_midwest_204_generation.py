@@ -4,7 +4,7 @@ from decimal import Decimal
 from fastapi.testclient import TestClient
 import pytest
 
-from app.api.routes.midwest_integrations import get_midwest_204_generation_service
+from app.api.routes.midwest_integrations import get_configuration_repository, get_midwest_204_generation_service
 from app.domain import (
   CanonicalLocation,
   CanonicalShipment,
@@ -24,6 +24,7 @@ from app.integrations.midwest.control_numbers import X12ControlNumbers
 from app.integrations.midwest.errors import MidwestShipmentNotFoundError
 from app.integrations.x12 import parse_x12, validate_x12_envelopes
 from app.main import app
+from app.models.configuration import Midwest204MappingConfig
 
 
 FIXED_GENERATED_AT = datetime(2026, 9, 19, 14, 0, tzinfo=timezone.utc)
@@ -93,6 +94,45 @@ def test_optional_po_is_omitted_and_counts_are_derived() -> None:
   assert ('L11', ('PO111', 'PO')) not in segments
   assert ('L11', ('CUST-REF-500', 'CR')) not in segments
   assert transaction.se_segment.element(1) == str(len(transaction.segments))
+
+
+def test_generated_204_uses_supplied_mapping_configuration() -> None:
+  generated = generate_midwest_204(
+    canonical_load500(),
+    generated_at=FIXED_GENERATED_AT,
+    control_numbers=FIXED_CONTROL_NUMBERS,
+    config=Midwest204MappingConfig(
+      sender_id='FBRIDGE',
+      receiver_id='MWCXT',
+      x12_version='004010',
+      isa_control_version='00401',
+      functional_identifier='SM',
+      transaction_set='204',
+      usage_indicator='T',
+      payment_method='CC',
+      bol_qualifier='BL',
+      po_qualifier='PN',
+      pickup_date_qualifier='37',
+      pickup_time_qualifier='I',
+      delivery_date_qualifier='38',
+      delivery_time_qualifier='K',
+      pickup_stop_reason='LD',
+      delivery_stop_reason='UL',
+      shipper_entity_identifier='SH',
+      consignee_entity_identifier='CN',
+      weight_qualifier='G',
+      timestamp_policy='UTC',
+    ),
+  )
+
+  interchange = parse_x12(generated.serialized_x12)
+  segments = _segment_signature(interchange)
+
+  assert interchange.isa_segment.element(6).strip() == 'FBRIDGE'
+  assert interchange.isa_segment.element(8).strip() == 'MWCXT'
+  assert ('B2', ('', 'MWCXT', '', 'LOAD500', '', 'CC')) in segments
+  assert ('L11', ('BOL900', 'BL')) in segments
+  assert ('L11', ('PO111', 'PN')) in segments
 
 
 @pytest.mark.parametrize(
@@ -171,6 +211,7 @@ def test_generation_endpoint_returns_preview_payload() -> None:
       control_numbers=FIXED_CONTROL_NUMBERS,
     )
   )
+  app.dependency_overrides[get_configuration_repository] = lambda: FakeConfigurationRepository()
   client = TestClient(app)
 
   response = client.post('/api/integrations/midwest/load-tenders/LOAD500/generate')
@@ -187,6 +228,7 @@ def test_generation_endpoint_returns_preview_payload() -> None:
 
 def test_generation_endpoint_returns_404_for_missing_shipment() -> None:
   app.dependency_overrides[get_midwest_204_generation_service] = lambda: FakeMissingShipmentService()
+  app.dependency_overrides[get_configuration_repository] = lambda: FakeConfigurationRepository()
   client = TestClient(app)
 
   response = client.post('/api/integrations/midwest/load-tenders/UNKNOWN/generate')
@@ -198,6 +240,7 @@ def test_generation_endpoint_returns_404_for_missing_shipment() -> None:
 
 def test_generation_endpoint_returns_422_for_mapping_error() -> None:
   app.dependency_overrides[get_midwest_204_generation_service] = lambda: FakeMappingErrorService()
+  app.dependency_overrides[get_configuration_repository] = lambda: FakeConfigurationRepository()
   client = TestClient(app)
 
   response = client.post('/api/integrations/midwest/load-tenders/LOAD500/generate')
@@ -222,22 +265,53 @@ class FakeGenerationService:
   def __init__(self, result) -> None:
     self.result = result
 
-  def generate_for_shipment_number(self, shipment_number: str):
+  def generate_for_shipment_number(self, shipment_number: str, *, config=None):
     return self.result
 
 
 class FakeMissingShipmentService:
-  def generate_for_shipment_number(self, shipment_number: str):
+  def generate_for_shipment_number(self, shipment_number: str, *, config=None):
     raise MidwestShipmentNotFoundError(shipment_number)
 
 
 class FakeMappingErrorService:
-  def generate_for_shipment_number(self, shipment_number: str):
+  def generate_for_shipment_number(self, shipment_number: str, *, config=None):
     raise Midwest204MappingError(
       Midwest204ErrorCode.MISSING_BOL_REFERENCE,
       'BOL reference is required for Midwest 204 generation.',
       'references.BOL',
     )
+
+
+class FakeConfigurationRepository:
+  def get_active_mapping(self, mapping_key: str):
+    return {
+      'id': __import__('uuid').uuid4(),
+      'mapping_key': mapping_key,
+      'version_number': 1,
+      'settings': {
+        'senderId': 'FREIGHTBRIDGE',
+        'receiverId': 'MWCX',
+        'x12Version': '004010',
+        'isaControlVersion': '00401',
+        'functionalIdentifier': 'SM',
+        'transactionSet': '204',
+        'usageIndicator': 'T',
+        'paymentMethod': 'PP',
+        'bolQualifier': 'BM',
+        'poQualifier': 'PO',
+        'pickupDateQualifier': '37',
+        'pickupTimeQualifier': 'I',
+        'deliveryDateQualifier': '38',
+        'deliveryTimeQualifier': 'K',
+        'pickupStopReason': 'LD',
+        'deliveryStopReason': 'UL',
+        'shipperEntityIdentifier': 'SH',
+        'consigneeEntityIdentifier': 'CN',
+        'weightQualifier': 'G',
+        'timestampPolicy': 'UTC',
+      },
+    }
 
 
 def canonical_load500(**overrides) -> CanonicalShipment:

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 
 from app.infrastructure.database import connect
+from app.infrastructure.configuration_repository import IntegrationConfigurationRepository
 from app.integrations.apex.service import ApexLoadTenderIngestionService
 from app.integrations.common.correlation import CORRELATION_HEADER, resolve_correlation_id
 from app.integrations.common.errors import IntegrationAPIError
@@ -19,6 +20,7 @@ def get_apex_ingestion_service() -> Iterator[ApexLoadTenderIngestionService]:
     yield ApexLoadTenderIngestionService(
       audit_connection=audit_connection,
       business_connection=business_connection,
+      configuration_repository=IntegrationConfigurationRepository(audit_connection),
     )
 
 

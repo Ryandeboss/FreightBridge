@@ -28,6 +28,9 @@ const transaction = {
   retryCount: 0,
   parentTransactionId: null,
   replayOfTransactionId: null,
+  mappingProfileId: '55555555-5555-4555-8555-555555555555',
+  mappingProfileVersion: 1,
+  mappingKey: 'CANONICAL_TO_MWCX_204',
   receivedAt: '2026-09-23T15:00:00Z',
   processedAt: '2026-09-23T15:01:00Z',
   createdAt: '2026-09-23T15:00:00Z',
@@ -54,6 +57,81 @@ const integrationError = {
   correlationId: 'corr-load-900',
 };
 
+const partner = {
+  id: '44444444-4444-4444-8444-444444444444',
+  partnerCode: 'MWCX',
+  name: 'Midwest Carrier',
+  businessRole: 'MOTOR_CARRIER',
+  integrationStyle: 'X12_SFTP',
+  active: true,
+  description: 'Midwest simulator.',
+  supportContact: 'ops@example.com',
+  configRevision: 2,
+  capabilitiesEnabled: 2,
+  capabilitiesTotal: 2,
+  capabilities: [
+    {
+      id: 'cap-204',
+      partnerId: '44444444-4444-4444-8444-444444444444',
+      direction: 'OUTBOUND',
+      documentType: '204',
+      transport: 'SFTP',
+      messageFormat: 'X12',
+      protocolVersion: '004010',
+      enabled: true,
+      createdAt: '2026-09-23T15:00:00Z',
+      updatedAt: '2026-09-23T15:00:00Z',
+    },
+  ],
+  createdAt: '2026-09-23T15:00:00Z',
+  updatedAt: '2026-09-23T15:00:00Z',
+};
+
+const mapping = {
+  id: '55555555-5555-4555-8555-555555555555',
+  partnerId: partner.id,
+  partnerCode: 'MWCX',
+  partnerName: 'Midwest Carrier',
+  mappingKey: 'CANONICAL_TO_MWCX_204',
+  name: 'Canonical shipment to Midwest 204',
+  description: 'Outbound Midwest X12 204 tender profile.',
+  direction: 'OUTBOUND',
+  sourceFormat: 'CANONICAL',
+  targetFormat: 'X12',
+  sourceDocumentType: 'CANONICAL_SHIPMENT',
+  targetDocumentType: '204',
+  versionNumber: 1,
+  status: 'ACTIVE',
+  settings: { senderId: 'FREIGHTBRIDGE', receiverId: 'MWCX' },
+  validationStatus: 'VALID',
+  validationErrors: [],
+  basedOnProfileId: null,
+  changeNote: null,
+  createdAt: '2026-09-23T15:00:00Z',
+  updatedAt: '2026-09-23T15:00:00Z',
+  validatedAt: '2026-09-23T15:00:00Z',
+  activatedAt: '2026-09-23T15:00:00Z',
+  rules: [
+    {
+      id: 'rule-1',
+      mappingProfileId: '55555555-5555-4555-8555-555555555555',
+      sequence: 10,
+      ruleKey: 'envelope',
+      sourcePath: 'shipment',
+      targetPath: 'ISA/GS/ST',
+      transformation: 'profile settings',
+      required: true,
+      qualifierOrCondition: null,
+      failureCode: null,
+      configuration: {},
+      notes: 'Envelope config.',
+      createdAt: '2026-09-23T15:00:00Z',
+      updatedAt: '2026-09-23T15:00:00Z',
+    },
+  ],
+  versions: [],
+};
+
 function jsonResponse(payload: unknown, status = 200) {
   return Promise.resolve(
     new Response(JSON.stringify(payload), {
@@ -71,7 +149,7 @@ function installFetchMock() {
       ? init.headers.get('Authorization')
       : (init?.headers as Record<string, string> | undefined)?.Authorization;
 
-    if (path.startsWith('/api/operations') && auth !== `Bearer ${token}`) {
+    if ((path.startsWith('/api/operations') || path.startsWith('/api/configuration')) && auth !== `Bearer ${token}`) {
       return jsonResponse(
         { detail: { error: { code: 'AUTHENTICATION_ERROR', message: 'Missing or invalid operations bearer token.' } } },
         401,
@@ -187,6 +265,55 @@ function installFetchMock() {
       });
     }
 
+    if (path === '/api/configuration/partners') {
+      return jsonResponse([partner]);
+    }
+
+    if (path === '/api/configuration/partners/MWCX') {
+      return jsonResponse(partner);
+    }
+
+    if (path === '/api/configuration/capabilities/cap-204') {
+      return jsonResponse({ ...partner.capabilities[0], enabled: false });
+    }
+
+    if (path === '/api/configuration/mappings') {
+      return jsonResponse({ limit: 100, offset: 0, count: 1, mappings: [mapping] });
+    }
+
+    if (path === `/api/configuration/mappings/${mapping.id}`) {
+      return jsonResponse(mapping);
+    }
+
+    if (path === `/api/configuration/mappings/${mapping.id}/clone-draft`) {
+      return jsonResponse({ ...mapping, id: '66666666-6666-4666-8666-666666666666', status: 'DRAFT', versionNumber: 2 }, 201);
+    }
+
+    if (path === '/api/configuration/mappings/66666666-6666-4666-8666-666666666666') {
+      return jsonResponse({ ...mapping, id: '66666666-6666-4666-8666-666666666666', status: 'DRAFT', versionNumber: 2 });
+    }
+
+    if (path === '/api/configuration/changes') {
+      return jsonResponse({
+        limit: 25,
+        offset: 0,
+        count: 1,
+        changes: [
+          {
+            id: 'change-1',
+            entityType: 'MAPPING_PROFILE',
+            entityId: mapping.id,
+            action: 'ACTIVATE',
+            beforeSnapshot: null,
+            afterSnapshot: {},
+            note: 'Initial profile.',
+            source: 'ANALYST_CONSOLE',
+            createdAt: '2026-09-23T15:00:00Z',
+          },
+        ],
+      });
+    }
+
     return jsonResponse({ message: `Unhandled ${path}` }, 404);
   });
 
@@ -280,6 +407,58 @@ describe('Analyst Console', () => {
 
     expect(await screen.findByTestId('trace-detail-page')).toBeInTheDocument();
     expect(screen.getByTestId('trace-transactions')).toHaveTextContent('MIDWEST');
+  });
+
+  test('lists and edits trading partner capabilities without exposing secrets', async () => {
+    const fetchMock = installFetchMock();
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/partners';
+    render(<App />);
+
+    expect(await screen.findByTestId('partners-page')).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('link', { name: /MWCX/i }));
+    expect(await screen.findByTestId('partner-detail-page')).toBeInTheDocument();
+    expect(screen.queryByText(/secret/i)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText(/toggle 204/i));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/api/configuration/capabilities/cap-204'),
+        expect.objectContaining({ method: 'PATCH' }),
+      );
+    });
+  });
+
+  test('lists mappings and clones an active profile to draft', async () => {
+    const fetchMock = installFetchMock();
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/mappings';
+    render(<App />);
+
+    expect(await screen.findByTestId('mappings-page')).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('link', { name: /CANONICAL_TO_MWCX_204/i }));
+    expect(await screen.findByTestId('mapping-detail-page')).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText(/change note/i), 'Tune envelope profile');
+    await userEvent.click(screen.getByRole('button', { name: /clone draft/i }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/api/configuration/mappings/55555555-5555-4555-8555-555555555555/clone-draft'),
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+  });
+
+  test('transaction detail links to the mapping profile that processed it', async () => {
+    installFetchMock();
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = `#/transactions/${transactionId}`;
+    render(<App />);
+
+    expect(await screen.findByTestId('transaction-detail-page')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('link', { name: /55555555/i }));
+
+    expect(await screen.findByTestId('mapping-detail-page')).toBeInTheDocument();
   });
 
   test('clears the session when an authenticated request returns 401', async () => {

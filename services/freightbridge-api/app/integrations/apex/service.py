@@ -17,13 +17,16 @@ from app.domain import (
   ProcessingStatus,
   Transport,
 )
+from app.infrastructure.configuration_repository import IntegrationConfigurationRepository
 from app.infrastructure.repositories import FreightBridgeRepository, IntegrationRepository
+from app.integrations.configuration import ensure_partner_capability_enabled, load_active_mapping_profile
 from app.integrations.apex.mapper import ApexMappingError, map_apex_load_to_canonical
 from app.integrations.apex.models import ApexInboundLoad
 from app.integrations.apex.security import apex_inbound_token_is_valid
 from app.integrations.common.errors import ClassifiedIntegrationFailure, IntegrationAPIError
 from app.integrations.common.idempotency import IdempotencyKeyError, normalize_idempotency_key, semantic_fingerprint
 from app.integrations.common.ingestion import payload_sha256
+from app.models.configuration import ApexLoadMappingConfig
 
 
 APEX_PARTNER_CODE = 'APEX'
@@ -64,6 +67,7 @@ class ApexLoadTenderIngestionService:
     connection=None,
     freightbridge_repository: FreightBridgeRepository | None = None,
     integration_repository: IntegrationRepository | None = None,
+    configuration_repository: IntegrationConfigurationRepository | None = None,
   ) -> None:
     resolved_audit_connection = audit_connection or connection
     resolved_business_connection = business_connection or connection
@@ -78,6 +82,7 @@ class ApexLoadTenderIngestionService:
     self.integration_repository = integration_repository or IntegrationRepository(
       resolved_audit_connection
     )
+    self.configuration_repository = configuration_repository
 
   def ingest(
     self,
@@ -123,6 +128,7 @@ class ApexLoadTenderIngestionService:
     try:
       normalized_idempotency_key = normalize_idempotency_key(idempotency_key)
       self._authenticate(transaction_id, authorization_header)
+      self._ensure_capability_enabled()
       parsed_payload = self._parse(transaction_id, raw_body)
       apex_load = self._validate(transaction_id, parsed_payload)
       self.integration_repository.update_business_identifier(transaction_id, apex_load.load_id)
@@ -291,6 +297,19 @@ class ApexLoadTenderIngestionService:
     if record_id is not None and hasattr(self.integration_repository, 'mark_idempotency_failed'):
       self.integration_repository.mark_idempotency_failed(record_id, original_transaction_id=transaction_id)
 
+  def _ensure_capability_enabled(self) -> None:
+    if self.configuration_repository is None:
+      return
+    ensure_partner_capability_enabled(
+      self.configuration_repository,
+      partner_code=APEX_PARTNER_CODE,
+      direction=IntegrationDirection.INBOUND.value,
+      document_type=APEX_DOCUMENT_TYPE,
+      transport=Transport.REST.value,
+      message_format=MessageFormat.JSON.value,
+      protocol_version='v1',
+    )
+
   def _authenticate(self, transaction_id: UUID, authorization_header: str | None) -> None:
     self.integration_repository.update_processing_state(
       transaction_id,
@@ -369,7 +388,24 @@ class ApexLoadTenderIngestionService:
       ProcessingStage.MAPPING,
     )
     try:
-      mapping_result = map_apex_load_to_canonical(apex_load, partner_id)
+      active_mapping = None
+      if self.configuration_repository is not None:
+        active_mapping = load_active_mapping_profile(
+          self.configuration_repository,
+          'APEX_LOAD_TO_CANONICAL',
+          ApexLoadMappingConfig,
+        )
+        self.integration_repository.update_mapping_audit(
+          transaction_id,
+          mapping_profile_id=active_mapping.id,
+          mapping_profile_version=active_mapping.version_number,
+          mapping_key=active_mapping.mapping_key,
+        )
+      mapping_result = map_apex_load_to_canonical(
+        apex_load,
+        partner_id,
+        config=active_mapping.config if active_mapping is not None else None,
+      )
     except ApexMappingError as exc:
       raise ClassifiedIntegrationFailure(
         status_code=422,
@@ -383,7 +419,10 @@ class ApexLoadTenderIngestionService:
       ProcessingStage.MAPPING,
       ProcessingStatus.SUCCEEDED,
       'Apex load tender mapped to canonical shipment.',
-      mapping_result.metadata,
+      {
+        **mapping_result.metadata,
+        **(active_mapping.audit_metadata() if active_mapping is not None else {}),
+      },
     )
     return mapping_result
 

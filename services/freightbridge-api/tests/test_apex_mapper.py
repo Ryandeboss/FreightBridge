@@ -1,6 +1,7 @@
 from app.domain import EquipmentType, ReferenceType
 from app.integrations.apex.mapper import map_apex_load_to_canonical
 from app.integrations.apex.models import ApexInboundLoad
+from app.models.configuration import ApexLoadMappingConfig
 
 
 def apex_payload(**overrides) -> dict[str, object]:
@@ -125,5 +126,27 @@ def test_appointment_reference_is_deterministically_ignored() -> None:
   assert mapping.metadata['ignored_reference_types'] == ['APPOINTMENT']
   assert all(
     reference.reference_value != 'APT-1'
+    for reference in mapping.shipment.references
+  )
+
+
+def test_apex_mapping_uses_supplied_profile_configuration() -> None:
+  mapping = map_apex_load_to_canonical(
+    ApexInboundLoad.model_validate(
+      apex_payload(
+        equipmentType='REEFER_53',
+        references=[{'type': 'CUSTOMER_REF', 'value': 'CUST-REF-ALT'}],
+      )
+    ),
+    config=ApexLoadMappingConfig(
+      equipment_map={'REEFER_53': EquipmentType.DRY_VAN_53, 'VAN_53': EquipmentType.DRY_VAN_53, 'FLATBED': EquipmentType.FLATBED},
+      reference_map={'CUSTOMER_REF': ReferenceType.PO},
+      ignored_reference_types=[],
+    ),
+  )
+
+  assert mapping.shipment.equipment_type == EquipmentType.DRY_VAN_53
+  assert any(
+    reference.reference_type == ReferenceType.PO and reference.reference_value == 'CUST-REF-ALT'
     for reference in mapping.shipment.references
   )

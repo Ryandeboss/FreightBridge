@@ -48,6 +48,28 @@ def test_direct_dispatch_service_records_successful_outbound_audit() -> None:
   assert integration_repository.failed_stage is None
 
 
+def test_direct_dispatch_records_active_mapping_profile() -> None:
+  integration_repository = FakeIntegrationRepository()
+  configuration_repository = FakeConfigurationRepository()
+  generation_service = FakeGenerationService()
+  service = MidwestDirectDispatchService(
+    audit_connection=object(),
+    business_connection=object(),
+    freightbridge_repository=FakeFreightBridgeRepository(),
+    integration_repository=integration_repository,
+    configuration_repository=configuration_repository,
+    generation_service=generation_service,
+    transport=FakeTransport(),
+  )
+
+  service.dispatch(shipment_number='LOAD500', correlation_id='corr-config')
+
+  assert generation_service.configs[0].receiver_id == 'MWCX'
+  assert integration_repository.transaction.mapping_profile_id == configuration_repository.mapping_profile_id
+  assert integration_repository.transaction.mapping_profile_version == 3
+  assert integration_repository.transaction.mapping_key == 'CANONICAL_TO_MWCX_204'
+
+
 def test_sftp_dispatch_uploads_204_atomically_and_records_remote_audit() -> None:
   integration_repository = FakeIntegrationRepository()
   fake_client = FakeSftpClient()
@@ -372,10 +394,50 @@ class FakeFreightBridgeRepository:
 class FakeGenerationService:
   def __init__(self) -> None:
     self.calls = []
+    self.configs = []
 
-  def generate_for_shipment_number(self, shipment_number: str):
+  def generate_for_shipment_number(self, shipment_number: str, *, config=None):
     self.calls.append(shipment_number)
+    self.configs.append(config)
     return generated_result()
+
+
+class FakeConfigurationRepository:
+  def __init__(self, *, capability_enabled: bool = True) -> None:
+    self.capability_enabled = capability_enabled
+    self.mapping_profile_id = uuid4()
+
+  def check_capability_enabled(self, **kwargs):
+    return self.capability_enabled
+
+  def get_active_mapping(self, mapping_key: str):
+    return {
+      'id': self.mapping_profile_id,
+      'mapping_key': mapping_key,
+      'version_number': 3,
+      'settings': {
+        'senderId': 'FREIGHTBRIDGE',
+        'receiverId': 'MWCX',
+        'x12Version': '004010',
+        'isaControlVersion': '00401',
+        'functionalIdentifier': 'SM',
+        'transactionSet': '204',
+        'usageIndicator': 'T',
+        'paymentMethod': 'PP',
+        'bolQualifier': 'BM',
+        'poQualifier': 'PO',
+        'pickupDateQualifier': '37',
+        'pickupTimeQualifier': 'I',
+        'deliveryDateQualifier': '38',
+        'deliveryTimeQualifier': 'K',
+        'pickupStopReason': 'LD',
+        'deliveryStopReason': 'UL',
+        'shipperEntityIdentifier': 'SH',
+        'consigneeEntityIdentifier': 'CN',
+        'weightQualifier': 'G',
+        'timestampPolicy': 'UTC',
+      },
+    }
 
 
 class FakeTransport(MidwestOutboundTransport):

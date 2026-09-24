@@ -33,6 +33,7 @@ from app.integrations.midwest.mapping_997 import Midwest997MappingError, map_mid
 from app.integrations.midwest.sftp_poll_service import MidwestSftpOutboundPollService
 from app.integrations.x12 import parse_x12, validate_x12_envelopes
 from app.main import app
+from app.models.configuration import Midwest214MappingConfig, Midwest990MappingConfig, Midwest997MappingConfig
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -122,6 +123,31 @@ def test_maps_midwest_990_accepted_and_rejected_fixtures() -> None:
   assert rejected.interchange_control_number == '000000916'
 
 
+def test_midwest_990_mapping_uses_supplied_profile_configuration() -> None:
+  payload = MIDWEST_990_ACCEPTED.replace('L11*MWC900500*CN~', 'L11*MWC900500*CL~')
+  interchange = parse_x12(payload)
+  validate_x12_envelopes(interchange)
+
+  mapped = map_midwest_990(
+    interchange,
+    config=Midwest990MappingConfig(
+      expected_sender='MWCX',
+      expected_receiver='FREIGHTBRIDGE',
+      x12_version='004010',
+      isa_control_version='00401',
+      functional_identifier='GF',
+      transaction_set='990',
+      decision_code_map={'A': TenderDecision.ACCEPTED, 'D': TenderDecision.REJECTED},
+      carrier_load_qualifier='CL',
+      rejection_reason_qualifier='ZZ',
+      bol_qualifier='BM',
+      po_qualifier='PO',
+    ),
+  )
+
+  assert mapped.carrier_load_number == 'MWC900500'
+
+
 @pytest.mark.parametrize(
   ('payload', 'expected_code'),
   [
@@ -164,6 +190,29 @@ def test_maps_midwest_214_supported_status_codes(at7_code: str, expected_status:
   assert mapped.po_reference == 'PO111'
 
 
+def test_midwest_214_mapping_uses_supplied_status_configuration() -> None:
+  interchange = parse_x12(midwest_214(at7_code='AF'))
+  validate_x12_envelopes(interchange)
+
+  mapped = map_midwest_214(
+    interchange,
+    config=Midwest214MappingConfig(
+      expected_sender='MWCX',
+      expected_receiver='FREIGHTBRIDGE',
+      x12_version='004010',
+      isa_control_version='00401',
+      functional_identifier='QM',
+      transaction_set='214',
+      status_code_map={'AF': ShipmentStatus.ARRIVED},
+      event_time_code='UT',
+      bol_qualifier='BM',
+      po_qualifier='PO',
+    ),
+  )
+
+  assert mapped.status == ShipmentStatus.ARRIVED
+
+
 def test_maps_midwest_997_accepted_and_rejected_fixtures() -> None:
   accepted = _map_997(MIDWEST_997_ACCEPTED)
   rejected = _map_997(MIDWEST_997_REJECTED)
@@ -180,6 +229,31 @@ def test_maps_midwest_997_accepted_and_rejected_fixtures() -> None:
   assert rejected.transaction_ack_code == 'R'
   assert rejected.group_ack_code == 'R'
   assert rejected.transaction_sets_accepted == 0
+
+
+def test_midwest_997_mapping_uses_supplied_supported_ack_codes() -> None:
+  interchange = parse_x12(midwest_997(ak5_code='R', ak9_code='R', accepted_count=0))
+  validate_x12_envelopes(interchange)
+
+  with pytest.raises(Midwest997MappingError) as exc_info:
+    map_midwest_997(
+      interchange,
+      config=Midwest997MappingConfig(
+        expected_sender='MWCX',
+        expected_receiver='FREIGHTBRIDGE',
+        x12_version='004010',
+        isa_control_version='00401',
+        functional_identifier='FA',
+        transaction_set='997',
+        acknowledged_functional_identifier='SM',
+        acknowledged_transaction_set='204',
+        supported_ack_codes=['A'],
+        expected_included_count=1,
+        expected_received_count=1,
+      ),
+    )
+
+  assert exc_info.value.code == 'UNSUPPORTED_AK5_CODE'
 
 
 @pytest.mark.parametrize(

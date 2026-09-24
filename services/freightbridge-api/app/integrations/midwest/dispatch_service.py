@@ -13,7 +13,10 @@ from app.domain import (
   ProcessingStage,
   ProcessingStatus,
 )
+from app.infrastructure.configuration_repository import IntegrationConfigurationRepository
 from app.infrastructure.repositories import FreightBridgeRepository, IntegrationRepository
+from app.integrations.configuration import ensure_partner_capability_enabled, load_active_mapping_profile
+from app.integrations.common.errors import ClassifiedIntegrationFailure
 from app.integrations.common.ingestion import payload_sha256
 from app.integrations.common.idempotency import IdempotencyKeyError, normalize_idempotency_key, semantic_fingerprint
 from app.integrations.midwest.constants import MIDWEST_PARTNER_CODE
@@ -22,6 +25,7 @@ from app.integrations.midwest.transport import (
   MidwestDeliveryError,
   MidwestOutboundTransport,
 )
+from app.models.configuration import Midwest204MappingConfig
 
 
 @dataclass(frozen=True)
@@ -63,6 +67,7 @@ class MidwestDirectDispatchService:
     transport: MidwestOutboundTransport,
     freightbridge_repository: FreightBridgeRepository | None = None,
     integration_repository: IntegrationRepository | None = None,
+    configuration_repository: IntegrationConfigurationRepository | None = None,
     generation_service: Midwest204GenerationService | None = None,
   ) -> None:
     self.audit_connection = audit_connection
@@ -74,6 +79,7 @@ class MidwestDirectDispatchService:
     self.integration_repository = integration_repository or IntegrationRepository(
       audit_connection
     )
+    self.configuration_repository = configuration_repository
     self.generation_service = generation_service or Midwest204GenerationService(
       repository=self.freightbridge_repository
     )
@@ -106,7 +112,37 @@ class MidwestDirectDispatchService:
       if replay_result is not None:
         return replay_result
 
-    generated = self.generation_service.generate_for_shipment_number(shipment_number)
+    active_mapping = None
+    if self.configuration_repository is not None:
+      try:
+        ensure_partner_capability_enabled(
+          self.configuration_repository,
+          partner_code=MIDWEST_PARTNER_CODE,
+          direction=IntegrationDirection.OUTBOUND.value,
+          document_type='204',
+          transport=self.transport.integration_transport.value,
+          message_format=MessageFormat.X12.value,
+          protocol_version='004010',
+        )
+        active_mapping = load_active_mapping_profile(
+          self.configuration_repository,
+          'CANONICAL_TO_MWCX_204',
+          Midwest204MappingConfig,
+        )
+      except ClassifiedIntegrationFailure as exc:
+        raise MidwestDeliveryError(
+          status_code=exc.status_code,
+          code=exc.code,
+          message=exc.message,
+          category=exc.category,
+          stage=exc.stage,
+          retryable=exc.retryable,
+        ) from exc
+
+    generated = self.generation_service.generate_for_shipment_number(
+      shipment_number,
+      config=active_mapping.config if active_mapping is not None else None,
+    )
     transaction_id = self.integration_repository.create_transaction(
       IntegrationTransaction(
         correlation_id=correlation_id,
@@ -123,10 +159,19 @@ class MidwestDirectDispatchService:
         payload_hash=payload_sha256(generated.serialized_x12.encode('utf-8')),
         processing_status=ProcessingStatus.PROCESSING,
         processing_stage=ProcessingStage.MAPPING,
+        mapping_profile_id=active_mapping.id if active_mapping is not None else None,
+        mapping_profile_version=active_mapping.version_number if active_mapping is not None else None,
+        mapping_key=active_mapping.mapping_key if active_mapping is not None else None,
         received_at=datetime.now(timezone.utc),
       )
     )
-    self._log(transaction_id, ProcessingStage.MAPPING, ProcessingStatus.SUCCEEDED, 'Midwest 204 generated.')
+    self._log(
+      transaction_id,
+      ProcessingStage.MAPPING,
+      ProcessingStatus.SUCCEEDED,
+      'Midwest 204 generated.',
+      active_mapping.audit_metadata() if active_mapping is not None else {},
+    )
     self.integration_repository.store_message_payload(
       transaction_id=transaction_id,
       media_type='application/edi-x12',

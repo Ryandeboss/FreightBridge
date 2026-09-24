@@ -286,10 +286,11 @@ class OperationsRepository:
               interchange_control_number, group_control_number,
               transaction_control_number, payload_hash, raw_payload_location,
               processing_status, processing_stage, retry_count,
-              parent_transaction_id, received_at
+              parent_transaction_id, replay_of_transaction_id, mapping_profile_id,
+              mapping_profile_version, mapping_key, received_at
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    'PROCESSING', 'DELIVERY', 0, %s, now())
+                    'PROCESSING', 'DELIVERY', 0, %s, %s, %s, %s, %s, now())
             RETURNING id
           """,
           (
@@ -307,6 +308,10 @@ class OperationsRepository:
             original['payload_hash'],
             original['raw_payload_location'],
             transaction_id,
+            original.get('replay_of_transaction_id'),
+            original.get('mapping_profile_id'),
+            original.get('mapping_profile_version'),
+            original.get('mapping_key'),
           ),
         )
         retry_transaction_id = cursor.fetchone()['id']
@@ -492,7 +497,9 @@ class OperationsRepository:
         t.direction, t.transport, t.message_format, t.document_type, t.business_identifier,
         t.x12_version, t.interchange_control_number, t.group_control_number,
         t.transaction_control_number, t.processing_status, t.processing_stage,
-        t.retry_count, t.parent_transaction_id, t.replay_of_transaction_id, t.received_at, t.processed_at,
+        t.retry_count, t.parent_transaction_id, t.replay_of_transaction_id,
+        t.mapping_profile_id, t.mapping_profile_version, t.mapping_key,
+        t.received_at, t.processed_at,
         t.created_at, t.updated_at, count(e.id)::int as error_count
       FROM integration_transactions t
       JOIN trading_partners p ON p.id = t.partner_id
@@ -669,6 +676,9 @@ class OperationsRepository:
       'retry_count': row['retry_count'],
       'parent_transaction_id': row['parent_transaction_id'],
       'replay_of_transaction_id': row.get('replay_of_transaction_id'),
+      'mapping_profile_id': row.get('mapping_profile_id'),
+      'mapping_profile_version': row.get('mapping_profile_version'),
+      'mapping_key': row.get('mapping_key'),
       'received_at': row['received_at'],
       'processed_at': row['processed_at'],
       'created_at': row['created_at'],

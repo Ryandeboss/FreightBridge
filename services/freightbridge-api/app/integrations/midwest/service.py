@@ -13,6 +13,7 @@ from app.integrations.midwest.errors import (
 from app.integrations.midwest.mapping_204 import generate_midwest_204
 from app.integrations.midwest.models import Midwest204GenerationResult
 from app.integrations.x12 import parse_x12, validate_x12_envelopes
+from app.models.configuration import Midwest204MappingConfig
 
 
 class Midwest204GenerationService:
@@ -30,7 +31,12 @@ class Midwest204GenerationService:
     self.control_number_provider = control_number_provider or TimestampControlNumberProvider()
     self.clock = clock or (lambda: datetime.now(timezone.utc))
 
-  def generate_for_shipment_number(self, shipment_number: str) -> Midwest204GenerationResult:
+  def generate_for_shipment_number(
+    self,
+    shipment_number: str,
+    *,
+    config: Midwest204MappingConfig | None = None,
+  ) -> Midwest204GenerationResult:
     shipment = self.repository.fetch_shipment_by_number(shipment_number)
     if shipment is None:
       raise MidwestShipmentNotFoundError(shipment_number)
@@ -45,6 +51,7 @@ class Midwest204GenerationService:
         shipment,
         generated_at=generated_at,
         control_numbers=control_numbers,
+        config=config,
       )
       validate_x12_envelopes(parse_x12(result.serialized_x12))
     except Midwest204MappingError:

@@ -15,12 +15,14 @@ from app.domain import (
   TenderResponse,
   Transport,
 )
+from app.infrastructure.configuration_repository import IntegrationConfigurationRepository
 from app.infrastructure.repositories import (
   FreightBridgeRepository,
   IntegrationRepository,
   ShipmentNotFoundForTenderError,
   TenderAlreadyDecidedError,
 )
+from app.integrations.configuration import ensure_partner_capability_enabled, load_active_mapping_profile
 from app.integrations.apex.tender_response_client import (
   ApexTenderResponseClient,
   ApexTenderResponseDeliveryError,
@@ -32,6 +34,7 @@ from app.integrations.midwest.constants import MIDWEST_PARTNER_CODE
 from app.integrations.midwest.mapping_990 import Midwest990MappingError, map_midwest_990
 from app.integrations.midwest.security import midwest_inbound_token_is_valid
 from app.integrations.x12 import X12Error, parse_x12, validate_x12_envelopes
+from app.models.configuration import Midwest990MappingConfig
 
 
 MIDWEST_990_DOCUMENT_TYPE = '990'
@@ -70,6 +73,7 @@ class Midwest990IngestionService:
     connection=None,
     freightbridge_repository: FreightBridgeRepository | None = None,
     integration_repository: IntegrationRepository | None = None,
+    configuration_repository: IntegrationConfigurationRepository | None = None,
     apex_client: ApexTenderResponseClient | None = None,
   ) -> None:
     resolved_audit_connection = audit_connection or connection
@@ -81,6 +85,7 @@ class Midwest990IngestionService:
     self.business_connection = resolved_business_connection
     self.freightbridge_repository = freightbridge_repository or FreightBridgeRepository(resolved_business_connection)
     self.integration_repository = integration_repository or IntegrationRepository(resolved_audit_connection)
+    self.configuration_repository = configuration_repository
     self.apex_client = apex_client or ApexTenderResponseClient()
 
   def ingest(
@@ -130,6 +135,7 @@ class Midwest990IngestionService:
           'Midwest SFTP authentication completed by SSH transport boundary.',
           {'transport': transport.value},
         )
+      self._ensure_inbound_capability_enabled(transport)
       mapped = self._parse_validate_and_map(transaction_id, raw_body)
       self.integration_repository.update_x12_metadata(
         transaction_id,
@@ -259,6 +265,19 @@ class Midwest990IngestionService:
       {'partner_code': MIDWEST_PARTNER_CODE},
     )
 
+  def _ensure_inbound_capability_enabled(self, transport: Transport) -> None:
+    if self.configuration_repository is None:
+      return
+    ensure_partner_capability_enabled(
+      self.configuration_repository,
+      partner_code=MIDWEST_PARTNER_CODE,
+      direction=IntegrationDirection.INBOUND.value,
+      document_type=MIDWEST_990_DOCUMENT_TYPE,
+      transport=transport.value,
+      message_format=MessageFormat.X12.value,
+      protocol_version='004010',
+    )
+
   def _parse_validate_and_map(self, transaction_id: UUID, raw_body: bytes):
     self.integration_repository.update_processing_state(
       transaction_id,
@@ -284,7 +303,23 @@ class Midwest990IngestionService:
       ProcessingStage.MAPPING,
     )
     try:
-      mapped = map_midwest_990(interchange)
+      active_mapping = None
+      if self.configuration_repository is not None:
+        active_mapping = load_active_mapping_profile(
+          self.configuration_repository,
+          'MWCX_990_TO_CANONICAL',
+          Midwest990MappingConfig,
+        )
+        self.integration_repository.update_mapping_audit(
+          transaction_id,
+          mapping_profile_id=active_mapping.id,
+          mapping_profile_version=active_mapping.version_number,
+          mapping_key=active_mapping.mapping_key,
+        )
+      mapped = map_midwest_990(
+        interchange,
+        config=active_mapping.config if active_mapping is not None else None,
+      )
     except Midwest990MappingError as exc:
       raise ClassifiedIntegrationFailure(
         status_code=422,
@@ -298,7 +333,11 @@ class Midwest990IngestionService:
       ProcessingStage.MAPPING,
       ProcessingStatus.SUCCEEDED,
       'Midwest 990 mapped to canonical tender response.',
-      {'shipment_number': mapped.shipment_number, 'decision': mapped.decision.value},
+      {
+        'shipment_number': mapped.shipment_number,
+        'decision': mapped.decision.value,
+        **(active_mapping.audit_metadata() if active_mapping is not None else {}),
+      },
     )
     return mapped
 
@@ -355,6 +394,19 @@ class Midwest990IngestionService:
     partner = self.freightbridge_repository.fetch_trading_partner_by_code(APEX_PARTNER_CODE)
     if partner is None or not partner['active']:
       return 'FAILED'
+    if self.configuration_repository is not None:
+      try:
+        ensure_partner_capability_enabled(
+          self.configuration_repository,
+          partner_code=APEX_PARTNER_CODE,
+          direction=IntegrationDirection.OUTBOUND.value,
+          document_type=APEX_TENDER_RESPONSE_DOCUMENT_TYPE,
+          transport=Transport.REST.value,
+          message_format=MessageFormat.JSON.value,
+          protocol_version='v1',
+        )
+      except ClassifiedIntegrationFailure:
+        return 'FAILED'
 
     payload = serialized_apex_tender_response_payload(
       shipment_number=shipment_number,

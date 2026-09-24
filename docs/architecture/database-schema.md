@@ -148,3 +148,16 @@ The migration upserts two stable synthetic partners:
 - `MWCX` - Midwest Carrier, `MOTOR_CARRIER`, `X12_SFTP`
 
 No LOAD500 business data is seeded permanently.
+
+## Milestone 17 Configuration Tables
+
+Migration `20260923_010_add_partner_mapping_configuration.sql` adds safe partner and mapping configuration:
+
+- `trading_partners.description`, `support_contact`, `config_revision`
+- `trading_partner_capabilities`
+- `mapping_profiles`
+- `mapping_rules`
+- `configuration_change_log`
+- `integration_transactions.mapping_profile_id`, `mapping_profile_version`, `mapping_key`
+
+`mapping_profiles` keeps a unique `(mapping_key, version_number)` and allows only one `ACTIVE` profile per `mapping_key`. Runtime services write mapping audit fields after using an active profile.

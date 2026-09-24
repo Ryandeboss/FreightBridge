@@ -46,9 +46,35 @@ from app.integrations.x12 import (
   X12TransactionSet,
   serialize_x12,
 )
+from app.models.configuration import Midwest204MappingConfig
 
 
 MAPPING_SPEC_PATH = Path(__file__).parent / 'mappings' / '204.json'
+
+
+def default_midwest_204_mapping_config() -> Midwest204MappingConfig:
+  return Midwest204MappingConfig(
+    sender_id=FREIGHTBRIDGE_SENDER_ID,
+    receiver_id=MIDWEST_RECEIVER_ID,
+    x12_version=X12_VERSION,
+    isa_control_version=ISA_CONTROL_VERSION,
+    functional_identifier=FUNCTIONAL_IDENTIFIER_CODE,
+    transaction_set=TRANSACTION_SET_IDENTIFIER_CODE,
+    usage_indicator=USAGE_INDICATOR_TEST,
+    payment_method=PAYMENT_METHOD_PREPAID,
+    bol_qualifier=BOL_REFERENCE_QUALIFIER,
+    po_qualifier=PO_REFERENCE_QUALIFIER,
+    pickup_date_qualifier=PICKUP_DATE_QUALIFIER,
+    pickup_time_qualifier=PICKUP_TIME_QUALIFIER,
+    delivery_date_qualifier=DELIVERY_DATE_QUALIFIER,
+    delivery_time_qualifier=DELIVERY_TIME_QUALIFIER,
+    pickup_stop_reason=PICKUP_STOP_REASON,
+    delivery_stop_reason=DELIVERY_STOP_REASON,
+    shipper_entity_identifier=SHIPPER_ENTITY_IDENTIFIER,
+    consignee_entity_identifier=CONSIGNEE_ENTITY_IDENTIFIER,
+    weight_qualifier=WEIGHT_QUALIFIER_GROSS,
+    timestamp_policy='UTC',
+  )
 
 
 def load_mapping_spec() -> dict[str, Any]:
@@ -60,18 +86,21 @@ def generate_midwest_204(
   *,
   generated_at: datetime,
   control_numbers: X12ControlNumbers,
+  config: Midwest204MappingConfig | None = None,
 ) -> Midwest204GenerationResult:
+  resolved_config = config or default_midwest_204_mapping_config()
   validate_midwest_204_business_requirements(shipment)
   interchange = build_midwest_204_interchange(
     shipment,
     generated_at=generated_at,
     control_numbers=control_numbers,
+    config=resolved_config,
   )
   mapping_spec = load_mapping_spec()
   return Midwest204GenerationResult(
     shipment_number=shipment.shipment_number,
-    document_type=TRANSACTION_SET_IDENTIFIER_CODE,
-    x12_version=X12_VERSION,
+    document_type=resolved_config.transaction_set,
+    x12_version=resolved_config.x12_version,
     interchange_control_number=control_numbers.interchange_control_number,
     group_control_number=control_numbers.group_control_number,
     transaction_control_number=control_numbers.transaction_control_number,
@@ -85,12 +114,14 @@ def build_midwest_204_interchange(
   *,
   generated_at: datetime,
   control_numbers: X12ControlNumbers,
+  config: Midwest204MappingConfig | None = None,
 ) -> X12Interchange:
+  resolved_config = config or default_midwest_204_mapping_config()
   envelope_time = generated_at.astimezone(timezone.utc)
-  body_segments = _build_body_segments(shipment)
+  body_segments = _build_body_segments(shipment, resolved_config)
   st_segment = X12Segment(
     segment_id='ST',
-    elements=(TRANSACTION_SET_IDENTIFIER_CODE, control_numbers.transaction_control_number),
+    elements=(resolved_config.transaction_set, control_numbers.transaction_control_number),
   )
   se_segment = X12Segment(
     segment_id='SE',
@@ -104,14 +135,14 @@ def build_midwest_204_interchange(
   gs_segment = X12Segment(
     segment_id='GS',
     elements=(
-      FUNCTIONAL_IDENTIFIER_CODE,
-      FREIGHTBRIDGE_SENDER_ID,
-      MIDWEST_RECEIVER_ID,
+      resolved_config.functional_identifier,
+      resolved_config.sender_id,
+      resolved_config.receiver_id,
       envelope_time.strftime('%Y%m%d'),
       envelope_time.strftime('%H%M'),
       control_numbers.group_control_number,
       RESPONSIBLE_AGENCY_CODE,
-      X12_VERSION,
+      resolved_config.x12_version,
     ),
   )
   ge_segment = X12Segment(
@@ -131,16 +162,16 @@ def build_midwest_204_interchange(
       ISA_SECURITY_QUALIFIER,
       _fixed_width('', 10),
       ISA_TRADING_PARTNER_QUALIFIER,
-      _fixed_width(FREIGHTBRIDGE_SENDER_ID, 15),
+      _fixed_width(resolved_config.sender_id, 15),
       ISA_TRADING_PARTNER_QUALIFIER,
-      _fixed_width(MIDWEST_RECEIVER_ID, 15),
+      _fixed_width(resolved_config.receiver_id, 15),
       envelope_time.strftime('%y%m%d'),
       envelope_time.strftime('%H%M'),
       ISA_REPETITION_OR_STANDARDS_ID,
-      ISA_CONTROL_VERSION,
+      resolved_config.isa_control_version,
       control_numbers.interchange_control_number,
       ACKNOWLEDGMENT_REQUESTED,
-      USAGE_INDICATOR_TEST,
+      resolved_config.usage_indicator,
       COMPONENT_SEPARATOR,
     ),
   )
@@ -195,54 +226,54 @@ def validate_midwest_204_business_requirements(shipment: CanonicalShipment) -> N
     )
 
 
-def _build_body_segments(shipment: CanonicalShipment) -> list[X12Segment]:
+def _build_body_segments(shipment: CanonicalShipment, config: Midwest204MappingConfig) -> list[X12Segment]:
   bol_reference = _reference_value(shipment, ReferenceType.BOL)
   po_reference = _reference_value(shipment, ReferenceType.PO)
   segments = [
     X12Segment(
       segment_id='B2',
-      elements=('', MIDWEST_RECEIVER_ID, '', shipment.shipment_number, '', PAYMENT_METHOD_PREPAID),
+      elements=('', config.receiver_id, '', shipment.shipment_number, '', config.payment_method),
     ),
-    X12Segment(segment_id='L11', elements=(bol_reference, BOL_REFERENCE_QUALIFIER)),
+    X12Segment(segment_id='L11', elements=(bol_reference, config.bol_qualifier)),
   ]
   if po_reference is not None:
     segments.append(
-      X12Segment(segment_id='L11', elements=(po_reference, PO_REFERENCE_QUALIFIER))
+      X12Segment(segment_id='L11', elements=(po_reference, config.po_qualifier))
     )
   segments.extend(
     [
       X12Segment(
         segment_id='G62',
         elements=(
-          PICKUP_DATE_QUALIFIER,
+          config.pickup_date_qualifier,
           _format_x12_date(shipment.origin.scheduled_at),
-          PICKUP_TIME_QUALIFIER,
+          config.pickup_time_qualifier,
           _format_x12_time(shipment.origin.scheduled_at),
         ),
       ),
       X12Segment(
         segment_id='G62',
         elements=(
-          DELIVERY_DATE_QUALIFIER,
+          config.delivery_date_qualifier,
           _format_x12_date(shipment.destination.scheduled_at),
-          DELIVERY_TIME_QUALIFIER,
+          config.delivery_time_qualifier,
           _format_x12_time(shipment.destination.scheduled_at),
         ),
       ),
-      X12Segment(segment_id='S5', elements=('1', PICKUP_STOP_REASON)),
+      X12Segment(segment_id='S5', elements=('1', config.pickup_stop_reason)),
       X12Segment(
         segment_id='N1',
-        elements=(SHIPPER_ENTITY_IDENTIFIER, shipment.origin.facility_name),
+        elements=(config.shipper_entity_identifier, shipment.origin.facility_name),
       ),
       X12Segment(segment_id='N3', elements=(shipment.origin.address_line_1,)),
       X12Segment(
         segment_id='N4',
         elements=(shipment.origin.city, shipment.origin.state, shipment.origin.postal_code),
       ),
-      X12Segment(segment_id='S5', elements=('2', DELIVERY_STOP_REASON)),
+      X12Segment(segment_id='S5', elements=('2', config.delivery_stop_reason)),
       X12Segment(
         segment_id='N1',
-        elements=(CONSIGNEE_ENTITY_IDENTIFIER, shipment.destination.facility_name),
+        elements=(config.consignee_entity_identifier, shipment.destination.facility_name),
       ),
       X12Segment(segment_id='N3', elements=(shipment.destination.address_line_1,)),
       X12Segment(
@@ -255,7 +286,7 @@ def _build_body_segments(shipment: CanonicalShipment) -> list[X12Segment]:
       ),
       X12Segment(
         segment_id='L3',
-        elements=(_format_decimal(shipment.weight_lbs), WEIGHT_QUALIFIER_GROSS, '', '', str(shipment.pieces)),
+        elements=(_format_decimal(shipment.weight_lbs), config.weight_qualifier, '', '', str(shipment.pieces)),
       ),
     ]
   )
