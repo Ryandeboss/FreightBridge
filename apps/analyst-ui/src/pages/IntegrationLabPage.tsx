@@ -110,6 +110,7 @@ export function IntegrationLabPage() {
   const [runs, setRuns] = useState<LabRun[]>([]);
   const [selectedRun, setSelectedRun] = useState<LabRun | null>(null);
   const [form, setForm] = useState<LabFormState>(defaultForm);
+  const [scenarioKind, setScenarioKind] = useState<'HAPPY_PATH' | 'FAILURE_DRILL'>('HAPPY_PATH');
   const [isLoading, setIsLoading] = useState(true);
   const [isWorking, setIsWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -270,12 +271,43 @@ export function IntegrationLabPage() {
               <h2>New Run</h2>
               <span>Synthetic Integration Test</span>
             </div>
+            <div className="segmented-control" aria-label="Integration Lab scenario type">
+              <button
+                className={scenarioKind === 'HAPPY_PATH' ? 'active' : ''}
+                type="button"
+                onClick={() => {
+                  const scenario = readiness.scenarios.find((candidate) => (candidate.kind ?? 'HAPPY_PATH') === 'HAPPY_PATH');
+                  setScenarioKind('HAPPY_PATH');
+                  if (scenario) setForm((current) => ({ ...current, scenarioKey: scenario.scenarioKey }));
+                }}
+              >
+                Happy Paths
+              </button>
+              <button
+                className={scenarioKind === 'FAILURE_DRILL' ? 'active' : ''}
+                type="button"
+                onClick={() => {
+                  const scenario = readiness.scenarios.find((candidate) => candidate.kind === 'FAILURE_DRILL');
+                  setScenarioKind('FAILURE_DRILL');
+                  if (scenario) setForm((current) => ({ ...current, scenarioKey: scenario.scenarioKey }));
+                }}
+              >
+                Failure Drills
+              </button>
+            </div>
             <ScenarioCards
-              scenarios={readiness.scenarios}
+              scenarios={readiness.scenarios.filter((scenario) => (scenario.kind ?? 'HAPPY_PATH') === scenarioKind)}
               selected={form.scenarioKey}
               onSelect={(scenarioKey) => setForm((current) => ({ ...current, scenarioKey }))}
             />
-            <LabRunForm form={form} readiness={readiness} isWorking={isWorking} onChange={setForm} onCreate={createRun} />
+            <LabRunForm
+              form={form}
+              readiness={readiness}
+              selectedScenario={readiness.scenarios.find((scenario) => scenario.scenarioKey === form.scenarioKey) ?? null}
+              isWorking={isWorking}
+              onChange={setForm}
+              onCreate={createRun}
+            />
           </section>
 
           {selectedRun ? (
@@ -338,8 +370,10 @@ function ScenarioCards({
       {scenarios.map((scenario) => {
         const meta = scenarioMeta[scenario.scenarioKey] ?? {
           title: scenario.name,
-          path: scenario.scenarioKey,
-          endState: 'Scenario complete',
+          path: scenario.kind === 'FAILURE_DRILL'
+            ? `${String(scenario.layer ?? 'Failure drill')} / ${String(scenario.expectedFailure?.errorCode ?? 'Expected failure')}`
+            : scenario.scenarioKey,
+          endState: scenario.kind === 'FAILURE_DRILL' ? 'Expected failure observed' : 'Scenario complete',
         };
         return (
           <button
@@ -352,6 +386,11 @@ function ScenarioCards({
               <strong>{meta.title}</strong>
               <span>{scenario.description}</span>
               <span>{meta.path}</span>
+              {scenario.expectedFailure && (
+                <span>
+                  {String(scenario.expectedFailure.category ?? '')} / {String(scenario.expectedFailure.stage ?? '')}
+                </span>
+              )}
               <small>{scenario.stepCount} steps / {meta.endState}</small>
             </div>
           </button>
@@ -364,30 +403,38 @@ function ScenarioCards({
 function LabRunForm({
   form,
   readiness,
+  selectedScenario,
   isWorking,
   onChange,
   onCreate,
 }: {
   form: LabFormState;
   readiness: LabReadiness;
+  selectedScenario: LabScenario | null;
   isWorking: boolean;
   onChange: (form: LabFormState) => void;
   onCreate: () => void;
 }) {
   const setField = (field: keyof LabFormState, value: string) => onChange({ ...form, [field]: value });
   const createDisabled = isWorking || readiness.status !== 'ready';
+  const isFailureDrill = selectedScenario?.kind === 'FAILURE_DRILL';
 
   return (
     <div className="editor-stack">
       <label>
         Scenario
         <select value={form.scenarioKey} onChange={(event) => setField('scenarioKey', event.target.value)}>
-          {Object.entries(scenarioMeta).map(([key, meta]) => (
-            <option key={key} value={key}>{meta.title}</option>
+          {readiness.scenarios
+            .filter((scenario) => (scenario.kind ?? 'HAPPY_PATH') === (isFailureDrill ? 'FAILURE_DRILL' : 'HAPPY_PATH'))
+            .map((scenario) => (
+            <option key={scenario.scenarioKey} value={scenario.scenarioKey}>{scenario.name}</option>
           ))}
         </select>
       </label>
 
+      {isFailureDrill && selectedScenario ? (
+        <FailureDrillSetup scenario={selectedScenario} form={form} onChange={setField} />
+      ) : (
       <section className="content-grid two-column">
         <div className="editor-stack">
           <h3>General</h3>
@@ -438,6 +485,7 @@ function LabRunForm({
           </div>
         )}
       </section>
+      )}
 
       <button className="primary-button" type="button" disabled={createDisabled} onClick={onCreate}>
         <Play size={16} />
@@ -445,6 +493,43 @@ function LabRunForm({
       </button>
       {readiness.status !== 'ready' && <small>Complete dependency readiness before creating a run.</small>}
     </div>
+  );
+}
+
+function FailureDrillSetup({
+  scenario,
+  form,
+  onChange,
+}: {
+  scenario: LabScenario;
+  form: LabFormState;
+  onChange: (field: keyof LabFormState, value: string) => void;
+}) {
+  const expected = scenario.expectedFailure ?? {};
+  return (
+    <section className="content-grid two-column">
+      <article className="lab-scenario-summary">
+        <strong>Failure Drill</strong>
+        <span>{scenario.description}</span>
+        <span>{scenario.guidance}</span>
+        <small>Injected Fault: {scenario.injectedFault}</small>
+      </article>
+      <article className="lab-scenario-summary">
+        <strong>Expected Failure</strong>
+        <span>Code: {String(expected.errorCode ?? 'Pending')}</span>
+        <span>Category: {String(expected.category ?? 'Pending')}</span>
+        <span>Stage: {String(expected.stage ?? 'Pending')}</span>
+        <span>Retryable: {String(expected.retryable ?? false)}</span>
+        <small>{String(expected.transport ?? 'Pre-ingestion')} / {String(expected.documentType ?? 'Transport probe')}</small>
+      </article>
+      <label>
+        Load ID
+        <input value={form.loadId} onChange={(event) => onChange('loadId', event.target.value)} placeholder="Auto-generate" />
+      </label>
+      <p className="muted-text">
+        Fault mutation is selected by this predefined drill. The browser does not submit credentials, headers, endpoints, or editable message bodies.
+      </p>
+    </section>
   );
 }
 
@@ -473,6 +558,7 @@ function RunDetail({
   const canonicalShipment = findCanonicalShipment(run);
   const technicalAckDetail = asRecord(run.resultSummary.technicalAcknowledgmentDetail);
   const nextRunnableKey = nextRunnableStepKey(run.steps);
+  const failureDrill = asRecord(run.resultSummary.failureDrill);
 
   return (
     <section className="page-stack" data-testid="lab-run-detail">
@@ -516,6 +602,8 @@ function RunDetail({
           <Link className="secondary-button" to={`/trace/${encodeURIComponent(run.businessIdentifier)}`}>Business Trace</Link>
         </div>
       </article>
+
+      {failureDrill && <FailureDrillResult run={run} drill={failureDrill} />}
 
       <section className="lab-lanes" aria-label="Integration path">
         {lanes.map((lane) => (
@@ -607,6 +695,74 @@ function RunDetail({
               );
             })}
           </ul>
+        )}
+      </article>
+    </section>
+  );
+}
+
+function FailureDrillResult({ run, drill }: { run: LabRun; drill: Record<string, unknown> }) {
+  const expected = asRecord(drill.expected) ?? {};
+  const observed = asRecord(drill.observed) ?? {};
+  const errorId = typeof observed.errorId === 'string' ? observed.errorId : null;
+  const transactionId = typeof observed.transactionId === 'string' ? observed.transactionId : null;
+  const errorCode = String(observed.errorCode ?? expected.errorCode ?? '');
+  const queueQuery = new URLSearchParams({ errorCode });
+  if (run.businessIdentifier) queueQuery.set('businessIdentifier', run.businessIdentifier);
+  const payloadPreview = drill.payloadPreview;
+
+  return (
+    <section className="content-grid two-column" data-testid="failure-drill-result">
+      <article className="panel">
+        <div className="panel-header">
+          <h2>Failure Drill</h2>
+          <StatusBadge value={String(drill.drillOutcome ?? 'EXPECTED_FAILURE_OBSERVED')} />
+        </div>
+        <dl className="definition-grid">
+          <div><dt>Result</dt><dd>EXPECTED FAILURE OBSERVED</dd></div>
+          <div><dt>Lab Run</dt><dd><StatusBadge value={run.status} /></dd></div>
+          <div><dt>Integration Transaction</dt><dd>{transactionId ? 'FAILED' : 'No transaction created'}</dd></div>
+          <div><dt>Injected Fault</dt><dd>{String(drill.injectedFault ?? 'Controlled synthetic fault')}</dd></div>
+          <div><dt>Transport</dt><dd>{String(observed.transport ?? expected.transport ?? 'Pre-ingestion')}</dd></div>
+          <div><dt>Document</dt><dd>{String(observed.documentType ?? expected.documentType ?? 'Transport probe')}</dd></div>
+        </dl>
+        <p className="muted-text">
+          {String(drill.transactionStatusExplanation ?? 'The drill succeeded because the expected integration failure was correctly produced and recorded.')}
+        </p>
+        {!transactionId && (
+          <p className="muted-text">Failure occurred before an integration transaction could be created.</p>
+        )}
+        <div className="lab-actions">
+          {errorId && <Link className="secondary-button" to={`/failures/${errorId}`}>View Failure</Link>}
+          {transactionId && <Link className="secondary-button" to={`/transactions/${transactionId}`}>View Failed Transaction</Link>}
+          <Link className="secondary-button" to={`/failures?${queueQuery.toString()}`}>Open Failure Queue</Link>
+        </div>
+      </article>
+
+      <article className="panel">
+        <div className="panel-header"><h2>Expected vs Observed</h2></div>
+        <section className="content-grid two-column">
+          <div className="lab-scenario-summary">
+            <strong>Expected</strong>
+            <span>Code: {String(expected.errorCode ?? 'Pending')}</span>
+            <span>Category: {String(expected.category ?? 'Pending')}</span>
+            <span>Stage: {String(expected.stage ?? 'Pending')}</span>
+            <span>Retryable: {String(expected.retryable ?? false)}</span>
+          </div>
+          <div className="lab-scenario-summary">
+            <strong>Observed</strong>
+            <span>Code: {String(observed.errorCode ?? 'Pending')}</span>
+            <span>Category: {String(observed.category ?? 'Pending')}</span>
+            <span>Stage: {String(observed.stage ?? 'Pending')}</span>
+            <span>Retryable: {String(observed.retryable ?? false)}</span>
+            <span>Status: {String(observed.processingStatus ?? 'Pre-ingestion')}</span>
+          </div>
+        </section>
+        <p className="muted-text">{String(drill.guidance ?? '')}</p>
+        {payloadPreview !== null && payloadPreview !== undefined && (
+          <pre className="lab-preview" aria-label="Read-only failure payload preview">
+            {typeof payloadPreview === 'string' ? payloadPreview : JSON.stringify(payloadPreview, null, 2)}
+          </pre>
         )}
       </article>
     </section>

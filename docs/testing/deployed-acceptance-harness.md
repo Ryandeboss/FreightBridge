@@ -6,7 +6,7 @@ The deployed acceptance harness is a production-like black-box runner for the al
 - FreightBridge API
 - Midwest Partner Simulator
 - Railway/SFTPGo transport through the deployed services
-- Vercel Analyst UI for Milestones 16, 17, and 18
+- Vercel Analyst UI for Milestones 16 through 19
 
 It replaces the long manual Postman sequence for full milestone acceptance. Postman collections remain useful for debugging individual requests.
 
@@ -96,7 +96,14 @@ python -m playwright install chromium
 python scripts/acceptance/milestone18.py
 ```
 
-Milestones 14, 15, 16, 17, and 18 require `OPERATIONS_API_BEARER_TOKEN`. Milestones 16, 17, and 18 also require `ANALYST_UI_BASE_URL`. Milestones 12 and 13 do not require the operations token.
+Run Milestone 19:
+
+```bash
+python -m playwright install chromium
+python scripts/acceptance/milestone19.py
+```
+
+Milestones 14, 15, 16, 17, 18, and 19 require `OPERATIONS_API_BEARER_TOKEN`. Milestones 16, 17, 18, and 19 also require `ANALYST_UI_BASE_URL`. Milestones 12 and 13 do not require the operations token.
 
 Useful options:
 
@@ -110,7 +117,7 @@ python scripts/acceptance/milestone12.py --print-env
 
 Milestone 15 also uses safe custom headers for `Idempotency-Key`; the shared HTTP client rejects custom `Authorization` overrides so bearer tokens are controlled only by the configured token arguments.
 
-Milestones 16 through 18 use Playwright to type the operations token into the deployed Analyst Console. The token remains a GitHub Actions secret and is not passed to Vite or printed in output.
+Milestones 16 through 19 use Playwright to type the operations token into the deployed Analyst Console. The token remains a GitHub Actions secret and is not passed to Vite or printed in output.
 
 When `--load-id` is omitted, the harness generates a fresh ID like:
 
@@ -207,7 +214,7 @@ The workflow is `workflow_dispatch` only because it mutates shared deployed test
 
 Supported inputs:
 
-- `milestone`: `milestone12`, `milestone13`, `milestone14`, `milestone15`, `milestone16`, `milestone17`, or `milestone18`
+- `milestone`: `milestone12`, `milestone13`, `milestone14`, `milestone15`, `milestone16`, `milestone17`, `milestone18`, or `milestone19`
 - `load_id`: optional, blank means generate a fresh load ID
 - `run_db_verification`: passes `DATABASE_URL` only when enabled
 - `verbose`: prints safe request progress
@@ -228,13 +235,23 @@ DATABASE_URL
 OPERATIONS_API_BEARER_TOKEN
 ```
 
-Create this repository Actions variable for Milestones 16, 17, and 18:
+Create this repository Actions variable for Milestones 16, 17, 18, and 19:
 
 ```text
 ANALYST_UI_BASE_URL
 ```
 
-`APEX_READONLY_TOKEN`, `MIDWEST_READONLY_TOKEN`, and `DATABASE_URL` are optional. `OPERATIONS_API_BEARER_TOKEN` is required for Milestones 14, 15, 16, 17, and 18. Add `DATABASE_URL` only if you want GitHub to run direct SQL verification.
+`APEX_READONLY_TOKEN`, `MIDWEST_READONLY_TOKEN`, and `DATABASE_URL` are optional. `OPERATIONS_API_BEARER_TOKEN` is required for Milestones 14, 15, 16, 17, 18, and 19. Add `DATABASE_URL` only if you want GitHub to run direct SQL verification.
+
+## Milestone 19 Automated Sequence
+
+Milestone 19 runs three representative Failure Drills through the deployed Analyst UI:
+
+1. `APEX_BAD_AUTH` verifies authentication diagnosis.
+2. `APEX_INVALID_CONTRACT` verifies JSON parsed successfully but contract validation failed.
+3. `X12_214_UNSUPPORTED_STATUS` verifies SFTP/X12 parsing succeeds and mapping fails with `UNSUPPORTED_AT7_CODE`.
+
+The harness verifies `EXPECTED FAILURE OBSERVED`, the expected code/category/stage, failed transaction links, Failure Detail, Failure Queue visibility, and read-only payload preview text. It records the synthetic `errorId` values created during the run and resolves only those errors with the note `Milestone 19 deployed acceptance cleanup.` It does not delete history or resolve unrelated failures.
 
 To create repository secrets:
 

@@ -19,10 +19,11 @@ Current test coverage:
 - Milestone 16 Analyst Console token-gate, dashboard, transaction, failure, business-trace, lock, and deployed browser acceptance tests.
 - Milestone 17 partner configuration, mapping profile/version workflow, runtime mapping audit, Analyst Console Partners/Mappings, and deployed browser acceptance tests.
 - Milestone 18 Integration Lab run/step APIs, Analyst Console scenario workflow, 204/997/990/214 inspection, and deployed browser acceptance tests.
+- Milestone 19 controlled failure drills for Apex auth/parsing/validation/duplicate failures, X12 214 envelope/status/version failures, SFTP host-key boundary behavior, SFTP poll `transactionId` observability, Analyst Console Failure Drills UI, and deployed browser acceptance tests.
 - Offline unit tests for the deployed acceptance harness helpers.
 - GitHub Actions workflow for frontend and backend checks.
 - Manual-only GitHub Actions workflow for deployed acceptance.
 
-For full deployed milestone acceptance, prefer the Python harness documented in [deployed-acceptance-harness.md](deployed-acceptance-harness.md). Milestone-specific guides include [Milestone 12](milestone-12-midwest-214-status-flow.md), [Milestone 13](milestone-13-997-functional-acknowledgment.md), [Milestone 14](milestone-14-operational-observability.md), [Milestone 15](milestone-15-idempotency-retry.md), [Milestone 16](milestone-16-analyst-console.md), [Milestone 17](milestone-17-partner-mapping-configuration.md), and [Milestone 18](milestone-18-integration-lab.md). The Postman collections remain useful for debugging individual routes.
+For full deployed milestone acceptance, prefer the Python harness documented in [deployed-acceptance-harness.md](deployed-acceptance-harness.md). Milestone-specific guides include [Milestone 12](milestone-12-midwest-214-status-flow.md), [Milestone 13](milestone-13-997-functional-acknowledgment.md), [Milestone 14](milestone-14-operational-observability.md), [Milestone 15](milestone-15-idempotency-retry.md), [Milestone 16](milestone-16-analyst-console.md), [Milestone 17](milestone-17-partner-mapping-configuration.md), [Milestone 18](milestone-18-integration-lab.md), and [Milestone 19](milestone-19-failure-injection.md). The Postman collections remain useful for debugging individual routes.
 
 Future milestones should add API contract tests, simulator tests, database tests, integration pipeline tests, and deployed acceptance scripts that reuse `scripts/acceptance/common.py`.

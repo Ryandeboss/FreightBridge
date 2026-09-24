@@ -43,6 +43,11 @@ export type LabScenario = {
   name: string;
   description: string;
   stepCount: number;
+  kind: 'HAPPY_PATH' | 'FAILURE_DRILL';
+  expectedFailure?: Record<string, unknown> | null;
+  guidance?: string | null;
+  injectedFault?: string | null;
+  layer?: string | null;
 };
 
 export type LabReadiness = {

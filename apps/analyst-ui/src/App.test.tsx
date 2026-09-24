@@ -388,6 +388,97 @@ const completedLabRun = {
   })),
 };
 
+const completedFailureLabRun = {
+  ...labRun,
+  id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  scenarioKey: 'APEX_INVALID_CONTRACT',
+  businessIdentifier: 'LABFAIL900',
+  status: 'SUCCEEDED',
+  resultSummary: {
+    drillOutcome: 'EXPECTED_FAILURE_OBSERVED',
+    failureDrill: {
+      scenarioKey: 'APEX_INVALID_CONTRACT',
+      name: 'Invalid Apex Contract',
+      kind: 'FAILURE_DRILL',
+      expected: {
+        errorCode: 'INVALID_APEX_LOAD',
+        category: 'BUSINESS_VALIDATION_ERROR',
+        stage: 'VALIDATION',
+        retryable: false,
+        documentType: 'APEX_LOAD_TENDER',
+        transport: 'REST',
+      },
+      observed: {
+        errorId,
+        transactionId,
+        correlationId: 'lab-failure-contract',
+        errorCode: 'INVALID_APEX_LOAD',
+        category: 'BUSINESS_VALIDATION_ERROR',
+        stage: 'VALIDATION',
+        retryable: false,
+        safeMessage: 'Apex payload failed contract validation.',
+        processingStatus: 'FAILED',
+        documentType: 'APEX_LOAD_TENDER',
+        transport: 'REST',
+      },
+      drillOutcome: 'EXPECTED_FAILURE_OBSERVED',
+      guidance: 'JSON parsed successfully, but the request did not satisfy the Apex load contract.',
+      injectedFault: 'pickup.postalCode removed from an otherwise valid payload.',
+      payloadPreview: {
+        loadId: 'LABFAIL900',
+        pickup: {
+          facilityName: 'ABC Factory',
+          address1: '200 Industrial Rd',
+          city: 'Aurora',
+          state: 'IL',
+          postalCode: 'REMOVED',
+        },
+      },
+      transactionStatusExplanation: 'The drill succeeded because the expected integration failure was correctly produced and recorded.',
+    },
+  },
+  startedAt: '2026-09-24T15:01:00Z',
+  completedAt: '2026-09-24T15:02:00Z',
+  steps: [
+    {
+      ...labRun.steps[0],
+      id: 'failure-step-1',
+      runId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      stepKey: 'INJECT_APEX_INVALID_CONTRACT',
+      displayName: 'Inject invalid Apex contract',
+      receiver: 'FreightBridge',
+      status: 'SUCCEEDED',
+      attemptCount: 1,
+      relatedTransactionIds: [transactionId],
+      requestSummary: {
+        expectedFailure: {
+          errorCode: 'INVALID_APEX_LOAD',
+          category: 'BUSINESS_VALIDATION_ERROR',
+          stage: 'VALIDATION',
+          retryable: false,
+        },
+      },
+      responseSummary: {
+        drillOutcome: 'EXPECTED_FAILURE_OBSERVED',
+        expectedFailure: {
+          errorCode: 'INVALID_APEX_LOAD',
+          category: 'BUSINESS_VALIDATION_ERROR',
+          stage: 'VALIDATION',
+          retryable: false,
+        },
+        observedFailure: {
+          errorId,
+          transactionId,
+          errorCode: 'INVALID_APEX_LOAD',
+          category: 'BUSINESS_VALIDATION_ERROR',
+          stage: 'VALIDATION',
+          processingStatus: 'FAILED',
+        },
+      },
+    },
+  ],
+};
+
 function jsonResponse(payload: unknown, status = 200) {
   return Promise.resolve(
     new Response(JSON.stringify(payload), {
@@ -435,6 +526,151 @@ function installFetchMock(options: { readiness?: Record<string, unknown>; initia
         name: 'Full shipment lifecycle',
         description: 'Accepted tender plus picked up, in transit, arrived, and delivered 214 updates.',
         stepCount: 21,
+        kind: 'HAPPY_PATH',
+      },
+      {
+        scenarioKey: 'APEX_BAD_AUTH',
+        name: 'Bad Apex Authentication',
+        description: 'Send a valid synthetic Apex tender with invalid authentication.',
+        stepCount: 1,
+        kind: 'FAILURE_DRILL',
+        layer: 'Authentication',
+        expectedFailure: {
+          errorCode: 'AUTHENTICATION_ERROR',
+          category: 'AUTHENTICATION_ERROR',
+          stage: 'AUTHENTICATION',
+          retryable: false,
+          documentType: 'APEX_LOAD_TENDER',
+          transport: 'REST',
+        },
+        guidance: 'Check the partner credential configured for the environment.',
+        injectedFault: 'Synthetic Authorization header rejected before parsing.',
+      },
+      {
+        scenarioKey: 'APEX_INVALID_JSON',
+        name: 'Invalid Apex JSON',
+        description: 'Send malformed JSON bytes with valid server-side authentication.',
+        stepCount: 1,
+        kind: 'FAILURE_DRILL',
+        layer: 'Parsing',
+        expectedFailure: {
+          errorCode: 'INVALID_JSON',
+          category: 'SYNTAX_ERROR',
+          stage: 'PARSING',
+          retryable: false,
+          documentType: 'APEX_LOAD_TENDER',
+          transport: 'REST',
+        },
+        guidance: 'JSON could not be parsed.',
+        injectedFault: 'Malformed JSON body.',
+      },
+      {
+        scenarioKey: 'APEX_INVALID_CONTRACT',
+        name: 'Invalid Apex Contract',
+        description: 'Send valid JSON with pickup.postalCode removed.',
+        stepCount: 1,
+        kind: 'FAILURE_DRILL',
+        layer: 'Validation',
+        expectedFailure: {
+          errorCode: 'INVALID_APEX_LOAD',
+          category: 'BUSINESS_VALIDATION_ERROR',
+          stage: 'VALIDATION',
+          retryable: false,
+          documentType: 'APEX_LOAD_TENDER',
+          transport: 'REST',
+        },
+        guidance: 'JSON parsed successfully, but contract validation failed.',
+        injectedFault: 'pickup.postalCode removed from an otherwise valid payload.',
+      },
+      {
+        scenarioKey: 'APEX_DUPLICATE_SHIPMENT',
+        name: 'Duplicate Apex Shipment',
+        description: 'Create a baseline load, then resend it without an Idempotency-Key.',
+        stepCount: 2,
+        kind: 'FAILURE_DRILL',
+        layer: 'Business validation',
+        expectedFailure: {
+          errorCode: 'DUPLICATE_SHIPMENT',
+          category: 'DUPLICATE_TRANSACTION',
+          stage: 'BUSINESS_VALIDATION',
+          retryable: false,
+          documentType: 'APEX_LOAD_TENDER',
+          transport: 'REST',
+        },
+        guidance: 'Repeated request without Idempotency-Key is a duplicate shipment failure.',
+        injectedFault: 'Second request reuses the same loadId without Idempotency-Key.',
+      },
+      {
+        scenarioKey: 'X12_214_CONTROL_MISMATCH',
+        name: '214 Control Mismatch',
+        description: 'Upload a synthetic 214 with mismatched ST02 and SE02.',
+        stepCount: 1,
+        kind: 'FAILURE_DRILL',
+        layer: 'X12 envelope',
+        expectedFailure: {
+          errorCode: 'CONTROL_NUMBER_MISMATCH',
+          category: 'SYNTAX_ERROR',
+          stage: 'PARSING',
+          retryable: false,
+          documentType: '214',
+          transport: 'SFTP',
+        },
+        guidance: 'Check envelope control numbers.',
+        injectedFault: 'SE02 changed so it does not match ST02.',
+      },
+      {
+        scenarioKey: 'X12_214_UNSUPPORTED_STATUS',
+        name: '214 Unsupported Status',
+        description: 'Upload a structurally valid 214 with unsupported AT7-01 status.',
+        stepCount: 1,
+        kind: 'FAILURE_DRILL',
+        layer: 'Mapping',
+        expectedFailure: {
+          errorCode: 'UNSUPPORTED_AT7_CODE',
+          category: 'MAPPING_ERROR',
+          stage: 'MAPPING',
+          retryable: false,
+          documentType: '214',
+          transport: 'SFTP',
+        },
+        guidance: 'Check the active 214 status-code mapping.',
+        injectedFault: 'AT7-01 changed to unsupported code ZZ.',
+      },
+      {
+        scenarioKey: 'X12_214_WRONG_VERSION',
+        name: '214 Wrong Version',
+        description: 'Upload a structurally valid 214 using unsupported version identifiers.',
+        stepCount: 1,
+        kind: 'FAILURE_DRILL',
+        layer: 'Mapping/profile',
+        expectedFailure: {
+          errorCode: 'UNSUPPORTED_X12_VERSION',
+          category: 'MAPPING_ERROR',
+          stage: 'MAPPING',
+          retryable: false,
+          documentType: '214',
+          transport: 'SFTP',
+        },
+        guidance: 'Confirm the supported X12 version.',
+        injectedFault: 'ISA12 set to 00501 and GS08 set to 005010.',
+      },
+      {
+        scenarioKey: 'SFTP_HOST_KEY_MISMATCH',
+        name: 'SFTP Host-Key Mismatch',
+        description: 'Probe SFTP with a temporary invalid expected host-key fingerprint.',
+        stepCount: 1,
+        kind: 'FAILURE_DRILL',
+        layer: 'Transport',
+        expectedFailure: {
+          errorCode: 'SFTP_HOST_KEY_MISMATCH',
+          category: 'TRANSPORT_ERROR',
+          stage: 'TRANSPORT_BOUNDARY',
+          retryable: false,
+          documentType: null,
+          transport: 'SFTP',
+        },
+        guidance: 'Check SFTP host-key pinning and endpoint identity.',
+        injectedFault: 'Temporary in-memory host-key fingerprint mismatch.',
       },
     ],
   };
@@ -668,10 +904,22 @@ function installFetchMock(options: { readiness?: Record<string, unknown>; initia
 
     if (path === '/api/lab/runs') {
       if (init?.method === 'POST') {
-        currentLabRun = labRun;
+        const body = JSON.parse(String(init.body));
+        currentLabRun = body.scenarioKey === 'APEX_INVALID_CONTRACT'
+          ? { ...completedFailureLabRun, status: 'READY', steps: completedFailureLabRun.steps.map((step) => ({ ...step, status: 'PENDING', responseSummary: {}, relatedTransactionIds: [] })) }
+          : labRun;
         return jsonResponse(currentLabRun, 201);
       }
       return jsonResponse({ limit: 12, offset: 0, count: 1, runs: [currentLabRun] });
+    }
+
+    if (path === `/api/lab/runs/${completedFailureLabRun.id}`) {
+      return jsonResponse(currentLabRun);
+    }
+
+    if (path === `/api/lab/runs/${completedFailureLabRun.id}/run-next`) {
+      currentLabRun = completedFailureLabRun;
+      return jsonResponse({ run: currentLabRun, step: completedFailureLabRun.steps[0], alreadyCompleted: false });
     }
 
     if (path === `/api/lab/runs/${labRun.id}`) {
@@ -1025,6 +1273,53 @@ describe('Analyst Console', () => {
     await waitFor(() => expect(window.location.hash).toBe(`#/lab/runs/${labRun.id}`));
     expect(screen.getAllByRole('link', { name: /Business Trace/i }).length).toBeGreaterThan(0);
     expect(screen.queryByLabelText(/bearer token/i)).not.toBeInTheDocument();
+  });
+
+  test('runs a controlled Integration Lab failure drill with troubleshooting links and safe previews', async () => {
+    const fetchMock = installFetchMock();
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/lab';
+    render(<App />);
+
+    expect(await screen.findByTestId('integration-lab-page')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Failure Drills/i }));
+    expect(screen.getByRole('button', { name: /Bad Apex Authentication/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Invalid Apex JSON/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Invalid Apex Contract/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Duplicate Apex Shipment/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /214 Control Mismatch/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /214 Unsupported Status/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /214 Wrong Version/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /SFTP Host-Key Mismatch/i })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Invalid Apex Contract/i }));
+    expect(screen.getAllByText(/Expected Failure/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/INVALID_APEX_LOAD/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/BUSINESS_VALIDATION_ERROR/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/pickup.postalCode removed/i).length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText(/raw json/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/raw x12/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/bearer token/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/sftp credential/i)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /create run/i }));
+    expect(await screen.findByTestId('lab-run-detail')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /run next step/i }));
+    expect(await screen.findByTestId('failure-drill-result')).toBeInTheDocument();
+    expect(screen.getAllByText(/EXPECTED FAILURE OBSERVED/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Lab Run/i)).toBeInTheDocument();
+    expect(screen.getByText(/Integration Transaction/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/FAILED/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/JSON parsed successfully/i).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText(/Read-only failure payload preview/i)).toHaveTextContent('REMOVED');
+    expect(screen.getByRole('link', { name: /View Failure/i })).toHaveAttribute('href', `#/failures/${errorId}`);
+    expect(screen.getByRole('link', { name: /View Failed Transaction/i })).toHaveAttribute('href', `#/transactions/${transactionId}`);
+    expect(screen.getByRole('link', { name: /Open Failure Queue/i })).toHaveAttribute('href', expect.stringContaining('#/failures?'));
+    await waitFor(() => {
+      const createCall = fetchMock.mock.calls.find(([input, init]) => String(input).endsWith('/api/lab/runs') && init?.method === 'POST');
+      expect(createCall).toBeTruthy();
+      const body = JSON.parse(String(createCall?.[1]?.body));
+      expect(body.scenarioKey).toBe('APEX_INVALID_CONTRACT');
+      expect(JSON.stringify(body).toLowerCase()).not.toContain('token');
+    });
   });
 
   test('disables Integration Lab run creation until readiness is healthy', async () => {

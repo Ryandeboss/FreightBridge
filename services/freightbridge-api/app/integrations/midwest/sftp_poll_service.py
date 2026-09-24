@@ -13,7 +13,7 @@ from app.integrations.midwest.sftp_client import (
   MidwestSftpError,
   MidwestSftpFileConflictError,
 )
-from app.integrations.x12 import X12Error, parse_x12, validate_x12_envelopes
+from app.integrations.x12 import X12Error, parse_x12
 
 
 OUTBOUND_DIR = '/outbound'
@@ -28,6 +28,7 @@ class SftpPollFileResult:
   status: str
   destination_path: str | None = None
   error_code: str | None = None
+  transaction_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -48,6 +49,7 @@ class SftpPollResult:
           'status': item.status,
           'destinationPath': item.destination_path,
           'errorCode': item.error_code,
+          'transactionId': item.transaction_id,
         }
         for item in self.processed
       ],
@@ -108,7 +110,7 @@ class MidwestSftpOutboundPollService:
           payload = client.download_bytes(source_path)
           transaction_type = _detect_transaction_type(payload, correlation_id=f'{correlation_id}:{file_name}')
           ingestion_service = self._ingestion_service_for(transaction_type, correlation_id=f'{correlation_id}:{file_name}')
-          ingestion_service.ingest(
+          ingestion_result = ingestion_service.ingest(
             raw_body=payload,
             correlation_id=f'{correlation_id}:{file_name}',
             transport=Transport.SFTP,
@@ -121,6 +123,7 @@ class MidwestSftpOutboundPollService:
               source_path=source_path,
               status='ARCHIVED',
               destination_path=destination_path,
+              transaction_id=str(ingestion_result.transaction_id),
             )
           )
         except IntegrationAPIError as exc:
@@ -131,6 +134,7 @@ class MidwestSftpOutboundPollService:
                 source_path=source_path,
                 status='LEFT_FOR_RETRY',
                 error_code=exc.code,
+                transaction_id=str(exc.transaction_id) if exc.transaction_id else None,
               )
             )
             continue
@@ -142,6 +146,7 @@ class MidwestSftpOutboundPollService:
               status='MOVED_TO_ERROR',
               destination_path=destination_path,
               error_code=exc.code,
+              transaction_id=str(exc.transaction_id) if exc.transaction_id else None,
             )
           )
         except MidwestSftpFileConflictError:
@@ -217,7 +222,6 @@ def _safe_archive(client, source_path: str, destination_path: str, payload: byte
 def _detect_transaction_type(payload: bytes, *, correlation_id: str) -> str:
   try:
     interchange = parse_x12(payload)
-    validate_x12_envelopes(interchange)
   except X12Error as exc:
     raise IntegrationAPIError(
       status_code=400,

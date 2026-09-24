@@ -169,6 +169,31 @@ def test_lab_apex_payload_matches_deployed_simulator_contract() -> None:
   assert payload['createdAt'] <= payload['updatedAt']
 
 
+def test_lab_failure_drill_scenarios_are_server_declared_with_expected_metadata() -> None:
+  service = IntegrationLabService(repository=None)  # type: ignore[arg-type]
+  readiness = service.readiness()
+  scenarios = {scenario['scenario_key']: scenario for scenario in readiness['scenarios']}
+
+  assert scenarios['APEX_BAD_AUTH']['kind'] == 'FAILURE_DRILL'
+  assert scenarios['APEX_BAD_AUTH']['expected_failure']['errorCode'] == 'AUTHENTICATION_ERROR'
+  assert scenarios['APEX_INVALID_JSON']['expected_failure']['stage'] == 'PARSING'
+  assert scenarios['APEX_INVALID_CONTRACT']['expected_failure']['category'] == 'BUSINESS_VALIDATION_ERROR'
+  assert scenarios['APEX_DUPLICATE_SHIPMENT']['step_count'] == 2
+  assert scenarios['X12_214_CONTROL_MISMATCH']['expected_failure']['errorCode'] == 'CONTROL_NUMBER_MISMATCH'
+  assert scenarios['X12_214_UNSUPPORTED_STATUS']['expected_failure']['errorCode'] == 'UNSUPPORTED_AT7_CODE'
+  assert scenarios['X12_214_WRONG_VERSION']['expected_failure']['errorCode'] == 'UNSUPPORTED_X12_VERSION'
+  assert scenarios['SFTP_HOST_KEY_MISMATCH']['expected_failure']['stage'] == 'TRANSPORT_BOUNDARY'
+
+
+def test_lab_create_request_accepts_predefined_failure_drills_only() -> None:
+  request = CreateLabRunRequest.model_validate({'scenarioKey': 'APEX_BAD_AUTH'})
+
+  assert request.scenario_key == 'APEX_BAD_AUTH'
+
+  with pytest.raises(Exception):
+    CreateLabRunRequest.model_validate({'scenarioKey': 'ARBITRARY_RAW_X12'})
+
+
 def test_lab_exact_204_preview_uses_stored_payload_metadata() -> None:
   service = IntegrationLabService(repository=None)  # type: ignore[arg-type]
 

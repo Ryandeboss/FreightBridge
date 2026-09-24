@@ -43,7 +43,7 @@ FreightBridge
   [stores technical acks; forwards business tender/status updates to Apex]
 ```
 
-Operations support can inspect the same transaction/log/error records through secured `/api/operations` endpoints and the protected Analyst Console. Partner capabilities and mapping profiles are managed through `/api/configuration` and the same console token. The Integration Lab uses `/api/lab` to create and execute controlled end-to-end scenarios without exposing partner credentials to the browser. See [Operational observability and failure queue](docs/operations/observability-and-failure-queue.md), [Idempotency, replay, and manual retry](docs/operations/idempotency-and-retry.md), [Trading partner configuration](docs/operations/trading-partner-configuration.md), [Mapping change control](docs/operations/mapping-change-control.md), [Integration Lab](docs/operations/integration-lab.md), and [Analyst Console](docs/operations/analyst-console.md).
+Operations support can inspect the same transaction/log/error records through secured `/api/operations` endpoints and the protected Analyst Console. Partner capabilities and mapping profiles are managed through `/api/configuration` and the same console token. The Integration Lab uses `/api/lab` to create and execute controlled end-to-end happy-path scenarios and predefined troubleshooting failure drills without exposing partner credentials to the browser. See [Operational observability and failure queue](docs/operations/observability-and-failure-queue.md), [Idempotency, replay, and manual retry](docs/operations/idempotency-and-retry.md), [Trading partner configuration](docs/operations/trading-partner-configuration.md), [Mapping change control](docs/operations/mapping-change-control.md), [Integration Lab](docs/operations/integration-lab.md), and [Analyst Console](docs/operations/analyst-console.md).
 
 See [docs/architecture/initial-architecture.md](docs/architecture/initial-architecture.md) for the first architecture diagram.
 
@@ -152,6 +152,12 @@ Milestone 18 acceptance verifies the deployed Integration Lab full-lifecycle bro
 
 ```bash
 python scripts/acceptance/milestone18.py
+```
+
+Milestone 19 acceptance verifies three representative controlled failure drills through the deployed Analyst UI and resolves only the synthetic errors it creates:
+
+```bash
+python scripts/acceptance/milestone19.py
 ```
 
 See [deployed acceptance harness](docs/testing/deployed-acceptance-harness.md) for required environment variables, GitHub Actions secrets, optional DB verification, and failure reporting. Postman collections remain available for individual route debugging.
@@ -272,6 +278,7 @@ Major Milestone 3 contract files:
 - [Midwest 997 functional acknowledgment mapping](docs/mappings/midwest-997-functional-acknowledgment.md)
 - [Analyst Console runbook](docs/operations/analyst-console.md)
 - [Milestone 16 Analyst Console acceptance](docs/testing/milestone-16-analyst-console.md)
+- [Milestone 19 Failure Injection acceptance](docs/testing/milestone-19-failure-injection.md)
 
 Sample contract fixtures:
 
@@ -309,6 +316,7 @@ Implemented:
 - Midwest X12 214 shipment-status event creation, SFTP dispatch, FreightBridge canonical event history/current-status handling, and Apex shipment-status readback.
 - Midwest X12 997 functional acknowledgment generation, SFTP dispatch, FreightBridge AK1/AK2 correlation to outbound 204, and technical acknowledgment audit.
 - Reusable deployed acceptance harness for black-box testing against Apex, FreightBridge, Midwest, SFTPGo, and the Analyst UI through public HTTP/browser paths.
+- Controlled Integration Lab failure drills for authentication, JSON parsing, Apex contract validation, duplicate shipment detection, X12 214 envelope/mapping/version diagnosis, and SFTP host-key boundary diagnosis.
 
 Specified:
 

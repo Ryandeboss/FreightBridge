@@ -39,7 +39,20 @@ class LabLocationInput(LabModel):
 
 
 class CreateLabRunRequest(LabModel):
-  scenario_key: Literal['TECHNICAL_ACK_ONLY', 'TENDER_ACCEPTED', 'TENDER_REJECTED', 'FULL_SHIPMENT_LIFECYCLE'] = Field(alias='scenarioKey')
+  scenario_key: Literal[
+    'TECHNICAL_ACK_ONLY',
+    'TENDER_ACCEPTED',
+    'TENDER_REJECTED',
+    'FULL_SHIPMENT_LIFECYCLE',
+    'APEX_BAD_AUTH',
+    'APEX_INVALID_JSON',
+    'APEX_INVALID_CONTRACT',
+    'APEX_DUPLICATE_SHIPMENT',
+    'X12_214_CONTROL_MISMATCH',
+    'X12_214_UNSUPPORTED_STATUS',
+    'X12_214_WRONG_VERSION',
+    'SFTP_HOST_KEY_MISMATCH',
+  ] = Field(alias='scenarioKey')
   load_id: str | None = Field(default=None, alias='loadId', min_length=6, max_length=30)
   equipment_type: Literal['VAN_53', 'REEFER_53', 'FLATBED'] | None = Field(default='VAN_53', alias='equipmentType')
   weight_lbs: int | None = Field(default=42000, alias='weightLbs', gt=0)
@@ -59,6 +72,11 @@ class LabScenarioView(LabModel):
   name: str
   description: str
   step_count: int = Field(alias='stepCount')
+  kind: Literal['HAPPY_PATH', 'FAILURE_DRILL'] = 'HAPPY_PATH'
+  expected_failure: dict[str, object] | None = Field(default=None, alias='expectedFailure')
+  guidance: str | None = None
+  injected_fault: str | None = Field(default=None, alias='injectedFault')
+  layer: str | None = None
 
 
 class LabStepView(LabModel):

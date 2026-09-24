@@ -13,6 +13,13 @@ from app.infrastructure.lab_repository import IntegrationLabRepository, LabStepI
 from app.infrastructure.operations_repository import OperationsRepository
 from app.infrastructure.repositories import FreightBridgeRepository, IntegrationRepository
 from app.integrations.common.correlation import resolve_correlation_id
+from app.integrations.failure_drills import (
+  DRILL_DEFINITIONS,
+  DRILL_KIND,
+  HAPPY_PATH_KIND,
+  ControlledFailureDrillService,
+  LabDrillMismatch,
+)
 from app.integrations.midwest.dispatch_service import MidwestDirectDispatchService
 from app.integrations.midwest.sftp_poll_service import MidwestSftpOutboundPollService, MidwestSftpReadinessService
 from app.integrations.midwest.transport import MidwestSftpTransport
@@ -43,6 +50,11 @@ class LabScenarioDefinition:
   name: str
   description: str
   steps: tuple[LabStepDefinition, ...]
+  kind: str = HAPPY_PATH_KIND
+  expected_failure: dict[str, object] | None = None
+  guidance: str | None = None
+  injected_fault: str | None = None
+  layer: str | None = None
 
 
 EVENTS = (
@@ -63,6 +75,14 @@ def _step(
   doc: str,
 ) -> LabStepDefinition:
   return LabStepDefinition(key, label, sender, receiver, transport, fmt, doc)
+
+
+def _failure_drill_step(step_key: str, label: str, doc: str, transport: str, fmt: str) -> LabStepDefinition:
+  if transport == 'REST':
+    return _step(step_key, label, 'Analyst', 'FreightBridge', transport, fmt, doc)
+  if doc == 'TRANSPORT_PROBE':
+    return _step(step_key, label, 'Analyst', 'Midwest SFTP', transport, fmt, doc)
+  return _step(step_key, label, 'Midwest Carrier', 'FreightBridge', transport, fmt, doc)
 
 
 TECHNICAL_STEPS = (
@@ -125,6 +145,29 @@ SCENARIOS: dict[str, LabScenarioDefinition] = {
     'Accepted tender plus picked up, in transit, arrived, and delivered 214 updates.',
     lifecycle_steps(),
   ),
+  **{
+    definition.scenario_key: LabScenarioDefinition(
+      definition.scenario_key,
+      definition.name,
+      definition.description,
+      tuple(
+        _failure_drill_step(
+          step.step_key,
+          step.display_name,
+          step.document_type,
+          step.transport,
+          step.message_format,
+        )
+        for step in definition.steps
+      ),
+      kind=DRILL_KIND,
+      expected_failure=definition.expected.view(),
+      guidance=definition.guidance,
+      injected_fault=definition.injected_fault,
+      layer=definition.layer,
+    )
+    for definition in DRILL_DEFINITIONS.values()
+  },
 }
 
 
@@ -215,6 +258,7 @@ class IntegrationLabService:
     self.repository = repository
     self.apex = ApexSimulatorClient()
     self.midwest = MidwestSimulatorClient()
+    self.failure_drills = ControlledFailureDrillService()
 
   def readiness(self) -> dict[str, object]:
     settings = get_settings()
@@ -247,6 +291,11 @@ class IntegrationLabService:
           'name': scenario.name,
           'description': scenario.description,
           'step_count': len(scenario.steps),
+          'kind': scenario.kind,
+          'expected_failure': scenario.expected_failure,
+          'guidance': scenario.guidance,
+          'injected_fault': scenario.injected_fault,
+          'layer': scenario.layer,
         }
         for scenario in SCENARIOS.values()
       ],
@@ -296,15 +345,24 @@ class IntegrationLabService:
       return self.repository.get_run(run_id), acquired, True
     try:
       request_summary, response_summary = self._execute(run_id, step_key)
-      transaction_ids = self._related_transactions(run['business_identifier'])
+      related_override = response_summary.pop('_relatedTransactionIds', None)
+      result_summary_override = response_summary.pop('_resultSummary', None)
+      transaction_ids = (
+        [str(transaction_id) for transaction_id in related_override]
+        if isinstance(related_override, list)
+        else self._related_transactions(run['business_identifier'])
+      )
       self.repository.mark_step_succeeded(
         step_id=acquired['id'],
         request_summary=request_summary,
         response_summary=response_summary,
         related_transaction_ids=transaction_ids,
       )
-      latest_summary = self._result_summary(run['business_identifier'])
+      latest_summary = result_summary_override if isinstance(result_summary_override, dict) else self._result_summary(run['business_identifier'])
       self.repository.mark_run_if_complete(run_id, latest_summary)
+    except LabDrillMismatch as exc:
+      self.repository.mark_step_failed(step_id=acquired['id'], error_code=exc.code, safe_message=exc.message)
+      raise LabExecutionError(exc.code, exc.message) from exc
     except LabExecutionError as exc:
       self.repository.mark_step_failed(step_id=acquired['id'], error_code=exc.code, safe_message=exc.message)
       raise
@@ -327,6 +385,9 @@ class IntegrationLabService:
     snapshot = dict(run['input_snapshot'])
     load_id = str(snapshot['loadId'])
     correlation_id = resolve_correlation_id(f'lab-{run_id}-{step_key}')
+
+    if str(run['scenario_key']) in DRILL_DEFINITIONS:
+      return self.failure_drills.execute(run, step_key)
 
     if step_key == 'CREATE_APEX_LOAD':
       payload = self._apex_payload(snapshot)

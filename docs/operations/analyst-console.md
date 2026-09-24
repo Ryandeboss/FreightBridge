@@ -44,11 +44,13 @@ The UI uses `HashRouter` so the deployed static app works without server-side ro
 - Transaction detail: metadata, copy controls, timeline logs, errors, parent/child/replay links, retry attempts, and a manual retry dialog for eligible failed 204 transactions.
 - Failures: server-backed queue filters, failure detail, resolve, and reopen.
 - Business Trace: business ID search with transaction chain and relationship links.
-- Integration Lab: scenario creation, step-by-step execution, run history, three-party workflow lanes, 204 preview, 997/990 distinction, 214 progression, and links back to Business Trace.
+- Integration Lab: scenario creation, step-by-step execution, run history, happy-path workflow lanes, 204 preview, 997/990 distinction, 214 progression, controlled Failure Drills, Expected vs Observed failure comparison, read-only payload previews, and links back to Business Trace, Transaction Detail, Failure Detail, and the Failure Queue.
 - Partners: safe partner-field edits and capability toggles without exposing secrets.
 - Mappings: active profile inspection, draft clone/edit/validate/activate/abandon workflow, rules, versions, and change history.
 
-The console never renders secrets. Payload locations, hashes, mapping profile identifiers, synthetic Lab inputs, and Lab-generated X12 previews may be displayed when returned by protected operations endpoints. Partner simulator tokens, inbound bearer tokens, SFTP credentials, database URLs, and Supabase secrets remain backend-only.
+The console never renders secrets. Payload locations, hashes, mapping profile identifiers, synthetic Lab inputs, and Lab-generated read-only JSON/X12 previews may be displayed when returned by protected operations endpoints. Partner simulator tokens, inbound bearer tokens, SFTP credentials, database URLs, and Supabase secrets remain backend-only.
+
+Failure Drills are not a raw-message editor. The UI does not provide arbitrary JSON, X12, HTTP header, URL, SQL, token, host, or SFTP credential inputs. Analysts select one predefined drill and may optionally provide a safe load ID. A drill can show `Lab Run: SUCCEEDED` beside `Integration Transaction: FAILED`; that means the expected synthetic failure was produced, persisted, and matched to the configured classification.
 
 ## Deployment Notes
 

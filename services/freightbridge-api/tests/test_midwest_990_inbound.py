@@ -786,8 +786,30 @@ def test_sftp_outbound_poll_archives_replay_without_overwriting_original_archive
 
   assert result.processed[0].status == 'ARCHIVED'
   assert result.processed[0].destination_path.startswith('/archive/MWCX_APEX_990_000000906__replay_')
+  assert result.response_body()['processed'][0]['transactionId'] == str(service.tender_response_ingestion_service.transaction_id)
   assert fake_sftp.files['/archive/MWCX_APEX_990_000000906.edi'] == original_archive
   assert result.processed[0].destination_path in fake_sftp.files
+
+
+def test_sftp_outbound_poll_exposes_transaction_id_for_failed_ingestion() -> None:
+  transaction_id = uuid4()
+  fake_sftp = FakeSftpClient({'/outbound/MWCX_APEX_990_000000906.edi': MIDWEST_990_ACCEPTED.encode('utf-8')})
+  service = MidwestSftpOutboundPollService(
+    audit_connection=DummyConnection(),
+    business_connection=DummyConnection(),
+    client_factory=lambda: fake_sftp,
+    ingestion_service=FakeFailingTypedIngestionService('990', transaction_id=transaction_id),
+  )
+
+  result = service.poll(correlation_id='corr-sftp-failed')
+  body = result.response_body()
+
+  assert body['processed'][0]['fileName'] == 'MWCX_APEX_990_000000906.edi'
+  assert body['processed'][0]['sourcePath'] == '/outbound/MWCX_APEX_990_000000906.edi'
+  assert body['processed'][0]['status'] == 'MOVED_TO_ERROR'
+  assert body['processed'][0]['destinationPath'] == '/error/MWCX_APEX_990_000000906.edi'
+  assert body['processed'][0]['errorCode'] == 'INVALID_TEST_990'
+  assert body['processed'][0]['transactionId'] == str(transaction_id)
 
 
 def test_sftp_outbound_poll_moves_deterministic_invalid_990_to_error() -> None:
@@ -1100,6 +1122,7 @@ class FakeTypedIngestionService:
   def __init__(self, document_type: str) -> None:
     self.document_type = document_type
     self.calls = []
+    self.transaction_id = uuid4()
 
   def ingest(self, *, raw_body: bytes, correlation_id: str, transport, raw_payload_location: str | None = None):
     self.calls.append(correlation_id)
@@ -1108,8 +1131,25 @@ class FakeTypedIngestionService:
       (),
       {
         'document_type': self.document_type,
+        'transaction_id': self.transaction_id,
       },
     )()
+
+
+class FakeFailingTypedIngestionService(FakeTypedIngestionService):
+  def __init__(self, document_type: str, *, transaction_id: UUID) -> None:
+    super().__init__(document_type)
+    self.transaction_id = transaction_id
+
+  def ingest(self, *, raw_body: bytes, correlation_id: str, transport, raw_payload_location: str | None = None):
+    self.calls.append(correlation_id)
+    raise IntegrationAPIError(
+      status_code=422,
+      code='INVALID_TEST_990',
+      message='Synthetic invalid 990.',
+      correlation_id=correlation_id,
+      transaction_id=str(self.transaction_id),
+    )
 
 
 class FakeSftpClient:
