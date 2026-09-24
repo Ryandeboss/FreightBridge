@@ -7,6 +7,7 @@ import re
 import sys
 import time
 from typing import Any
+from uuid import UUID
 
 if __package__ in (None, ''):
   sys.path.append(str(Path(__file__).resolve().parents[2]))
@@ -77,9 +78,17 @@ class Milestone18Acceptance:
         page.get_by_label('Scenario').select_option('FULL_SHIPMENT_LIFECYCLE')
         page.get_by_label('Load ID').fill(self.load_id)
         page.get_by_role('button', name='Create Run').click()
+        expect(page).to_have_url(re.compile(r'.*/#/lab/runs/[0-9a-fA-F-]{36}$'), timeout=30000)
         expect(page.get_by_test_id('lab-run-detail')).to_be_visible(timeout=20000)
-        run_id = page.url.split('/lab/runs/')[-1].split('?')[0].split('#')[-1]
-        assert_truth(bool(run_id), 'Analyst UI Integration Lab flow', 'Lab run ID could not be captured from browser URL.')
+        browser_run_id = extract_lab_run_id_from_url(page.url, 'Analyst UI Integration Lab flow')
+        run_id = self._find_persisted_lab_run_id()
+        assert_truth(
+          browser_run_id == run_id,
+          'Analyst UI Integration Lab flow',
+          f'Browser route run ID {browser_run_id} did not match persisted Lab run {run_id}.',
+        )
+        if self.recorder.verbose:
+          print(f'       load_id={self.load_id} lab_run_id={run_id} browser_url={page.url}')
         expect_text(page, self.load_id)
         page.get_by_role('button', name='Run Step').first.click()
         self._wait_for_lab_step(run_id, 'CREATE_APEX_LOAD', 'SUCCEEDED')
@@ -126,8 +135,9 @@ class Milestone18Acceptance:
         expect_text(page, self.load_id, timeout=30000)
         page.get_by_role('link', name=self.load_id).first.click()
         expect(page.get_by_test_id('lab-run-detail')).to_be_visible(timeout=30000)
+        expect(page).to_have_url(re.compile(rf'.*/#/lab/runs/{re.escape(run_id)}$'), timeout=30000)
         assert_truth(
-          f'/lab/runs/{run_id}' in page.url,
+          extract_lab_run_id_from_url(page.url, 'Analyst UI Integration Lab flow') == run_id,
           'Analyst UI Integration Lab flow',
           'Recent Lab run did not navigate to the run detail URL.',
         )
@@ -140,6 +150,27 @@ class Milestone18Acceptance:
         return {'load_id': self.load_id, 'run_id': run_id}
       finally:
         browser.close()
+
+  def _find_persisted_lab_run_id(self) -> str:
+    step = 'Find persisted Lab run'
+    last_body: dict[str, Any] | None = None
+    for _ in range(30):
+      body = self.freightbridge.get(
+        f'/api/lab/runs?businessIdentifier={self.load_id}&limit=10',
+        token=self.operations_token,
+        step=step,
+      )
+      last_body = body
+      for run in body.get('runs') or []:
+        if isinstance(run, dict) and run.get('businessIdentifier') == self.load_id:
+          run_id = str(run.get('id') or '')
+          try:
+            UUID(run_id)
+          except ValueError as exc:
+            raise AcceptanceFailure(step, 'Persisted Lab run ID was not a valid UUID.', response_body=run) from exc
+          return run_id
+      time.sleep(1)
+    raise AcceptanceFailure(step, 'Created Lab run was not found in API history.', response_body=last_body)
 
   def _wait_for_lab_step(self, run_id: str, step_key: str, expected_status: str) -> dict[str, Any]:
     step_name = f'Wait for Lab step {step_key}'
@@ -202,6 +233,17 @@ def expect_text(page: Any, text: str, *, timeout: int = 15000) -> None:
     page.get_by_text(text, exact=False).first.wait_for(timeout=timeout)
   except PlaywrightTimeoutError as exc:
     raise AcceptanceFailure('Analyst UI Integration Lab flow', f'Missing UI text: {text}') from exc
+
+
+def extract_lab_run_id_from_url(url: str, step: str) -> str:
+  match = re.search(r'(?:^|/)#/lab/runs/([0-9a-fA-F-]{36})$', url)
+  if not match:
+    raise AcceptanceFailure(step, 'Browser URL was not a Lab run detail route.', response_body={'url': url})
+  run_id = match.group(1)
+  try:
+    return str(UUID(run_id))
+  except ValueError as exc:
+    raise AcceptanceFailure(step, 'Browser Lab run route did not contain a valid UUID.', response_body={'url': url}) from exc
 
 
 def parse_args() -> argparse.Namespace:

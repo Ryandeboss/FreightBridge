@@ -13,6 +13,7 @@ from scripts.acceptance.common import (
   safe_body,
 )
 from scripts.acceptance.milestone12 import apex_load_payload, assert_event_history
+from scripts.acceptance.milestone18 import extract_lab_run_id_from_url
 
 
 def test_generate_load_id_conforms_to_apex_validation_shape() -> None:
@@ -176,3 +177,14 @@ def test_event_history_assertion_rejects_missing_late_arrived_ordering() -> None
 
 def test_parse_instant_accepts_zulu_and_offset_forms() -> None:
   assert parse_instant('2026-10-08T18:30:00Z') == parse_instant('2026-10-08T18:30:00+00:00')
+
+
+def test_extract_lab_run_id_from_url_accepts_detail_route() -> None:
+  run_id = '99999999-9999-4999-8999-999999999999'
+
+  assert extract_lab_run_id_from_url(f'https://example.vercel.app/#/lab/runs/{run_id}', 'test') == run_id
+
+
+def test_extract_lab_run_id_from_url_rejects_lab_index_route() -> None:
+  with pytest.raises(AcceptanceFailure):
+    extract_lab_run_id_from_url('https://example.vercel.app/#/lab', 'test')
