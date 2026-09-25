@@ -58,6 +58,11 @@ Historical architecture files may describe earlier milestone state. The current 
 - [Trading partner configuration](operations/trading-partner-configuration.md)
 - [Mapping change control](operations/mapping-change-control.md)
 
+## Training
+
+- [Training Mode](training/README.md)
+- [Mission 1 - Learn the Flow](training/mission-1-learn-the-flow.md)
+
 ## Testing
 
 - [Testing index](testing/README.md)

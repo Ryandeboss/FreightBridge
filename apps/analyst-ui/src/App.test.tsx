@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import App from './App';
 import { OPERATIONS_TOKEN_STORAGE_KEY } from './auth/storage';
+import { TRAINING_PROGRESS_STORAGE_KEY } from './training/progress';
 
 const token = 'runtime-token';
 const transactionId = '11111111-1111-4111-8111-111111111111';
@@ -335,7 +336,9 @@ const completedLabRun = {
     },
     shipmentEvents: [
       { status: 'PICKED_UP', occurredAt: '2026-09-24T16:00:00Z', city: 'Aurora', state: 'IL' },
+      { status: 'IN_TRANSIT', occurredAt: '2026-09-24T20:00:00Z', city: 'Toledo', state: 'OH' },
       { status: 'DELIVERED', occurredAt: '2026-09-25T16:00:00Z', city: 'Detroit', state: 'MI' },
+      { status: 'ARRIVED', occurredAt: '2026-09-25T15:00:00Z', city: 'Detroit', state: 'MI' },
     ],
   },
   startedAt: '2026-09-24T15:01:00Z',
@@ -514,7 +517,11 @@ function jsonResponse(payload: unknown, status = 200) {
   );
 }
 
-function installFetchMock(options: { readiness?: Record<string, unknown>; initialLabRun?: Record<string, unknown> } = {}) {
+function installFetchMock(options: {
+  readiness?: Record<string, unknown>;
+  initialLabRun?: Record<string, unknown>;
+  failNextLabStep?: boolean;
+} = {}) {
   let currentDraftMapping: Record<string, unknown> = draftMapping;
   let currentLabRun: Record<string, unknown> = options.initialLabRun ?? labRun;
   const readiness = options.readiness ?? {
@@ -953,6 +960,12 @@ function installFetchMock(options: { readiness?: Record<string, unknown>; initia
     }
 
     if (path === `/api/lab/runs/${labRun.id}/run-next`) {
+      if (options.failNextLabStep) {
+        return jsonResponse(
+          { detail: { error: { code: 'LAB_STEP_FAILED', message: 'Synthetic lab failure.' } } },
+          500,
+        );
+      }
       currentLabRun = completedLabRun;
       return jsonResponse({ run: currentLabRun, step: completedLabRun.steps[1], alreadyCompleted: false });
     }
@@ -975,6 +988,7 @@ function installFetchMock(options: { readiness?: Record<string, unknown>; initia
 
 beforeEach(() => {
   window.sessionStorage.clear();
+  window.localStorage.clear();
   window.location.hash = '';
   vi.restoreAllMocks();
 });
@@ -987,7 +1001,8 @@ describe('Analyst Console', () => {
     await userEvent.type(screen.getByLabelText(/operations bearer token/i), token);
     await userEvent.click(screen.getByRole('button', { name: /unlock console/i }));
 
-    expect(await screen.findByTestId('dashboard-page')).toBeInTheDocument();
+    expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
+    expect(window.location.hash).toBe('#/learn');
     expect(window.sessionStorage.getItem(OPERATIONS_TOKEN_STORAGE_KEY)).toBe(token);
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/api/operations/summary'),
@@ -1032,6 +1047,143 @@ describe('Analyst Console', () => {
       window.location.hash = hash;
       await waitFor(() => expect(screen.getByTestId(testId)).toBeInTheDocument());
     }
+  });
+
+  test('renders Training Home and navigates to the Advanced Console', async () => {
+    installFetchMock();
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn';
+    render(<App />);
+
+    expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Learn EDI & API integration by doing it/i })).toBeInTheDocument();
+    expect(screen.getByText(/Training Progress/i)).toBeInTheDocument();
+    const advancedConsoleLinks = screen.getAllByRole('link', { name: /Advanced Console/i });
+    expect(advancedConsoleLinks[0]).toHaveAttribute('href', '#/dashboard');
+
+    await userEvent.click(advancedConsoleLinks[0]);
+    expect(await screen.findByTestId('dashboard-page')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /Back to Training/i }).length).toBeGreaterThan(0);
+  });
+
+  test('keeps future missions non-playable on Training Home', async () => {
+    installFetchMock();
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn';
+    render(<App />);
+
+    expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
+    expect(screen.getByText(/Mission 2 - Authentication Trouble/i)).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Locked/i }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('link', { name: /Mission 2/i })).not.toBeInTheDocument();
+  });
+
+  test('Mission 1 renders the three entities and cannot complete before lifecycle success', async () => {
+    const fetchMock = installFetchMock();
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn/mission/learn-the-flow';
+    render(<App />);
+
+    expect(await screen.findByTestId('learn-the-flow-mission-page')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Apex Logistics/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /^FreightBridge$/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Midwest Carrier/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Complete Mission/i })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /Start Mission/i }));
+    await waitFor(() => {
+      const createCall = fetchMock.mock.calls.find(([input, init]) => String(input).endsWith('/api/lab/runs') && init?.method === 'POST');
+      expect(createCall).toBeTruthy();
+      expect(JSON.parse(String(createCall?.[1]?.body)).scenarioKey).toBe('FULL_SHIPMENT_LIFECYCLE');
+    });
+    expect(screen.queryByRole('button', { name: /Complete Mission/i })).not.toBeInTheDocument();
+  });
+
+  test('Mission 1 teaches 997 and 990 knowledge checks with correct and incorrect behavior', async () => {
+    installFetchMock();
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn/mission/learn-the-flow';
+    render(<App />);
+
+    expect(await screen.findByTestId('learn-the-flow-mission-page')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Start Mission/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /Continue/i }));
+
+    expect(await screen.findByText(/Midwest sent a 997/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('radio', { name: /^Yes$/i }));
+    expect(screen.getByText(/Not quite/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Continue/i })).toBeDisabled();
+    await userEvent.click(screen.getByRole('radio', { name: /^No$/i }));
+    expect(screen.getByText(/997 only confirms/i)).toBeInTheDocument();
+
+    expect(screen.getByText(/Which message tells Apex whether Midwest accepted/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('radio', { name: /^990$/i }));
+    expect(screen.getByText(/990 is the tender response/i)).toBeInTheDocument();
+  });
+
+  test('Mission 1 shows 214 progression and out-of-order event lesson', async () => {
+    installFetchMock();
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn/mission/learn-the-flow';
+    render(<App />);
+
+    expect(await screen.findByTestId('learn-the-flow-mission-page')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Start Mission/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /Continue/i }));
+    await userEvent.click(await screen.findByRole('radio', { name: /^No$/i }));
+    await userEvent.click(screen.getByRole('radio', { name: /^990$/i }));
+
+    expect(screen.getByText(/Midwest sends 214 shipment statuses/i)).toBeInTheDocument();
+    expect(screen.getByText('PICKED_UP')).toBeInTheDocument();
+    expect(screen.getByText('IN_TRANSIT')).toBeInTheDocument();
+    expect(screen.getByText('ARRIVED')).toBeInTheDocument();
+    expect(screen.getByText('DELIVERED')).toBeInTheDocument();
+    expect(screen.getByText(/Business event time matters/i)).toBeInTheDocument();
+    expect(screen.getByText(/leaves the current shipment status as DELIVERED/i)).toBeInTheDocument();
+  });
+
+  test('Mission 1 completion persists locally and unlocks the next coming-soon mission card', async () => {
+    installFetchMock();
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn/mission/learn-the-flow';
+    render(<App />);
+
+    expect(await screen.findByTestId('learn-the-flow-mission-page')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Start Mission/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /Continue/i }));
+    await userEvent.click(await screen.findByRole('radio', { name: /^No$/i }));
+    await userEvent.click(screen.getByRole('radio', { name: /^990$/i }));
+    await userEvent.click(within(screen.getByRole('radiogroup', { name: /Who is Apex/i })).getByRole('radio', { name: /Broker \/ 3PL/i }));
+    await userEvent.click(within(screen.getByRole('radiogroup', { name: /Who is Midwest/i })).getByRole('radio', { name: /Carrier \/ trucking company/i }));
+    await userEvent.click(within(screen.getByRole('radiogroup', { name: /Who generates the Midwest X12 204/i })).getByRole('radio', { name: /^FreightBridge$/i }));
+    await userEvent.click(within(screen.getByRole('radiogroup', { name: /What does the 997 mean/i })).getByRole('radio', { name: /Technical acknowledgment/i }));
+    await userEvent.click(within(screen.getByRole('radiogroup', { name: /What message carries shipment status/i })).getByRole('radio', { name: /^214$/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: /Complete Mission/i }));
+    expect(await screen.findByText(/MISSION COMPLETE - Learn the Flow/i)).toBeInTheDocument();
+    expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('LEARN_THE_FLOW');
+
+    await userEvent.click(screen.getByRole('link', { name: /Return to Training Home/i }));
+    expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
+    expect(screen.getByText(/1 \/ 9/i)).toBeInTheDocument();
+    expect(screen.getByText(/Mission 1 - Learn the Flow/i)).toBeInTheDocument();
+    expect(screen.getByText(/Training mission not implemented yet/i)).toBeInTheDocument();
+  });
+
+  test('Mission 1 shows a safe failure state when the real lab step fails', async () => {
+    installFetchMock({ failNextLabStep: true });
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn/mission/learn-the-flow';
+    render(<App />);
+
+    expect(await screen.findByTestId('learn-the-flow-mission-page')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Start Mission/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /Continue/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/unexpected system failure/i);
+    expect(screen.getByText(/Synthetic lab failure/i)).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /Open in Advanced Console/i }).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/MISSION COMPLETE/i)).not.toBeInTheDocument();
   });
 
   test('searches transactions and opens detail with retry action', async () => {
@@ -1468,6 +1620,7 @@ describe('Analyst Console', () => {
       }),
     );
     window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/dashboard';
     render(<App />);
 
     expect(await screen.findByText(/session expired or the token was rejected/i)).toBeInTheDocument();

@@ -4,6 +4,8 @@
 
 FreightBridge is a synthetic logistics integration platform that translates between a modern REST/JSON broker and an X12 004010 carrier. It demonstrates canonical shipment mapping, SFTP transport, technical and business acknowledgments, idempotency, retry, transaction observability, partner configuration, an Analyst Console, and an Integration Lab for happy-path and controlled-failure demos.
 
+FreightBridge now has two authenticated experiences: Training Mode for guided, story-driven integration learning, and the Advanced Analyst Console for direct operational exploration. Milestone 23 implements Training Home and Mission 1, "Learn the Flow"; future troubleshooting missions are shown only as locked or coming-soon placeholders.
+
 This is a portfolio lab, not a production TMS. Apex Logistics and Midwest Carrier are fictional trading partners created for the project. The architecture and failure modes are modeled after real EDI/API integration work, but no real customer or partner data is involved.
 
 ## MVP Status
