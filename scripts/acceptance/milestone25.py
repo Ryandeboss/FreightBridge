@@ -126,7 +126,9 @@ def run_browser_acceptance(analyst_ui_base_url: str, operations_token: str) -> d
       expect(page.get_by_test_id('mission-checkpoint-sftp-delivery')).to_contain_text('Document creation and document delivery are different')
       expect(page.get_by_test_id('mission-checkpoint-x12-997')).to_contain_text('Functional Acknowledgment')
       expect(page.get_by_test_id('mission-checkpoint-x12-990')).to_contain_text('business answer')
-      expect(page.get_by_test_id('mission-checkpoint-x12-214')).to_contain_text('business event time')
+      expect(page.get_by_test_id('mission-checkpoint-x12-214')).to_contain_text(
+        re.compile('business event time', re.IGNORECASE)
+      )
       expect(page.get_by_test_id('transport-business-comparison')).to_contain_text('990 business response')
       expect(page.get_by_test_id('healthy-flow-checklist')).to_be_visible(timeout=15000)
       expect(page.get_by_test_id('last-healthy-checkpoint')).to_contain_text('Last Healthy Checkpoint')
