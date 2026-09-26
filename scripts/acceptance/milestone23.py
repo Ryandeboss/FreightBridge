@@ -104,7 +104,9 @@ def run_browser_acceptance(analyst_ui_base_url: str, operations_token: str) -> d
       page.get_by_role('link', name=re.compile('Start Mission', re.IGNORECASE)).click()
       expect(page.get_by_test_id('learn-the-flow-mission-page')).to_be_visible(timeout=15000)
       for entity_name in ('Apex Logistics', 'FreightBridge', 'Midwest Carrier'):
-        expect(page.get_by_role('heading', name=entity_name, exact=True))
+          expect(
+              page.get_by_role('heading', name=entity_name, exact=True)
+          ).to_be_visible(timeout=15000)
 
       page.get_by_role('button', name='Start Mission').click()
       run_training_lifecycle(page)
