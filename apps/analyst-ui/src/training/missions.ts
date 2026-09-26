@@ -1,6 +1,8 @@
 import { BriefcaseBusiness, GitBranch, ShieldCheck, Truck } from 'lucide-react';
 import type {
   Hint,
+  HealthyCheckpoint,
+  HealthyChecklistItem,
   KnowledgeCheckQuestion,
   MissionCommunication,
   MissionPhase,
@@ -142,7 +144,7 @@ export const missionOneBriefing: MissionCommunication = {
   from: 'Mike',
   role: 'Integration Manager',
   body:
-    'We support Apex Logistics and Midwest Carrier. Apex sends us load requests through an API. Midwest expects EDI files through SFTP. Today you are not fixing anything; watch one clean shipment from your FreightBridge workstation so you know what healthy evidence looks like.',
+    'Before I put you on an incident, I want you to know what a clean integration looks like. Follow one Apex load through FreightBridge and into Midwest. At every step, watch what we received, what FreightBridge did with it, and what evidence proves the next system received it. Later, when something breaks, you will compare the failed flow against this baseline.',
 };
 
 export const samplePartnerMessages: MissionCommunication[] = [
@@ -194,6 +196,171 @@ export const missionOneHints: Hint[] = [
     body: 'For shipment status, FreightBridge preserves event history and uses business event time to protect current status.',
   },
 ];
+
+export const healthyCheckpoints: HealthyCheckpoint[] = [
+  {
+    id: 'inbound-apex',
+    sequence: 1,
+    title: 'Apex Reaches FreightBridge',
+    shortLabel: 'Inbound',
+    source: 'FreightBridge API Gateway',
+    observed: 'Inbound REST/JSON request evidence from Apex Logistics.',
+    whyItMatters: 'This proves the shipment reached the FreightBridge integration boundary. It does not prove Midwest has seen the load.',
+    analystChecks: ['Partner identity is Apex Logistics', 'Transport is REST API', 'Format is JSON', 'A load/business identifier is present', 'No secrets or authorization values are exposed'],
+    healthySignal: 'FreightBridge accepts the request into processing and creates correlated transaction evidence.',
+    correlationFields: ['Load ID', 'Business Identifier', 'Lab Run ID'],
+    questionId: 'inbound-does-not-prove-midwest',
+  },
+  {
+    id: 'validation',
+    sequence: 2,
+    title: 'FreightBridge Accepts the Message',
+    shortLabel: 'Validation',
+    source: 'FreightBridge Inbound Processor',
+    observed: 'Authentication, JSON parsing, partner identification, and business validation succeeded.',
+    whyItMatters: 'Transport success only means a request arrived. Application validation proves FreightBridge can safely understand and process it.',
+    analystChecks: ['Authentication passed', 'JSON was parseable', 'Required shipment fields are present', 'Business rules passed'],
+    healthySignal: 'The inbound tender can move from raw partner request to canonical shipment processing.',
+    correlationFields: ['Load ID', 'BOL', 'PO'],
+  },
+  {
+    id: 'canonical',
+    sequence: 3,
+    title: 'FreightBridge Normalizes the Shipment',
+    shortLabel: 'Canonical',
+    source: 'FreightBridge Domain Processor',
+    observed: 'A canonical shipment exists inside FreightBridge.',
+    whyItMatters: 'FreightBridge converts partner-specific messages into one internal shipment language so Apex JSON is not tightly coupled to Midwest X12.',
+    analystChecks: ['Load ID survived translation', 'Origin and destination survived translation', 'BOL and PO are preserved when available', 'Equipment, weight, pieces, and dates remain usable'],
+    healthySignal: 'The canonical shipment has enough business data to map into the carrier 204.',
+    correlationFields: ['Shipment Number', 'BOL', 'PO'],
+  },
+  {
+    id: 'x12-204',
+    sequence: 4,
+    title: 'FreightBridge Builds the 204',
+    shortLabel: '204',
+    source: 'FreightBridge X12 Mapper',
+    observed: 'FreightBridge generated an X12 204 Motor Carrier Load Tender for Midwest.',
+    whyItMatters: 'The 204 asks Midwest, in plain English, "Will you haul this load?" Apex did not generate this EDI document.',
+    analystChecks: ['Target partner is Midwest Carrier', 'X12 version is 004010', 'ST segment identifies transaction set 204', 'Required shipment fields mapped', 'Control numbers exist'],
+    healthySignal: 'A safe 204 payload exists and can be correlated back to the Apex shipment.',
+    correlationFields: ['ISA13', 'GS06', 'ST02', 'Load ID'],
+    technicalDetails: 'ISA is the interchange envelope, GS is the functional group, and ST is the transaction set. ST*204 identifies a 204 load tender.',
+    rawEvidenceTitle: 'Inspect Raw X12',
+    questionId: 'who-created-204',
+  },
+  {
+    id: 'sftp-delivery',
+    sequence: 5,
+    title: 'The 204 Leaves FreightBridge',
+    shortLabel: 'SFTP',
+    source: 'FreightBridge SFTP Transport',
+    observed: 'FreightBridge recorded outbound SFTP delivery metadata for the 204.',
+    whyItMatters: 'Document creation and document delivery are different. A 204 existing does not prove Midwest received it.',
+    analystChecks: ['Outbound file name exists', 'Remote path is recorded', 'Delivery disposition succeeded', 'No credentials are exposed'],
+    healthySignal: 'FreightBridge can show safe transport evidence for the outbound file.',
+    correlationFields: ['File Name', 'Remote Path', '204 Control Numbers'],
+    questionId: 'sftp-not-business-acceptance',
+  },
+  {
+    id: 'x12-997',
+    sequence: 6,
+    title: 'Midwest Technically Acknowledges It',
+    shortLabel: '997',
+    source: 'Inbound Midwest EDI',
+    observed: 'FreightBridge received a 997 Functional Acknowledgment from Midwest.',
+    whyItMatters: 'A 997 proves Midwest received and structurally processed the EDI. It does not prove the carrier accepted the load.',
+    analystChecks: ['Acknowledged group control number matches the 204', 'Acknowledged transaction control number matches the 204', 'AK5/AK9 status is accepted or rejected', 'Next expected business evidence is 990'],
+    healthySignal: 'The 997 correlates to the outbound 204 and reports technical acceptance.',
+    correlationFields: ['204 GS06', '204 ST02', '997 AK1', '997 AK2'],
+    questionId: 'technical-ack',
+  },
+  {
+    id: 'x12-990',
+    sequence: 7,
+    title: 'Midwest Makes the Business Decision',
+    shortLabel: '990',
+    source: 'Inbound Midwest EDI',
+    observed: 'FreightBridge received a 990 Response to Load Tender.',
+    whyItMatters: 'The 990 is the carrier business answer: accepted or rejected.',
+    analystChecks: ['Decision is accepted or rejected', 'Decision correlates to the same load', 'FreightBridge updates the broker-facing side when applicable'],
+    healthySignal: 'For this healthy run, the real tender result is accepted.',
+    correlationFields: ['Load ID', 'Carrier Load Reference', 'BOL', 'PO'],
+    questionId: 'tender-response',
+  },
+  {
+    id: 'x12-214',
+    sequence: 8,
+    title: 'Shipment Status Starts Moving',
+    shortLabel: '214',
+    source: 'Inbound Midwest EDI',
+    observed: 'FreightBridge received 214 shipment status events.',
+    whyItMatters: 'The 214 reports what is happening to the shipment, such as picked up, in transit, arrived, and delivered.',
+    analystChecks: ['AT7 status maps to a supported status', 'Business event time is captured', 'Received time may differ from event time', 'Apex-facing status is updated when applicable'],
+    healthySignal: 'Status events correlate to the load and preserve event history without moving current status backward.',
+    correlationFields: ['Load ID', '214 ST02', 'Event Time', 'Status Code'],
+    questionId: 'status-message',
+  },
+  {
+    id: 'apex-update',
+    sequence: 9,
+    title: 'FreightBridge Updates Apex',
+    shortLabel: 'Apex Update',
+    source: 'FreightBridge Outbound Partner Update',
+    observed: 'FreightBridge verifies broker-facing tender/status evidence from the Apex side of the integration.',
+    whyItMatters: 'The learner should verify FreightBridge-side callback or reconciliation evidence, not Apex private systems.',
+    analystChecks: ['Destination partner is Apex', 'Business result/status is normalized', 'Safe response metadata or reconciliation exists'],
+    healthySignal: 'Apex-facing tender/status evidence matches what FreightBridge processed from Midwest.',
+    correlationFields: ['Load ID', 'Tender Status', 'Shipment Status'],
+  },
+  {
+    id: 'healthy-confirmed',
+    sequence: 10,
+    title: 'Healthy Flow Confirmed',
+    shortLabel: 'Healthy',
+    source: 'FreightBridge Training Review',
+    observed: 'The full shipment lifecycle completed successfully.',
+    whyItMatters: 'This is your baseline. Future incident missions compare a broken flow against these healthy checkpoints.',
+    analystChecks: ['Identify the last healthy checkpoint', 'Confirm the evidence does not stop early', 'Summarize what normal looks like'],
+    healthySignal: 'Inbound, mapping, delivery, technical acknowledgment, business response, status flow, and broker-facing update evidence are complete.',
+    correlationFields: ['Load ID', 'Lab Run ID', 'Transaction IDs'],
+  },
+];
+
+export const inboundRequestQuestion: KnowledgeCheckQuestion = {
+  id: 'inbound-does-not-prove-midwest',
+  prompt: 'Does receiving the Apex request prove Midwest has seen the load?',
+  options: [
+    { id: 'yes', label: 'Yes' },
+    { id: 'no', label: 'No' },
+  ],
+  correctOptionId: 'no',
+  explanation: 'Correct: the request reached FreightBridge, but no Midwest evidence exists yet.',
+};
+
+export const generated204Question: KnowledgeCheckQuestion = {
+  id: 'who-created-204',
+  prompt: 'Who created the X12 204 for Midwest?',
+  options: [
+    { id: 'apex', label: 'Apex Logistics' },
+    { id: 'freightbridge', label: 'FreightBridge' },
+    { id: 'midwest', label: 'Midwest Carrier' },
+  ],
+  correctOptionId: 'freightbridge',
+  explanation: 'Correct: FreightBridge generated the 204 from the Apex request and canonical shipment.',
+};
+
+export const sftpDeliveryQuestion: KnowledgeCheckQuestion = {
+  id: 'sftp-not-business-acceptance',
+  prompt: 'Does successful SFTP delivery mean Midwest accepted the load?',
+  options: [
+    { id: 'yes', label: 'Yes' },
+    { id: 'no', label: 'No' },
+  ],
+  correctOptionId: 'no',
+  explanation: 'Correct: SFTP only proves delivery evidence. The 990 carries the business decision.',
+};
 
 export const missionOneTeachingSteps: TeachingStep[] = [
   {
@@ -294,63 +461,41 @@ export const tenderResponseQuestion: KnowledgeCheckQuestion = {
   explanation: 'Correct: the 990 is the tender response. It is the carrier business decision.',
 };
 
-export const finalQuizQuestions: KnowledgeCheckQuestion[] = [
-  {
-    id: 'apex-role',
-    prompt: 'Who is Apex in your FreightBridge evidence?',
-    options: [
-      { id: 'broker', label: 'External broker / 3PL partner' },
-      { id: 'carrier', label: 'Internal FreightBridge carrier team' },
-      { id: 'middleware', label: 'FreightBridge integration middleware' },
-    ],
-    correctOptionId: 'broker',
-    explanation: 'Apex is an external broker / 3PL partner that sends FreightBridge load requests.',
-  },
-  {
-    id: 'midwest-role',
-    prompt: 'Who is Midwest?',
-    options: [
-      { id: 'carrier', label: 'External motor carrier partner' },
-      { id: 'broker', label: 'Internal broker desk' },
-      { id: 'dashboard', label: 'Dashboard vendor' },
-    ],
-    correctOptionId: 'carrier',
-    explanation: 'Midwest is the external motor carrier that can haul the freight.',
-  },
-  {
-    id: 'who-generates-204',
-    prompt: 'Who generates the Midwest X12 204 in this project?',
-    options: [
-      { id: 'apex', label: 'Apex Logistics' },
-      { id: 'freightbridge', label: 'FreightBridge' },
-      { id: 'midwest', label: 'Midwest Carrier' },
-    ],
-    correctOptionId: 'freightbridge',
-    explanation: 'FreightBridge generates the 204 from the Apex JSON/canonical shipment.',
-  },
-  {
-    id: '997-meaning',
-    prompt: 'What does the 997 mean?',
-    options: [
-      { id: 'technical', label: 'Technical acknowledgment' },
-      { id: 'business', label: 'Load acceptance' },
-      { id: 'status', label: 'Shipment status' },
-    ],
-    correctOptionId: 'technical',
-    explanation: 'A 997 is a technical acknowledgment, not load acceptance.',
-  },
-  {
-    id: 'status-message',
-    prompt: 'What message carries shipment status?',
-    options: [
-      { id: '204', label: '204' },
-      { id: '997', label: '997' },
-      { id: '990', label: '990' },
-      { id: '214', label: '214' },
-    ],
-    correctOptionId: '214',
-    explanation: 'The 214 carries shipment status updates.',
-  },
+export const statusMessageQuestion: KnowledgeCheckQuestion = {
+  id: 'status-message',
+  prompt: 'Which transaction communicates shipment status?',
+  options: [
+    { id: '204', label: '204' },
+    { id: '997', label: '997' },
+    { id: '990', label: '990' },
+    { id: '214', label: '214' },
+  ],
+  correctOptionId: '214',
+  explanation: 'Correct: the 214 carries shipment status updates.',
+};
+
+export const checkpointQuestions: KnowledgeCheckQuestion[] = [
+  inboundRequestQuestion,
+  generated204Question,
+  sftpDeliveryQuestion,
+  technicalAckQuestion,
+  tenderResponseQuestion,
+  statusMessageQuestion,
+];
+
+export const finalQuizQuestions = checkpointQuestions;
+
+export const healthyChecklistItems: HealthyChecklistItem[] = [
+  { id: 'inbound', label: 'Inbound request reached FreightBridge', evidence: 'Apex REST/JSON evidence exists for the load.' },
+  { id: 'validation', label: 'Authentication, parsing, and validation succeeded', evidence: 'The load moved into FreightBridge processing.' },
+  { id: 'canonical', label: 'Canonical shipment was created', evidence: 'Shipment data survived translation into FreightBridge format.' },
+  { id: 'x12', label: 'FreightBridge generated the 204', evidence: 'X12 004010 204 and control metadata exist.' },
+  { id: 'sftp', label: 'SFTP transport succeeded', evidence: 'Outbound file and remote path evidence exist.' },
+  { id: 'ack997', label: '997 technically acknowledged the EDI', evidence: 'AK1/AK2 correlation confirms the 204 was acknowledged.' },
+  { id: 'response990', label: '990 provided the business acceptance', evidence: 'Tender status is accepted for this healthy run.' },
+  { id: 'events214', label: '214 events were processed', evidence: 'Shipment status history is available.' },
+  { id: 'currentStatus', label: 'Current shipment status is correct', evidence: 'FreightBridge protects current status while preserving history.' },
+  { id: 'lastHealthy', label: 'Last Healthy Checkpoint is the completed lifecycle', evidence: 'The full scenario reached SUCCEEDED.' },
 ];
 
 export const missionPhases: MissionPhase[] = ['BRIEFING', 'INVESTIGATE', 'DIAGNOSE', 'PLAN', 'ACT', 'VERIFY', 'REPORT', 'DEBRIEF'];

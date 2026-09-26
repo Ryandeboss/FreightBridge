@@ -1,7 +1,17 @@
-import { CheckCircle2, Circle, Lock, MessageSquare, NotebookPen, XCircle } from 'lucide-react';
+import { CheckCircle2, Circle, Lock, MessageSquare, NotebookPen, RotateCcw, XCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-import type { Hint, KnowledgeCheckQuestion, MissionCommunication, MissionPhase, TrainingEntity, TrainingEvidence } from '../../training/types';
+import type {
+  CheckpointStatus,
+  HealthyCheckpoint,
+  HealthyChecklistItem,
+  Hint,
+  KnowledgeCheckQuestion,
+  MissionCommunication,
+  MissionPhase,
+  TrainingEntity,
+  TrainingEvidence,
+} from '../../training/types';
 
 export function MissionBriefing({ children }: { children: ReactNode }) {
   return (
@@ -139,6 +149,236 @@ export function EvidenceCard({ evidence }: { evidence: TrainingEvidence }) {
   );
 }
 
+export type CheckpointView = {
+  checkpoint: HealthyCheckpoint;
+  status: CheckpointStatus;
+  rawEvidence?: unknown;
+  values?: Record<string, string | number | null | undefined>;
+};
+
+export function FollowThisLoad({
+  loadId,
+  labRunId,
+  currentStage,
+  currentResult,
+}: {
+  loadId?: string;
+  labRunId?: string;
+  currentStage: string;
+  currentResult: string;
+}) {
+  return (
+    <article className="panel follow-load-panel" data-testid="follow-this-load">
+      <div className="panel-header">
+        <div>
+          <p className="eyebrow">Following Load</p>
+          <h2>{loadId ?? 'Start the mission to create a training load'}</h2>
+        </div>
+      </div>
+      <dl className="definition-grid">
+        <div><dt>Apex</dt><dd>Apex Logistics</dd></div>
+        <div><dt>Carrier</dt><dd>Midwest Carrier</dd></div>
+        <div><dt>Current Stage</dt><dd>{currentStage}</dd></div>
+        <div><dt>Current Result</dt><dd>{currentResult}</dd></div>
+        {labRunId && <div><dt>Lab Run ID</dt><dd>{labRunId}</dd></div>}
+      </dl>
+    </article>
+  );
+}
+
+export function CheckpointTimeline({ checkpoints }: { checkpoints: CheckpointView[] }) {
+  return (
+    <ol className="checkpoint-timeline" aria-label="Healthy integration checkpoints">
+      {checkpoints.map(({ checkpoint, status }) => (
+        <li key={checkpoint.id} className={`checkpoint-status ${status.toLowerCase()}`}>
+          <span className="checkpoint-number">{checkpoint.sequence}</span>
+          <div>
+            <strong>{checkpoint.shortLabel}</strong>
+            <small>{status === 'COMPLETE' ? 'Complete' : status === 'CURRENT' ? 'Current' : 'Pending'}</small>
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+export function MissionCheckpoint({
+  view,
+  children,
+}: {
+  view: CheckpointView;
+  children?: ReactNode;
+}) {
+  const { checkpoint, status, rawEvidence, values } = view;
+  const isAvailable = status !== 'PENDING';
+
+  return (
+    <article className={`panel mission-checkpoint ${status.toLowerCase()}`} data-testid={`mission-checkpoint-${checkpoint.id}`}>
+      <div className="panel-header">
+        <div>
+          <p className="eyebrow">Checkpoint {checkpoint.sequence} - {status === 'COMPLETE' ? 'Complete' : status === 'CURRENT' ? 'Current' : 'Pending'}</p>
+          <h2>{checkpoint.title}</h2>
+        </div>
+      </div>
+      {!isAvailable ? (
+        <p className="muted-text">Evidence for this checkpoint has not appeared yet. Continue the real Lab run to unlock it.</p>
+      ) : (
+        <>
+          <div className="checkpoint-learning-grid">
+            <div>
+              <h3>Observed by FreightBridge</h3>
+              <p>{checkpoint.observed}</p>
+            </div>
+            <div>
+              <h3>Why it matters</h3>
+              <p>{checkpoint.whyItMatters}</p>
+            </div>
+            <div>
+              <h3>What I should check</h3>
+              <ul className="check-list">
+                {checkpoint.analystChecks.map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            </div>
+            <div>
+              <h3>Healthy signal</h3>
+              <p>{checkpoint.healthySignal}</p>
+            </div>
+          </div>
+          <div className="correlation-strip" aria-label={`${checkpoint.title} correlation identifiers`}>
+            {checkpoint.correlationFields.map((field) => (
+              <span key={field}>{field}</span>
+            ))}
+          </div>
+          {values && (
+            <dl className="definition-grid checkpoint-values">
+              {Object.entries(values).map(([label, value]) => (
+                <div key={label}><dt>{label}</dt><dd>{value ?? 'Pending'}</dd></div>
+              ))}
+            </dl>
+          )}
+          {checkpoint.technicalDetails && (
+            <EvidencePanel title="Technical details">
+              <p>{checkpoint.technicalDetails}</p>
+            </EvidencePanel>
+          )}
+          {rawEvidence !== undefined && (
+            <EvidencePanel title={checkpoint.rawEvidenceTitle ?? 'Inspect Raw Data'}>
+              <pre className="lab-preview">{renderRawEvidence(rawEvidence)}</pre>
+            </EvidencePanel>
+          )}
+          {children}
+        </>
+      )}
+    </article>
+  );
+}
+
+export function TechnicalComparison() {
+  return (
+    <article className="panel technical-comparison" data-testid="transport-business-comparison">
+      <div className="panel-header">
+        <h2>Transport vs Business Outcome</h2>
+      </div>
+      <div className="comparison-grid">
+        <div>
+          <strong>SFTP upload success</strong>
+          <p>FreightBridge delivered a file. It does not prove the carrier accepted the load.</p>
+        </div>
+        <div>
+          <strong>997 technical acknowledgment</strong>
+          <p>Midwest received and structurally processed the EDI. It still does not mean "yes."</p>
+        </div>
+        <div>
+          <strong>990 business response</strong>
+          <p>This is the carrier's tender decision: accepted or rejected.</p>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+export function HealthyFlowChecklist({
+  items,
+}: {
+  items: HealthyChecklistItem[];
+}) {
+  return (
+    <article className="panel healthy-checklist" data-testid="healthy-flow-checklist">
+      <div className="panel-header">
+        <h2>Healthy Integration Checklist</h2>
+      </div>
+      <ul className="healthy-checklist-list">
+        {items.map((item) => (
+          <li key={item.id}>
+            <CheckCircle2 size={18} />
+            <div>
+              <strong>{item.label}</strong>
+              <span>{item.evidence}</span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </article>
+  );
+}
+
+export function LastHealthyCheckpoint({
+  label,
+  explanation,
+}: {
+  label: string;
+  explanation: string;
+}) {
+  return (
+    <article className="panel last-healthy-checkpoint" data-testid="last-healthy-checkpoint">
+      <div className="panel-header">
+        <h2>Last Healthy Checkpoint</h2>
+      </div>
+      <p><strong>{label}</strong></p>
+      <p>{explanation}</p>
+    </article>
+  );
+}
+
+export function FinalHealthyReview({
+  items,
+  selected,
+  onToggle,
+  reviewed,
+}: {
+  items: HealthyChecklistItem[];
+  selected: string[];
+  onToggle: (id: string) => void;
+  reviewed: boolean;
+}) {
+  return (
+    <article className="panel final-review" data-testid="final-healthy-review">
+      <div className="panel-header">
+        <h2>Final Analyst Review</h2>
+      </div>
+      <p className="muted-text">Based on the evidence, select every statement that proves this was a healthy flow.</p>
+      <div className="review-options">
+        {items.map((item) => (
+          <label key={item.id}>
+            <input
+              type="checkbox"
+              checked={selected.includes(item.id)}
+              onChange={() => onToggle(item.id)}
+            />
+            <span>{item.label}</span>
+          </label>
+        ))}
+      </div>
+      {reviewed && (
+        <div className="knowledge-feedback correct">
+          <CheckCircle2 size={18} />
+          <p>Review complete. These are the healthy signals you should compare against future incidents.</p>
+        </div>
+      )}
+    </article>
+  );
+}
+
 export function HintPanel({ hints }: { hints: Hint[] }) {
   return (
     <article className="panel hint-panel" data-testid="hint-panel">
@@ -181,11 +421,20 @@ export function AnalystNotes({ storageKey }: { storageKey: string }) {
         <textarea
           value={notes}
           onChange={(event) => updateNotes(event.target.value)}
-          placeholder="Write what you observed, what it means, and what you would check next."
+          placeholder="Write down the signals you would expect to see in a healthy shipment."
         />
       </label>
       <p className="muted-text">Stored locally in this browser. Notes are not sent to FreightBridge.</p>
     </article>
+  );
+}
+
+export function ReplayButton({ onReplay, disabled }: { onReplay: () => void; disabled?: boolean }) {
+  return (
+    <button className="secondary-button" type="button" onClick={onReplay} disabled={disabled} data-testid="replay-mission">
+      <RotateCcw size={16} />
+      Replay Mission
+    </button>
   );
 }
 

@@ -8,19 +8,22 @@ The default authenticated experience is now `#/learn`. The existing Analyst Cons
 
 Training Mode teaches EDI and API integration concepts from inside FreightBridge. The learner investigates evidence that FreightBridge could realistically observe: inbound requests, generated X12, SFTP activity, received EDI, transaction records, logs, errors, mapping metadata, and partner/manager messages.
 
-Milestone 24 implements:
+Training Mode currently implements:
 
 - Training Desk
 - FreightBridge Training Desk / mission board
 - learner role: FreightBridge Integration Support Analyst
 - Mission 1 - Your First Shift: Watch a Healthy Integration
-- FreightBridge workstation shell with evidence, hints, notes, messages, and phases
+- FreightBridge workstation shell with progressive healthy-flow checkpoints
+- Follow This Load panel for the active training load
+- checkpoint questions, hints, Analyst Notes, replay, and debrief
 - browser-local mission completion progress
 - locked or coming-soon roadmap placeholders for future missions
 
 No future troubleshooting mission is implemented yet.
 
 See [FreightBridge employee POV](freightbridge-employee-pov.md) for the observation rules and role framing.
+See [Healthy integration baseline](healthy-integration-baseline.md) for the Mission 1 checkpoint model.
 
 ## The Three Entities
 
@@ -63,7 +66,7 @@ The value is versioned and contains only non-sensitive mission completion IDs. O
 - Advanced: Mission 9 - Midwest SFTP Suddenly Stops Working - locked placeholder
 - Final Shift: Mission 10 - Production Incident - locked placeholder
 
-Only Mission 1 is playable in Milestone 24.
+Only Mission 1 is playable. Mission 2 remains coming soon and is not implemented yet.
 
 ## Manual Acceptance
 
@@ -75,10 +78,13 @@ Only Mission 1 is playable in Milestone 24.
 6. Confirm Apex and Midwest are labeled external trading partners.
 7. Start Mission 1.
 8. Start a real `FULL_SHIPMENT_LIFECYCLE` run.
-9. Continue the run until the healthy shipment evidence appears.
-10. Inspect safe evidence and raw data.
-11. Open an example hint.
-12. Type an Analyst Note and confirm it remains local.
-13. Complete/review Mission 1.
-14. Open Advanced Console.
-15. Use Back to Training to return to Training Desk.
+9. Confirm future evidence is pending until the run produces it.
+10. Follow the load through inbound, validation, canonical, 204, SFTP, 997, 990, 214, and healthy-confirmed checkpoints.
+11. Answer checkpoint questions about transport vs business outcome.
+12. Inspect safe raw JSON/X12/SFTP evidence as needed.
+13. Open an example hint.
+14. Type an Analyst Note and confirm it remains local.
+15. Complete the final healthy-flow review.
+16. Complete/review or replay Mission 1.
+17. Open Advanced Console.
+18. Use Back to Training to return to Training Desk.

@@ -92,3 +92,27 @@ export type TeachingStep = {
   observed: string;
   analystCheck: string[];
 };
+
+export type CheckpointStatus = 'PENDING' | 'CURRENT' | 'COMPLETE';
+
+export type HealthyCheckpoint = {
+  id: string;
+  sequence: number;
+  title: string;
+  shortLabel: string;
+  source: string;
+  observed: string;
+  whyItMatters: string;
+  analystChecks: string[];
+  healthySignal: string;
+  correlationFields: string[];
+  technicalDetails?: string;
+  rawEvidenceTitle?: string;
+  questionId?: string;
+};
+
+export type HealthyChecklistItem = {
+  id: string;
+  label: string;
+  evidence: string;
+};

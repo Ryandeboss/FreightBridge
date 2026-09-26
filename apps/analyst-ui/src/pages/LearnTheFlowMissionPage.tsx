@@ -1,5 +1,4 @@
 import { AlertTriangle, ArrowLeft, CheckCircle2, Play, RefreshCw } from 'lucide-react';
-import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError } from '../api/client';
@@ -7,91 +6,105 @@ import { createLabRun, runNextLabStep, type LabRun } from '../api/lab';
 import { useOperationsSession } from '../auth/OperationsSession';
 import {
   AnalystNotes,
+  CheckpointTimeline,
   CommunicationMessage,
   EntityCard,
-  EvidenceCard,
-  EvidencePanel,
+  FinalHealthyReview,
+  FollowThisLoad,
+  HealthyFlowChecklist,
   HintPanel,
   KnowledgeCheck,
+  LastHealthyCheckpoint,
   MissionBriefing,
+  MissionCheckpoint,
   MissionObjective,
   MissionPhaseProgress,
   MissionProgress,
+  ReplayButton,
+  TechnicalComparison,
+  type CheckpointView,
 } from '../components/training/TrainingComponents';
 import {
-  finalQuizQuestions,
+  checkpointQuestions,
+  healthyChecklistItems,
+  healthyCheckpoints,
   LEARN_THE_FLOW_MISSION_ID,
   missionOneBriefing,
   missionOneHints,
   missionOnePhases,
-  missionOneTeachingSteps,
-  missionOneTimeline,
   samplePartnerMessages,
-  technicalAckQuestion,
-  tenderResponseQuestion,
   trainingEntities,
 } from '../training/missions';
-import { completeMission } from '../training/progress';
-import type { MissionPhase, TeachingStep, TrainingEvidence } from '../training/types';
+import { completeMission, hasCompletedMission, loadTrainingProgress } from '../training/progress';
+import type { HealthyCheckpoint, MissionPhase } from '../training/types';
 import {
   find204Dispatch,
   find204Preview,
   findApexPayload,
   findCanonicalShipment,
+  findStep,
   locationLine,
-  rawEvidence,
   shipmentEvents,
 } from '../training/labEvidence';
 
 type Answers = Record<string, string | null>;
 
-const initialAnswers: Answers = {
-  [technicalAckQuestion.id]: null,
-  [tenderResponseQuestion.id]: null,
-  ...Object.fromEntries(finalQuizQuestions.map((question) => [question.id, null])),
-};
-
+const initialAnswers: Answers = Object.fromEntries(checkpointQuestions.map((question) => [question.id, null]));
 const NOTES_KEY = 'freightbridge.trainingNotes.LEARN_THE_FLOW';
 
 export function LearnTheFlowMissionPage() {
   const { token, handleApiError } = useOperationsSession();
   const [run, setRun] = useState<LabRun | null>(null);
   const [answers, setAnswers] = useState<Answers>(initialAnswers);
+  const [finalReviewSelections, setFinalReviewSelections] = useState<string[]>([]);
   const [isWorking, setIsWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
 
-  const technicalAckSeen = String(run?.resultSummary.technicalAcknowledgment ?? 'PENDING') !== 'PENDING';
-  const tenderResponseSeen = String(run?.resultSummary.tenderStatus ?? 'PENDING') !== 'PENDING';
+  const progress = loadTrainingProgress();
+  const alreadyCompleted = hasCompletedMission(progress, LEARN_THE_FLOW_MISSION_ID);
   const lifecycleSucceeded = run?.status === 'SUCCEEDED';
   const lifecycleFailed = run?.status === 'FAILED';
-  const technicalAckCorrect = answers[technicalAckQuestion.id] === technicalAckQuestion.correctOptionId;
-  const tenderResponseCorrect = answers[tenderResponseQuestion.id] === tenderResponseQuestion.correctOptionId;
-  const finalQuizCorrect = finalQuizQuestions.every((question) => answers[question.id] === question.correctOptionId);
-  const canComplete = lifecycleSucceeded && technicalAckCorrect && tenderResponseCorrect && finalQuizCorrect;
-  const completedObjectives = [
-    Boolean(run),
-    lifecycleSucceeded,
-    technicalAckCorrect,
-    tenderResponseCorrect,
-    finalQuizCorrect,
-  ].filter(Boolean).length;
-  const nextActionDisabled =
-    isWorking ||
-    lifecycleFailed ||
-    (technicalAckSeen && !technicalAckCorrect) ||
-    (tenderResponseSeen && !tenderResponseCorrect);
-
+  const technicalAckSeen = hasTechnicalAck(run);
+  const tenderResponseSeen = hasTenderResponse(run);
   const apexPayload = useMemo(() => findApexPayload(run), [run]);
   const canonicalShipment = useMemo(() => findCanonicalShipment(run), [run]);
   const dispatch204 = useMemo(() => find204Dispatch(run), [run]);
   const preview204 = useMemo(() => find204Preview(run), [run]);
   const events = useMemo(() => shipmentEvents(run), [run]);
-  const currentPhase: MissionPhase = lifecycleSucceeded ? 'DEBRIEF' : run ? 'INVESTIGATE' : 'BRIEFING';
-  const evidenceCards = useMemo(
-    () => buildMissionEvidence(run, apexPayload, canonicalShipment, dispatch204, preview204, events),
+  const checkpointViews = useMemo(
+    () => buildCheckpointViews(run, apexPayload, canonicalShipment, dispatch204, preview204, events),
     [run, apexPayload, canonicalShipment, dispatch204, preview204, events],
   );
+  const unlockedCheckpointIds = checkpointViews
+    .filter((view) => view.status !== 'PENDING')
+    .map((view) => view.checkpoint.id);
+  const requiredQuestions = checkpointQuestions.filter((question) =>
+    checkpointViews.some((view) => view.checkpoint.questionId === question.id && view.status !== 'PENDING'),
+  );
+  const requiredQuestionsCorrect = requiredQuestions.every((question) => answers[question.id] === question.correctOptionId);
+  const finalReviewCorrect = healthyChecklistItems.every((item) => finalReviewSelections.includes(item.id));
+  const canComplete = Boolean(lifecycleSucceeded && requiredQuestionsCorrect && finalReviewCorrect);
+  const currentPhase: MissionPhase = lifecycleSucceeded ? 'DEBRIEF' : run ? 'INVESTIGATE' : 'BRIEFING';
+  const currentStage = currentCheckpoint(checkpointViews)?.checkpoint.title ?? 'Ready to start';
+  const currentResult = lifecycleSucceeded
+    ? 'Healthy lifecycle complete'
+    : run
+      ? 'Evidence still progressing'
+      : 'No run started';
+  const completedObjectives = [
+    Boolean(run),
+    unlockedCheckpointIds.includes('inbound-apex'),
+    unlockedCheckpointIds.includes('canonical'),
+    unlockedCheckpointIds.includes('x12-204'),
+    technicalAckSeen,
+    tenderResponseSeen,
+    events.length > 0,
+    lifecycleSucceeded,
+    requiredQuestionsCorrect,
+    finalReviewCorrect,
+  ].filter(Boolean).length;
+  const nextActionDisabled = isWorking || lifecycleFailed || Boolean(run?.status === 'SUCCEEDED');
 
   async function startMission() {
     if (!token) return;
@@ -99,6 +112,7 @@ export function LearnTheFlowMissionPage() {
     setError(null);
     setCompleted(false);
     setAnswers(initialAnswers);
+    setFinalReviewSelections([]);
     try {
       const nextRun = await createLabRun(token, {
         scenarioKey: 'FULL_SHIPMENT_LIFECYCLE',
@@ -136,6 +150,12 @@ export function LearnTheFlowMissionPage() {
     setAnswers((current) => ({ ...current, [questionId]: optionId }));
   }
 
+  function toggleFinalReview(id: string) {
+    setFinalReviewSelections((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
+    );
+  }
+
   function finishMission() {
     if (!canComplete) return;
     completeMission(LEARN_THE_FLOW_MISSION_ID);
@@ -153,13 +173,27 @@ export function LearnTheFlowMissionPage() {
         <p className="eyebrow">Mission 1 - Your First Shift</p>
         <h1>Watch a Healthy Integration</h1>
         <p>
-          You are at FreightBridge. Before troubleshooting incidents, learn what a healthy partner
-          integration looks like from your workstation.
+          Before you troubleshoot failures, learn what normal looks like from inside FreightBridge.
         </p>
         <MissionPhaseProgress phases={missionOnePhases} current={currentPhase} />
       </MissionBriefing>
 
       <CommunicationMessage message={missionOneBriefing} />
+
+      {alreadyCompleted && !run && (
+        <article className="panel replay-panel" data-testid="completed-mission-review">
+          <div className="panel-header">
+            <h2>Mission 1 Complete</h2>
+            <CheckCircle2 size={22} />
+          </div>
+          <p className="muted-text">
+            Your LEARN_THE_FLOW progress is still recognized. Review the healthy baseline below or replay the mission with a new real Lab run.
+          </p>
+          <div className="lab-actions">
+            <ReplayButton onReplay={startMission} disabled={isWorking} />
+          </div>
+        </article>
+      )}
 
       <section className="entity-flow" aria-label="FreightBridge workplace and external partners">
         {trainingEntities.map((entity) => (
@@ -171,14 +205,19 @@ export function LearnTheFlowMissionPage() {
         <article className="panel">
           <div className="panel-header">
             <h2>Mission Objectives</h2>
-            <MissionProgress completed={completedObjectives} total={5} />
+            <MissionProgress completed={completedObjectives} total={10} />
           </div>
           <div className="mission-objectives">
             <MissionObjective done={Boolean(run)}>Start a real FULL_SHIPMENT_LIFECYCLE lab run.</MissionObjective>
-            <MissionObjective done={lifecycleSucceeded}>Run the lifecycle to success.</MissionObjective>
-            <MissionObjective done={technicalAckCorrect}>Explain why 997 is not load acceptance.</MissionObjective>
-            <MissionObjective done={tenderResponseCorrect}>Identify 990 as the tender response.</MissionObjective>
-            <MissionObjective done={finalQuizCorrect}>Pass the final beginner quiz.</MissionObjective>
+            <MissionObjective done={unlockedCheckpointIds.includes('inbound-apex')}>Identify the inbound Apex checkpoint.</MissionObjective>
+            <MissionObjective done={unlockedCheckpointIds.includes('canonical')}>Recognize canonical shipment evidence.</MissionObjective>
+            <MissionObjective done={unlockedCheckpointIds.includes('x12-204')}>Explain who generated the 204.</MissionObjective>
+            <MissionObjective done={technicalAckSeen}>Separate 997 technical acknowledgment from acceptance.</MissionObjective>
+            <MissionObjective done={tenderResponseSeen}>Identify the 990 business response.</MissionObjective>
+            <MissionObjective done={events.length > 0}>Recognize 214 status events.</MissionObjective>
+            <MissionObjective done={Boolean(lifecycleSucceeded)}>Reach the real lifecycle success state.</MissionObjective>
+            <MissionObjective done={requiredQuestionsCorrect}>Complete checkpoint knowledge checks.</MissionObjective>
+            <MissionObjective done={finalReviewCorrect}>Complete the final healthy-flow review.</MissionObjective>
           </div>
           <div className="lab-actions">
             {!run ? (
@@ -187,31 +226,32 @@ export function LearnTheFlowMissionPage() {
                 Start Mission
               </button>
             ) : (
-              <button className="primary-button" type="button" onClick={continueMission} disabled={nextActionDisabled || lifecycleSucceeded}>
+              <button className="primary-button" type="button" onClick={continueMission} disabled={nextActionDisabled}>
                 <RefreshCw size={16} />
                 Continue
               </button>
             )}
+            {run && <ReplayButton onReplay={startMission} disabled={isWorking} />}
             <Link className="secondary-button" to="/lab">
               Open in Advanced Console
             </Link>
           </div>
         </article>
 
-        <article className="panel">
-          <div className="panel-header">
-            <h2>FreightBridge Event Timeline</h2>
-          </div>
-          <ol className="timeline workstation-timeline">
-            {missionOneTimeline.map((event, index) => (
-              <li key={event}>
-                <span>Step {index + 1}</span>
-                <strong>{event}</strong>
-              </li>
-            ))}
-          </ol>
-        </article>
+        <FollowThisLoad
+          loadId={run?.businessIdentifier}
+          labRunId={run?.id}
+          currentStage={currentStage}
+          currentResult={currentResult}
+        />
       </section>
+
+      <article className="panel" data-testid="checkpoint-timeline-panel">
+        <div className="panel-header">
+          <h2>FreightBridge Event Timeline</h2>
+        </div>
+        <CheckpointTimeline checkpoints={checkpointViews} />
+      </article>
 
       {(error || lifecycleFailed) && (
         <article className="panel training-alert" role="alert">
@@ -227,126 +267,54 @@ export function LearnTheFlowMissionPage() {
       )}
 
       <section className="content-grid workstation-grid" data-testid="training-workstation">
-        <article className="panel">
-          <div className="panel-header">
-            <h2>Evidence</h2>
-          </div>
-          <div className="evidence-list">
-            {evidenceCards.map((evidence) => (
-              <EvidenceCard key={evidence.id} evidence={evidence} />
-            ))}
-          </div>
-        </article>
         <div className="training-stack">
           <HintPanel hints={missionOneHints} />
           <AnalystNotes storageKey={NOTES_KEY} />
         </div>
+        <TechnicalComparison />
       </section>
 
-      <section className="teaching-grid">
-        {missionOneTeachingSteps.slice(0, 4).map((step, index) => (
-          <TeachingCard
-            key={step.id}
-            step={step}
-            evidenceTitle={index === 0 ? 'Inspect Raw Data' : index === 2 ? 'Inspect Raw X12' : 'Inspect Raw Data'}
-            evidence={index === 0 ? apexPayload : index === 1 ? canonicalShipment : index === 2 ? String(preview204?.x12 ?? '204 preview pending.') : dispatch204}
-          >
-            {index === 0 && (
-              <dl className="definition-grid">
-                <div><dt>Load ID</dt><dd>{String(apexPayload.loadId ?? run?.businessIdentifier ?? 'Pending')}</dd></div>
-                <div><dt>Origin</dt><dd>{locationLine(apexPayload.pickup)}</dd></div>
-                <div><dt>Destination</dt><dd>{locationLine(apexPayload.delivery)}</dd></div>
-                <div><dt>BOL</dt><dd>{String(apexPayload.bolNumber ?? 'Pending')}</dd></div>
-                <div><dt>PO</dt><dd>{String(apexPayload.purchaseOrderNumber ?? 'Pending')}</dd></div>
-                <div><dt>Customer Reference</dt><dd>{String(apexPayload.customerReference ?? 'Pending')}</dd></div>
-              </dl>
-            )}
-            {index === 2 && (
-              <dl className="definition-grid">
-                <div><dt>Document</dt><dd>X12 204</dd></div>
-                <div><dt>Simple meaning</dt><dd>Will you haul this load?</dd></div>
-                <div><dt>Generated by</dt><dd>FreightBridge</dd></div>
-              </dl>
-            )}
-          </TeachingCard>
-        ))}
+      <section className="checkpoint-list" data-testid="mission-checkpoints">
+        {checkpointViews.map((view) => {
+          const question = checkpointQuestions.find((candidate) => candidate.id === view.checkpoint.questionId);
+          return (
+            <MissionCheckpoint key={view.checkpoint.id} view={view}>
+              {question && view.status !== 'PENDING' && (
+                <KnowledgeCheck
+                  question={question}
+                  selected={answers[question.id]}
+                  onAnswer={(optionId) => answer(question.id, optionId)}
+                />
+              )}
+            </MissionCheckpoint>
+          );
+        })}
       </section>
 
-      {technicalAckSeen && (
-        <section className="training-stack">
-          <TeachingCard
-            step={missionOneTeachingSteps[4]}
-            evidenceTitle="Inspect 997 Details"
-            evidence={run?.resultSummary.technicalAcknowledgmentDetail ?? run?.resultSummary.technicalAcknowledgment}
-          />
-          <KnowledgeCheck
-            question={technicalAckQuestion}
-            selected={answers[technicalAckQuestion.id]}
-            onAnswer={(optionId) => answer(technicalAckQuestion.id, optionId)}
-          />
-        </section>
-      )}
-
-      {tenderResponseSeen && technicalAckCorrect && (
-        <section className="training-stack">
-          <TeachingCard
-            step={missionOneTeachingSteps[5]}
-            evidenceTitle="Inspect 990 Result"
-            evidence={run?.resultSummary.tenderStatus}
-          />
-          <KnowledgeCheck
-            question={tenderResponseQuestion}
-            selected={answers[tenderResponseQuestion.id]}
-            onAnswer={(optionId) => answer(tenderResponseQuestion.id, optionId)}
-          />
-        </section>
-      )}
-
-      {events.length > 0 && tenderResponseCorrect && (
-        <section className="training-stack">
-          <TeachingCard
-            step={missionOneTeachingSteps[6]}
-            evidenceTitle="Inspect 214 Event History"
-            evidence={events}
-          >
-            <div className="status-progression" aria-label="214 status progression">
-              {['PICKED_UP', 'IN_TRANSIT', 'ARRIVED', 'DELIVERED'].map((status) => (
-                <span key={status}>{status}</span>
-              ))}
-            </div>
-          </TeachingCard>
-          <TeachingCard
-            step={missionOneTeachingSteps[7]}
-            evidenceTitle="Inspect Event-Time Evidence"
-            evidence={events}
-          />
-        </section>
-      )}
-
-      {lifecycleSucceeded && tenderResponseCorrect && (
-        <section className="training-stack">
+      {lifecycleSucceeded && (
+        <section className="training-stack" data-testid="mission-debrief">
           <article className="panel">
             <div className="panel-header">
               <h2>Debrief</h2>
             </div>
             <div className="flow-summary">
-              <p><strong>Apex Logistics</strong>: external partner claim/request enters FreightBridge.</p>
-              <p><strong>FreightBridge</strong>: authenticates, validates, maps, generates X12, sends, tracks, and logs.</p>
-              <p><strong>Midwest Carrier</strong>: external partner messages are visible only when FreightBridge receives files, acknowledgments, or support communication.</p>
-              <p><strong>FreightBridge</strong>: callbacks and status updates are verified from our transaction evidence.</p>
+              <p><strong>What happened?</strong> Apex sent a load to FreightBridge, FreightBridge normalized it, generated a Midwest 204, delivered it over SFTP, received a 997, received a 990 acceptance, processed 214 status events, and verified broker-facing status evidence.</p>
+              <p><strong>What proved it?</strong> Each checkpoint produced FreightBridge-owned evidence: partner request data, canonical shipment data, X12 control numbers, SFTP metadata, acknowledgment controls, tender status, and shipment events.</p>
+              <p><strong>What should you remember?</strong> Do not start by guessing. Find the last healthy checkpoint and identify where the evidence stops.</p>
             </div>
           </article>
 
-          <section className="final-quiz" aria-label="Final knowledge check">
-            {finalQuizQuestions.map((question) => (
-              <KnowledgeCheck
-                key={question.id}
-                question={question}
-                selected={answers[question.id]}
-                onAnswer={(optionId) => answer(question.id, optionId)}
-              />
-            ))}
-          </section>
+          <HealthyFlowChecklist items={healthyChecklistItems} />
+          <LastHealthyCheckpoint
+            label="Healthy Flow Confirmed"
+            explanation="The last stage where FreightBridge has evidence that processing succeeded is the completed lifecycle. In future incidents, compare the broken flow to this baseline and find where evidence diverges."
+          />
+          <FinalHealthyReview
+            items={healthyChecklistItems}
+            selected={finalReviewSelections}
+            onToggle={toggleFinalReview}
+            reviewed={finalReviewCorrect}
+          />
 
           <article className={`panel mission-complete-panel ${completed ? 'visible' : ''}`}>
             <div className="panel-header">
@@ -356,16 +324,16 @@ export function LearnTheFlowMissionPage() {
             {completed ? (
               <>
                 <h3>MISSION COMPLETE - Your First Shift</h3>
-                <p>
-                  You followed a shipment from the evidence available to a FreightBridge Integration Support Analyst.
-                </p>
-                <Link className="primary-button" to="/learn">Return to Training Desk</Link>
+                <p>That is your healthy baseline for future FreightBridge incidents.</p>
+                <div className="lab-actions">
+                  <Link className="primary-button" to="/learn">Return to Training Desk</Link>
+                  <ReplayButton onReplay={startMission} disabled={isWorking} />
+                </div>
               </>
             ) : (
               <>
                 <p className="muted-text">
-                  Mission 1 can only complete after the real lifecycle succeeds and all knowledge
-                  checks are correct.
+                  Mission 1 can only complete after the real lifecycle succeeds, checkpoint questions are correct, and the final review is complete.
                 </p>
                 <button className="primary-button" type="button" disabled={!canComplete} onClick={finishMission}>
                   Complete Mission
@@ -390,114 +358,179 @@ function generateTrainingLoadId(): string {
   return `TRAIN${suffix}`.slice(0, 30);
 }
 
-function TeachingCard({
-  step,
-  evidenceTitle,
-  evidence,
-  children,
-}: {
-  step: TeachingStep;
-  evidenceTitle: string;
-  evidence: unknown;
-  children?: ReactNode;
-}) {
-  return (
-    <article className="panel teaching-card">
-      <div className="panel-header">
-        <div>
-          <p className="eyebrow">{step.source}</p>
-          <h2>{step.title}</h2>
-        </div>
-      </div>
-      <div className="observed-meaning-grid">
-        <div>
-          <h3>Observed by FreightBridge</h3>
-          <p>{step.observed}</p>
-        </div>
-        <div>
-          <h3>What this means</h3>
-          <p>{step.plainLanguage}</p>
-        </div>
-      </div>
-      {children}
-      <EvidencePanel title="What would I check here?">
-        <ul className="check-list">
-          {step.analystCheck.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      </EvidencePanel>
-      {step.advancedDetails && (
-        <EvidencePanel title="Advanced details">
-          <p>{step.advancedDetails}</p>
-        </EvidencePanel>
-      )}
-      <EvidencePanel title={evidenceTitle}>
-        <pre className="lab-preview">{rawEvidence(evidence)}</pre>
-      </EvidencePanel>
-    </article>
-  );
-}
-
-function buildMissionEvidence(
+function buildCheckpointViews(
   run: LabRun | null,
   apexPayload: Record<string, unknown>,
   canonicalShipment: Record<string, unknown>,
   dispatch204: Record<string, unknown> | null,
   preview204: Record<string, unknown> | null,
   events: Record<string, unknown>[],
-): TrainingEvidence[] {
-  return [
-    {
-      id: 'inbound-apex',
-      type: 'Inbound API Request',
-      source: 'FreightBridge API Gateway',
-      summary: 'Message received from Apex',
-      observed: run ? 'FreightBridge accepted an Apex load-tender workflow into the Lab run.' : 'Waiting for a real Lab run.',
-      meaning: 'Apex reached FreightBridge; the next analyst question is whether authentication, parsing, and validation succeeded.',
-      timestamp: run?.createdAt,
-      businessIdentifier: run?.businessIdentifier,
-      raw: apexPayload,
-    },
-    {
-      id: 'canonical',
-      type: 'Transaction Record',
-      source: 'FreightBridge Domain Processor',
-      summary: 'Canonical shipment created',
-      observed: Object.keys(canonicalShipment).length > 0 ? 'FreightBridge has normalized shipment data.' : 'Canonical shipment evidence pending.',
-      meaning: 'FreightBridge has an internal representation that can be mapped to partner-specific formats.',
-      businessIdentifier: run?.businessIdentifier,
-      raw: canonicalShipment,
-    },
-    {
-      id: 'x12-204',
-      type: 'X12 Document',
-      source: 'FreightBridge X12 Mapper',
-      summary: '204 generated for Midwest',
-      observed: preview204 ? 'FreightBridge generated X12 204 preview/control metadata.' : '204 evidence pending.',
-      meaning: 'The integration platform produced the carrier load tender; this is FreightBridge evidence, not Apex internals.',
-      businessIdentifier: run?.businessIdentifier,
-      raw: preview204?.x12 ?? preview204,
-    },
-    {
-      id: 'sftp-activity',
-      type: 'SFTP Activity',
-      source: 'FreightBridge SFTP Transport',
-      summary: 'SFTP delivery metadata',
-      observed: dispatch204 ? 'FreightBridge recorded delivery metadata for the outbound 204.' : 'SFTP activity pending.',
-      meaning: 'For carrier complaints, this is where an analyst checks remote path and file delivery disposition.',
-      businessIdentifier: run?.businessIdentifier,
-      raw: dispatch204,
-    },
-    {
-      id: 'status-history',
-      type: 'Shipment Status History',
-      source: 'Inbound Midwest EDI',
-      summary: '214 event history',
-      observed: events.length > 0 ? `${events.length} Midwest status events received by FreightBridge.` : '214 status events pending.',
-      meaning: 'FreightBridge can verify received status events and protect current status using business event time.',
-      businessIdentifier: run?.businessIdentifier,
-      raw: events,
-    },
-  ];
+): CheckpointView[] {
+  const available = new Set<string>();
+  if (run) available.add('inbound-apex');
+  if (hasApexPayload(run, apexPayload)) available.add('validation');
+  if (Object.keys(canonicalShipment).length > 0) available.add('canonical');
+  if (preview204) available.add('x12-204');
+  if (dispatch204) available.add('sftp-delivery');
+  if (hasTechnicalAck(run)) available.add('x12-997');
+  if (hasTenderResponse(run)) available.add('x12-990');
+  if (events.length > 0) available.add('x12-214');
+  if (events.length > 0 || hasTenderResponse(run)) available.add('apex-update');
+  if (run?.status === 'SUCCEEDED') available.add('healthy-confirmed');
+  const firstPending = healthyCheckpoints.find((checkpoint) => !available.has(checkpoint.id))?.id;
+
+  return healthyCheckpoints.map((checkpoint) => ({
+    checkpoint,
+    status: available.has(checkpoint.id) ? 'COMPLETE' : checkpoint.id === firstPending ? 'CURRENT' : 'PENDING',
+    rawEvidence: rawEvidenceFor(checkpoint, run, apexPayload, canonicalShipment, dispatch204, preview204, events),
+    values: valuesFor(checkpoint, run, apexPayload, canonicalShipment, dispatch204, preview204, events),
+  }));
+}
+
+function hasApexPayload(run: LabRun | null, apexPayload: Record<string, unknown>): boolean {
+  return Boolean(
+    run &&
+    (
+      Object.keys(apexPayload).length > 0 ||
+      stepSucceeded(run, 'CREATE_APEX_LOAD') ||
+      stepSucceeded(run, 'DISPATCH_APEX_TENDER')
+    ),
+  );
+}
+
+function hasTechnicalAck(run: LabRun | null): boolean {
+  const value = String(run?.resultSummary.technicalAcknowledgment ?? 'PENDING');
+  return Boolean(run && value !== 'PENDING' && value !== 'NOT_RECEIVED');
+}
+
+function hasTenderResponse(run: LabRun | null): boolean {
+  const value = String(run?.resultSummary.tenderStatus ?? 'PENDING');
+  return Boolean(run && value !== 'PENDING');
+}
+
+function stepSucceeded(run: LabRun | null, stepKey: string): boolean {
+  return findStep(run, stepKey)?.status === 'SUCCEEDED';
+}
+
+function currentCheckpoint(checkpoints: CheckpointView[]): CheckpointView | null {
+  return checkpoints.find((view) => view.status === 'CURRENT') ?? checkpoints.filter((view) => view.status === 'COMPLETE').at(-1) ?? null;
+}
+
+function rawEvidenceFor(
+  checkpoint: HealthyCheckpoint,
+  run: LabRun | null,
+  apexPayload: Record<string, unknown>,
+  canonicalShipment: Record<string, unknown>,
+  dispatch204: Record<string, unknown> | null,
+  preview204: Record<string, unknown> | null,
+  events: Record<string, unknown>[],
+): unknown {
+  switch (checkpoint.id) {
+    case 'inbound-apex':
+    case 'validation':
+      return apexPayload;
+    case 'canonical':
+      return canonicalShipment;
+    case 'x12-204':
+      return preview204?.x12 ?? preview204;
+    case 'sftp-delivery':
+      return dispatch204;
+    case 'x12-997':
+      return run?.resultSummary.technicalAcknowledgmentDetail ?? run?.resultSummary.technicalAcknowledgment;
+    case 'x12-990':
+      return { tenderStatus: run?.resultSummary.tenderStatus };
+    case 'x12-214':
+      return events;
+    case 'apex-update':
+      return {
+        tenderStatus: run?.resultSummary.tenderStatus,
+        shipmentStatus: run?.resultSummary.shipmentStatus,
+        shipmentEvents: events.length,
+      };
+    case 'healthy-confirmed':
+      return run?.resultSummary;
+    default:
+      return undefined;
+  }
+}
+
+function valuesFor(
+  checkpoint: HealthyCheckpoint,
+  run: LabRun | null,
+  apexPayload: Record<string, unknown>,
+  canonicalShipment: Record<string, unknown>,
+  dispatch204: Record<string, unknown> | null,
+  preview204: Record<string, unknown> | null,
+  events: Record<string, unknown>[],
+): Record<string, string | number | null | undefined> | undefined {
+  switch (checkpoint.id) {
+    case 'inbound-apex':
+      return {
+        'Load ID': String(apexPayload.loadId ?? run?.businessIdentifier ?? 'Pending'),
+        Partner: 'Apex Logistics',
+        Transport: 'REST API',
+        Format: 'JSON',
+      };
+    case 'validation':
+      return {
+        'HTTP / app result': String(findStep(run, 'DISPATCH_APEX_TENDER')?.status ?? findStep(run, 'CREATE_APEX_LOAD')?.status ?? 'Evidence pending'),
+        'Business ID': run?.businessIdentifier,
+      };
+    case 'canonical':
+      return {
+        'Shipment Number': String(canonicalShipment.shipmentNumber ?? run?.businessIdentifier ?? 'Pending'),
+        Origin: locationLine(canonicalShipment.pickup ?? apexPayload.pickup),
+        Destination: locationLine(canonicalShipment.delivery ?? apexPayload.delivery),
+        Equipment: String(canonicalShipment.equipmentType ?? apexPayload.equipmentType ?? 'Pending'),
+      };
+    case 'x12-204':
+      return {
+        ISA13: String(preview204?.interchangeControlNumber ?? 'Pending'),
+        GS06: String(preview204?.groupControlNumber ?? 'Pending'),
+        ST02: String(preview204?.transactionControlNumber ?? 'Pending'),
+        'Generated By': 'FreightBridge',
+      };
+    case 'sftp-delivery':
+      return {
+        'File Name': String(dispatch204?.fileName ?? preview204?.fileName ?? 'Pending'),
+        'Remote Path': String(dispatch204?.remotePath ?? preview204?.remotePath ?? 'Pending'),
+        Transport: 'SFTP',
+      };
+    case 'x12-997':
+      return {
+        AK5: String(asRecord(run?.resultSummary.technicalAcknowledgmentDetail)?.ak5 ?? 'Pending'),
+        AK9: String(asRecord(run?.resultSummary.technicalAcknowledgmentDetail)?.ak9 ?? 'Pending'),
+        'Acknowledged GS06': String(asRecord(run?.resultSummary.technicalAcknowledgmentDetail)?.acknowledgedGroupControlNumber ?? 'Pending'),
+        'Acknowledged ST02': String(asRecord(run?.resultSummary.technicalAcknowledgmentDetail)?.acknowledgedTransactionControlNumber ?? 'Pending'),
+      };
+    case 'x12-990':
+      return {
+        'Tender Decision': String(run?.resultSummary.tenderStatus ?? 'Pending'),
+        'Business Meaning': 'Carrier tender response',
+      };
+    case 'x12-214':
+      return {
+        'Events Received': events.length,
+        'Current Status': String(run?.resultSummary.shipmentStatus ?? 'Pending'),
+        'Event Time Lesson': 'Occurred time may differ from received time',
+      };
+    case 'apex-update':
+      return {
+        'Tender Status': String(run?.resultSummary.tenderStatus ?? 'Pending'),
+        'Shipment Status': String(run?.resultSummary.shipmentStatus ?? 'Pending'),
+        'Evidence Boundary': 'FreightBridge callback/reconciliation evidence',
+      };
+    case 'healthy-confirmed':
+      return {
+        Scenario: run?.scenarioKey,
+        'Run Status': run?.status,
+        'Business ID': run?.businessIdentifier,
+      };
+    default:
+      return undefined;
+  }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }

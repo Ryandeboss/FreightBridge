@@ -112,8 +112,8 @@ def run_browser_acceptance(analyst_ui_base_url: str, operations_token: str) -> d
 
       page.get_by_role('button', name='Start Mission').click()
       run_training_lifecycle(page)
-      expect(page.get_by_test_id('training-workstation').get_by_text('Observed by FreightBridge').first).to_be_visible(timeout=15000)
-      expect(page.get_by_text('FreightBridge received a 997 from Midwest')).to_be_visible(timeout=15000)
+      expect(page.get_by_test_id('mission-checkpoints').get_by_text('Observed by FreightBridge').first).to_be_visible(timeout=15000)
+      expect(page.get_by_text('FreightBridge received a 997 Functional Acknowledgment from Midwest')).to_be_visible(timeout=15000)
       expect(page.get_by_test_id('hint-panel')).to_be_visible(timeout=15000)
       page.get_by_text('Hint 1 - Start with what FreightBridge received').click()
       expect(page.get_by_text(re.compile('confirm whether FreightBridge received', re.IGNORECASE))).to_be_visible(timeout=15000)

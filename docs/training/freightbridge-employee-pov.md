@@ -42,7 +42,7 @@ If partner-side context is needed, Training Mode presents it as a partner messag
 - Advanced: X12, callback, and SFTP issues.
 - Final Shift: end-to-end production-style incident simulation.
 
-Only Mission 1 is implemented in Milestone 24. Later missions remain locked or coming soon.
+Only Mission 1 is implemented. Later missions remain locked or coming soon.
 
 ## Training Mode vs Advanced Console
 
