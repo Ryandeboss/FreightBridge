@@ -111,7 +111,7 @@ def run_browser_acceptance(analyst_ui_base_url: str, operations_token: str) -> d
       expect(page.get_by_test_id('mission-checkpoint-x12-997')).to_contain_text('Pending')
 
       if page.get_by_test_id('completed-mission-review').count() > 0:
-        page.get_by_test_id('replay-mission').click()
+        page.get_by_test_id('completed-mission-review').get_by_test_id('replay-mission').click()
       else:
         page.get_by_role('button', name='Start Mission').click()
 
@@ -137,7 +137,9 @@ def run_browser_acceptance(analyst_ui_base_url: str, operations_token: str) -> d
       complete_final_review(page)
       page.get_by_role('button', name='Complete Mission').click()
       expect(page.get_by_text(re.compile('MISSION COMPLETE.*Your First Shift', re.IGNORECASE))).to_be_visible(timeout=15000)
-      expect(page.get_by_test_id('replay-mission')).to_be_visible(timeout=15000)
+      expect(
+        page.get_by_test_id('mission-debrief').get_by_test_id('replay-mission')
+      ).to_be_visible(timeout=15000)
 
       page.get_by_role('link', name='Return to Training Desk').click()
       expect(page.get_by_test_id('training-home-page')).to_be_visible(timeout=15000)
