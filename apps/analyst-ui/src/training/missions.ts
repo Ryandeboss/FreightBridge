@@ -64,6 +64,7 @@ export const trainingMissions: TrainingMission[] = [
     difficulty: 'INTERMEDIATE',
     summary: 'Locked roadmap placeholder for duplicate/idempotency investigation.',
     implemented: false,
+    unlocksAfter: APEX_INVALID_CONTRACT_MISSION_ID,
   },
   {
     id: 'X12_ENVELOPE_MISMATCH',
@@ -72,6 +73,7 @@ export const trainingMissions: TrainingMission[] = [
     difficulty: 'ADVANCED',
     summary: 'Locked roadmap placeholder for X12 control-number and envelope evidence.',
     implemented: false,
+    unlocksAfter: 'DUPLICATE_SHIPMENT',
   },
   {
     id: 'STATUS_CALLBACK_MISSING',
@@ -80,6 +82,7 @@ export const trainingMissions: TrainingMission[] = [
     difficulty: 'ADVANCED',
     summary: 'Locked roadmap placeholder for outbound callback troubleshooting.',
     implemented: false,
+    unlocksAfter: 'X12_ENVELOPE_MISMATCH',
   },
   {
     id: 'WRONG_X12_VERSION',
@@ -88,6 +91,7 @@ export const trainingMissions: TrainingMission[] = [
     difficulty: 'ADVANCED',
     summary: 'Locked roadmap placeholder for unsupported X12 version evidence.',
     implemented: false,
+    unlocksAfter: 'STATUS_CALLBACK_MISSING',
   },
   {
     id: 'SFTP_STOPS_WORKING',
@@ -96,6 +100,7 @@ export const trainingMissions: TrainingMission[] = [
     difficulty: 'ADVANCED',
     summary: 'Locked roadmap placeholder for SFTP readiness and delivery failures.',
     implemented: false,
+    unlocksAfter: 'WRONG_X12_VERSION',
   },
   {
     id: 'PRODUCTION_INCIDENT',
@@ -104,6 +109,7 @@ export const trainingMissions: TrainingMission[] = [
     difficulty: 'FINAL SHIFT',
     summary: 'Locked final-shift scenario placeholder. No incident is implemented yet.',
     implemented: false,
+    unlocksAfter: 'SFTP_STOPS_WORKING',
   },
 ];
 
@@ -536,7 +542,7 @@ export const incidentMissions: IncidentMissionDefinition[] = [
         checkpoint: 'Inbound request boundary',
         status: 'FAILED',
         source: 'FreightBridge API Gateway',
-        observed: 'A request reached the gateway but failed with AUTHENTICATION_ERROR before payload parsing.',
+        observed: 'A request reached the FreightBridge gateway but did not advance to payload parsing.',
         meaning: 'FreightBridge has request-boundary evidence, but it does not have a trusted partner identity for load processing.',
       },
       {
@@ -585,6 +591,7 @@ export const incidentMissions: IncidentMissionDefinition[] = [
     hints: [
       { id: 'stage', label: 'Hint 1 - Check the stage', body: 'AUTHENTICATION means the failure occurred before JSON parsing or business validation.' },
       { id: 'boundary', label: 'Hint 2 - Respect the evidence boundary', body: 'FreightBridge can prove request-boundary evidence; it cannot inspect Apex internal token handling.' },
+      { id: 'sequence', label: 'Hint 3 - Strong clue', body: 'If authentication does not succeed, JSON parsing and downstream EDI cannot begin.' },
     ],
   },
   {
@@ -623,7 +630,7 @@ export const incidentMissions: IncidentMissionDefinition[] = [
         checkpoint: 'JSON parsing',
         status: 'FAILED',
         source: 'FreightBridge Inbound Parser',
-        observed: 'The drill produced INVALID_JSON at the PARSING stage.',
+        observed: 'FreightBridge could not turn the request body into structured JSON data.',
         meaning: 'FreightBridge could not safely turn the body into structured load data.',
       },
       {
@@ -664,6 +671,7 @@ export const incidentMissions: IncidentMissionDefinition[] = [
     hints: [
       { id: 'arrival', label: 'Hint 1 - Arrival is not enough', body: 'A request can reach FreightBridge and still fail before it becomes structured data.' },
       { id: 'sequence', label: 'Hint 2 - Read the stage sequence', body: 'Parsing comes before business validation and canonical shipment creation.' },
+      { id: 'parser', label: 'Hint 3 - Strong clue', body: 'A contract validator cannot inspect business fields until the request body is valid JSON.' },
     ],
   },
   {
@@ -710,7 +718,7 @@ export const incidentMissions: IncidentMissionDefinition[] = [
         checkpoint: 'Apex load contract validation',
         status: 'FAILED',
         source: 'FreightBridge Validation Layer',
-        observed: 'The drill produced INVALID_APEX_LOAD at the VALIDATION stage because pickup.postalCode was removed.',
+        observed: 'FreightBridge parsed the JSON but rejected the load before canonical shipment creation.',
         meaning: 'A valid JSON document can still violate FreightBridge business contract rules.',
       },
     ],
@@ -743,6 +751,7 @@ export const incidentMissions: IncidentMissionDefinition[] = [
     hints: [
       { id: 'json', label: 'Hint 1 - Valid JSON is only syntax', body: 'Business validation checks whether required shipment fields are present and usable.' },
       { id: 'missing-field', label: 'Hint 2 - Inspect safe payload preview', body: 'The drill preview shows pickup.postalCode as REMOVED, which explains the contract failure.' },
+      { id: 'contract', label: 'Hint 3 - Strong clue', body: 'Parsing succeeded, so compare required contract fields rather than JSON syntax or Midwest transport.' },
     ],
   },
 ];

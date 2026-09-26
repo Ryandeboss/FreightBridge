@@ -511,7 +511,7 @@ export function LockedMarker({ unlocked = false }: { unlocked?: boolean }) {
   return (
     <span className={`locked-marker ${unlocked ? 'unlocked' : ''}`}>
       <Lock size={14} />
-      {unlocked ? 'Coming soon' : 'Locked'}
+      {unlocked ? 'Locked · Coming soon' : 'Locked'}
     </span>
   );
 }

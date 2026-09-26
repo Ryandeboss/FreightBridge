@@ -650,7 +650,7 @@ function makeCompletedFailureLabRun({
   };
 }
 
-function pendingFailureRun(run: typeof completedFailureLabRun) {
+function pendingFailureRun(run: ReturnType<typeof makeCompletedFailureLabRun>) {
   return {
     ...run,
     status: 'READY',
@@ -1094,7 +1094,23 @@ function installFetchMock(options: {
       if (init?.method === 'POST') {
         const body = JSON.parse(String(init.body));
         const failureRun = failureRunsByScenario[String(body.scenarioKey)];
-        currentLabRun = failureRun ? pendingFailureRun(failureRun) : labRun;
+        const requestedLoadId = String(body.loadId ?? labRun.businessIdentifier);
+        const isIncidentRecovery =
+          body.scenarioKey === 'FULL_SHIPMENT_LIFECYCLE'
+          && body.commodityDescription === 'Recovered Training Freight';
+
+        currentLabRun = failureRun
+          ? pendingFailureRun(failureRun)
+          : isIncidentRecovery
+            ? {
+                ...labRun,
+                businessIdentifier: requestedLoadId,
+                resultSummary: {
+                  ...labRun.resultSummary,
+                  loadId: requestedLoadId,
+                },
+              }
+            : labRun;
         return jsonResponse(currentLabRun, 201);
       }
       return jsonResponse({ limit: 12, offset: 0, count: 1, runs: [currentLabRun] });
@@ -1122,8 +1138,22 @@ function installFetchMock(options: {
           500,
         );
       }
-      currentLabRun = completedLabRun;
-      return jsonResponse({ run: currentLabRun, step: completedLabRun.steps[1], alreadyCompleted: false });
+      const requestedLoadId = currentLabRun.businessIdentifier;
+
+      currentLabRun = {
+        ...completedLabRun,
+        businessIdentifier: requestedLoadId,
+        resultSummary: {
+          ...completedLabRun.resultSummary,
+          loadId: requestedLoadId,
+        },
+      };
+
+      return jsonResponse({
+        run: currentLabRun,
+        step: completedLabRun.steps[1],
+        alreadyCompleted: false,
+      });
     }
 
     if (path === `/api/lab/runs/${labRun.id}/steps/CREATE_APEX_LOAD/execute`) {
@@ -1467,6 +1497,8 @@ describe('Analyst Console', () => {
     expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/AUTHENTICATION_ERROR/i);
     expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/AUTHENTICATION/i);
     expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/NOT REACHED/i);
+    expect(screen.getByTestId('verification-panel')).toHaveTextContent(/MATCHED - same incident load/i);
+    expect(screen.getByTestId('incident-summary')).toBeInTheDocument();
     expect(screen.getByTestId('incident-workspace')).not.toHaveTextContent(token);
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('APEX_BAD_AUTH');
     await waitFor(() => {

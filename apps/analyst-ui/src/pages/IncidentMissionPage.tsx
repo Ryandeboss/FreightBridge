@@ -17,6 +17,7 @@ import {
 import {
   findIncidentMissionBySlug,
   missionPhases,
+  trainingMissions,
 } from '../training/missions';
 import { completeMission, hasCompletedMission, loadTrainingProgress } from '../training/progress';
 import type { IncidentMissionDefinition, IncidentOption, IncidentStatus, MissionPhase } from '../training/types';
@@ -28,6 +29,17 @@ export function IncidentMissionPage() {
   const mission = findIncidentMissionBySlug(missionSlug);
 
   if (!mission) {
+    return <Navigate to="/learn" replace />;
+  }
+
+  const progress = loadTrainingProgress();
+  const roadmapMission = trainingMissions.find((candidate) => candidate.id === mission.id);
+  const prerequisiteSatisfied =
+    !roadmapMission?.unlocksAfter ||
+    hasCompletedMission(progress, roadmapMission.unlocksAfter) ||
+    hasCompletedMission(progress, mission.id);
+
+  if (!prerequisiteSatisfied) {
     return <Navigate to="/learn" replace />;
   }
 
@@ -55,7 +67,20 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
   const expected = readRecord(failureDrill?.expected);
   const canDiagnose = lastHealthyId === mission.correctLastHealthyId && diagnosisId === mission.correctDiagnosisId;
   const canPlan = planId === mission.correctPlanId;
-  const canReport = recoveryState === 'SUCCEEDED' && statusUpdate.trim().length >= 40;
+  const recoveryCorrelated = Boolean(
+    incidentRun &&
+    recoveryRun &&
+    recoveryRun.businessIdentifier === incidentRun.businessIdentifier
+  );
+  const selectedLastHealthy = mission.lastHealthyOptions.find((option) => option.id === lastHealthyId);
+  const selectedDiagnosis = mission.diagnosisOptions.find((option) => option.id === diagnosisId);
+  const selectedPlan = mission.planOptions.find((option) => option.id === planId);
+  const canReport =
+    canDiagnose &&
+    canPlan &&
+    recoveryState === 'SUCCEEDED' &&
+    recoveryCorrelated &&
+    statusUpdate.trim().length >= 40;
   const objectives = [
     Boolean(incidentRun),
     phaseOrder(phase) >= phaseOrder('INVESTIGATE'),
@@ -99,14 +124,14 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
   }
 
   async function runRecovery() {
-    if (!token) return;
+    if (!token || !incidentRun) return;
     setWorking(true);
     setError(null);
     setRecoveryState('RUNNING');
     try {
       let nextRun = await createLabRun(token, {
         scenarioKey: 'FULL_SHIPMENT_LIFECYCLE',
-        loadId: generateRecoveryLoadId(mission.missionNumber),
+        loadId: incidentRun.businessIdentifier,
         equipmentType: 'VAN_53',
         weightLbs: 42000,
         pieces: 22,
@@ -118,10 +143,13 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
         nextRun = result.run;
         guard += 1;
       }
+      const correlated = nextRun.businessIdentifier === incidentRun.businessIdentifier;
       setRecoveryRun(nextRun);
-      setRecoveryState(nextRun.status === 'SUCCEEDED' ? 'SUCCEEDED' : 'FAILED');
-      if (nextRun.status === 'SUCCEEDED') {
+      setRecoveryState(nextRun.status === 'SUCCEEDED' && correlated ? 'SUCCEEDED' : 'FAILED');
+      if (nextRun.status === 'SUCCEEDED' && correlated) {
         setPhase('VERIFY');
+      } else if (!correlated) {
+        setError('The recovery run did not preserve the original incident load identifier.');
       } else {
         setError('The recovery retry did not complete successfully.');
       }
@@ -236,17 +264,25 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
                 <p className="eyebrow">FreightBridge Failure Drill</p>
                 <h2>{mission.scenarioKey}</h2>
               </div>
-              <span className="badge badge-danger">{String(observed?.errorCode ?? expected?.errorCode ?? 'FAILED')}</span>
+              <span className="badge badge-danger">Incident observed</span>
             </div>
             <dl className="definition-grid">
               <div><dt>Scenario</dt><dd>{incidentRun.scenarioKey}</dd></div>
               <div><dt>Run Status</dt><dd>{incidentRun.status}</dd></div>
-              <div><dt>Observed Stage</dt><dd>{String(observed?.stage ?? expected?.stage ?? 'Unknown')}</dd></div>
-              <div><dt>Observed Category</dt><dd>{String(observed?.category ?? expected?.category ?? 'Unknown')}</dd></div>
+              <div><dt>Incident Load</dt><dd data-testid="incident-load-id">{incidentRun.businessIdentifier}</dd></div>
               <div><dt>Processing Status</dt><dd>{String(observed?.processingStatus ?? 'FAILED')}</dd></div>
-              <div><dt>Retryable</dt><dd>{String(observed?.retryable ?? expected?.retryable ?? false)}</dd></div>
             </dl>
-            <p className="muted-text">{String(failureDrill?.guidance ?? mission.symptom)}</p>
+            <p className="muted-text">{mission.symptom}</p>
+            <details className="evidence-panel" data-testid="technical-classification">
+              <summary>Inspect technical classification</summary>
+              <dl className="definition-grid">
+                <div><dt>Error Code</dt><dd>{String(observed?.errorCode ?? expected?.errorCode ?? 'Unknown')}</dd></div>
+                <div><dt>Observed Stage</dt><dd>{String(observed?.stage ?? expected?.stage ?? 'Unknown')}</dd></div>
+                <div><dt>Observed Category</dt><dd>{String(observed?.category ?? expected?.category ?? 'Unknown')}</dd></div>
+                <div><dt>Retryable</dt><dd>{String(observed?.retryable ?? expected?.retryable ?? false)}</dd></div>
+              </dl>
+              <p>{String(failureDrill?.guidance ?? 'Use the observed stage and surrounding evidence to classify the incident.')}</p>
+            </details>
             <details className="evidence-panel">
               <summary>Inspect safe failure payload preview</summary>
               <pre className="lab-preview">{JSON.stringify(failureDrill?.payloadPreview ?? incidentRun.resultSummary, null, 2)}</pre>
@@ -324,7 +360,10 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
             <div className="panel-header">
               <h2>Act</h2>
             </div>
-            <p>{mission.remediationLabel}. FreightBridge will verify recovery by running a clean training lifecycle after the corrected retry.</p>
+            <p>
+              {mission.remediationLabel}. FreightBridge will retry the same incident load through the clean
+              training path, then verify that the previously failing flow now progresses normally.
+            </p>
             <div className="lab-actions">
               <button className="primary-button" type="button" onClick={runRecovery} disabled={!canPlan || working || recoveryState === 'SUCCEEDED'}>
                 <RefreshCw size={16} />
@@ -348,8 +387,15 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
             <p>{mission.verification}</p>
             {recoveryRun && (
               <dl className="definition-grid">
+                <div><dt>Incident Load</dt><dd>{incidentRun.businessIdentifier}</dd></div>
                 <div><dt>Recovery Scenario</dt><dd>{recoveryRun.scenarioKey}</dd></div>
                 <div><dt>Recovery Load</dt><dd>{recoveryRun.businessIdentifier}</dd></div>
+                <div>
+                  <dt>Correlation</dt>
+                  <dd data-testid="recovery-correlation">
+                    {recoveryCorrelated ? 'MATCHED - same incident load' : 'MISMATCH'}
+                  </dd>
+                </div>
                 <div><dt>Recovery Status</dt><dd>{recoveryRun.status}</dd></div>
                 <div><dt>Tender Status</dt><dd>{String(recoveryRun.resultSummary.tenderStatus ?? 'Pending')}</dd></div>
                 <div><dt>Shipment Status</dt><dd>{String(recoveryRun.resultSummary.shipmentStatus ?? 'Pending')}</dd></div>
@@ -386,6 +432,30 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
             <CheckCircle2 size={24} />
           </div>
           <h3>MISSION COMPLETE - {mission.shortTitle}</h3>
+          <section className="incident-summary" data-testid="incident-summary">
+            <h4>Structured Incident Summary</h4>
+            <dl className="definition-grid">
+              <div><dt>Impact</dt><dd>{mission.symptom}</dd></div>
+              <div><dt>Last Healthy Checkpoint</dt><dd>{selectedLastHealthy?.label ?? 'Not recorded'}</dd></div>
+              <div><dt>Root Cause</dt><dd>{selectedDiagnosis?.label ?? 'Not recorded'}</dd></div>
+              <div>
+                <dt>Evidence</dt>
+                <dd>
+                  {String(observed?.errorCode ?? expected?.errorCode ?? 'Unknown')} at{' '}
+                  {String(observed?.stage ?? expected?.stage ?? 'Unknown')}
+                </dd>
+              </div>
+              <div><dt>Action</dt><dd>{selectedPlan?.label ?? mission.remediationLabel}</dd></div>
+              <div>
+                <dt>Verification</dt>
+                <dd>
+                  {recoveryRun
+                    ? `${recoveryRun.status}; ${recoveryCorrelated ? 'same load correlated' : 'load correlation mismatch'}`
+                    : 'Not recorded'}
+                </dd>
+              </div>
+            </dl>
+          </section>
           <ul className="check-list">
             {mission.debrief.map((item) => <li key={item}>{item}</li>)}
           </ul>

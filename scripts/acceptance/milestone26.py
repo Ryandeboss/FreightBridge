@@ -192,18 +192,24 @@ def run_incident_mission(
   expect(workspace).to_contain_text(scenario_key)
   expect(workspace).to_contain_text(expected_error)
   expect(workspace).to_contain_text(re.compile('FAILED|NOT REACHED'))
+  incident_load = page.get_by_test_id('incident-load-id').inner_text().strip()
+  assert_truth(bool(incident_load), 'Incident correlation', 'Incident load identifier was empty.')
 
   choose_radio(page, 'Where did FreightBridge evidence last look healthy', last_healthy)
   choose_radio(page, 'What is the most accurate FreightBridge diagnosis', diagnosis)
   choose_radio(page, 'What should you do next', plan)
   page.get_by_test_id('remediation-action').get_by_role('button', name=re.compile(re.escape(recovery), re.IGNORECASE)).click()
-  expect(page.get_by_test_id('verification-panel')).to_contain_text('SUCCEEDED', timeout=120000)
+  verification = page.get_by_test_id('verification-panel')
+  expect(verification).to_contain_text('SUCCEEDED', timeout=120000)
+  expect(verification).to_contain_text(incident_load)
+  expect(page.get_by_test_id('recovery-correlation')).to_contain_text('MATCHED')
   page.get_by_label(re.compile('Write Mike', re.IGNORECASE)).fill(
     f'Mike, FreightBridge reproduced {scenario_key}, found {expected_error}, completed the safe retry, and verified recovery.'
   )
   page.get_by_role('button', name='Complete Debrief').click()
   expect(page.get_by_test_id('incident-debrief')).to_be_visible(timeout=15000)
   expect(page.get_by_test_id('incident-debrief')).to_contain_text('MISSION COMPLETE')
+  expect(page.get_by_test_id('incident-summary')).to_be_visible(timeout=15000)
   page.get_by_role('link', name='Return to Training Desk').click()
   expect(page.get_by_test_id('training-home-page')).to_be_visible(timeout=15000)
 
