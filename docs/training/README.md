@@ -14,16 +14,33 @@ Training Mode currently implements:
 - FreightBridge Training Desk / mission board
 - learner role: FreightBridge Integration Support Analyst
 - Mission 1 - Your First Shift: Watch a Healthy Integration
+- Mission 2 - Apex Can't Get a Load Through
+- Mission 3 - The Request Arrived, But FreightBridge Can't Read It
+- Mission 4 - The JSON Looks Fine - Why Was It Rejected?
 - FreightBridge workstation shell with progressive healthy-flow checkpoints
+- beginner incident workspace with briefing, investigation, diagnosis, plan, action, verification, report, and debrief phases
 - Follow This Load panel for the active training load
 - checkpoint questions, hints, Analyst Notes, replay, and debrief
 - browser-local mission completion progress
 - locked or coming-soon roadmap placeholders for future missions
 
-No future troubleshooting mission is implemented yet.
+Missions 2-4 use existing real Integration Lab failure drills:
+
+- `APEX_BAD_AUTH`
+- `APEX_INVALID_JSON`
+- `APEX_INVALID_CONTRACT`
+
+These names are internal implementation/test keys. Training Mode keeps them out of the learner-facing briefing and investigation UI so the scenario name does not reveal the diagnosis.
+
+The beginner checkpoint progression mirrors the real inbound pipeline:
+
+- Mission 2: request received -> authentication failed
+- Mission 3: request received -> authentication succeeded -> parsing failed
+- Mission 4: request received -> authentication succeeded -> parsing succeeded -> validation failed
 
 See [FreightBridge employee POV](freightbridge-employee-pov.md) for the observation rules and role framing.
 See [Healthy integration baseline](healthy-integration-baseline.md) for the Mission 1 checkpoint model.
+See [Incident game loop](incident-game-loop.md) for the beginner incident mission structure.
 
 ## The Three Entities
 
@@ -56,9 +73,9 @@ The value is versioned and contains only non-sensitive mission completion IDs. O
 ## Roadmap
 
 - Orientation: Mission 1 - Your First Shift - implemented
-- Beginner: Mission 2 - Apex Can't Get a Load Through - coming soon after Mission 1 completion
-- Beginner: Mission 3 - The Request Arrived, But It Can't Be Read - locked placeholder
-- Intermediate: Mission 4 - The Payload Looks Fine, So Why Was It Rejected? - locked placeholder
+- Beginner: Mission 2 - Apex Can't Get a Load Through - implemented after Mission 1 completion
+- Beginner: Mission 3 - The Request Arrived, But FreightBridge Can't Read It - implemented after Mission 2 completion
+- Beginner: Mission 4 - The JSON Looks Fine - Why Was It Rejected? - implemented after Mission 3 completion
 - Intermediate: Mission 5 - Why Is This Shipment Showing Up Twice? - locked placeholder
 - Advanced: Mission 6 - The EDI Envelope Doesn't Match - locked placeholder
 - Advanced: Mission 7 - Midwest Sent the Status, Apex Never Got It - locked placeholder
@@ -66,7 +83,7 @@ The value is versioned and contains only non-sensitive mission completion IDs. O
 - Advanced: Mission 9 - Midwest SFTP Suddenly Stops Working - locked placeholder
 - Final Shift: Mission 10 - Production Incident - locked placeholder
 
-Only Mission 1 is playable. Mission 2 remains coming soon and is not implemented yet.
+Missions 1-4 are playable. Missions 5-10 remain locked or coming soon.
 
 ## Manual Acceptance
 
@@ -86,5 +103,10 @@ Only Mission 1 is playable. Mission 2 remains coming soon and is not implemented
 14. Type an Analyst Note and confirm it remains local.
 15. Complete the final healthy-flow review.
 16. Complete/review or replay Mission 1.
-17. Open Advanced Console.
-18. Use Back to Training to return to Training Desk.
+17. Confirm Mission 2 unlocks after Mission 1.
+18. Complete Mission 2 using `APEX_BAD_AUTH`.
+19. Complete Mission 3 using `APEX_INVALID_JSON`.
+20. Complete Mission 4 using `APEX_INVALID_CONTRACT`.
+21. Confirm Missions 5-10 remain locked or coming soon.
+22. Open Advanced Console.
+23. Use Back to Training to return to Training Desk.

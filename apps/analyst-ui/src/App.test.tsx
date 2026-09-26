@@ -508,6 +508,161 @@ const completedFailureLabRunWithObservedBusinessId = {
   })),
 };
 
+const completedBadAuthLabRun = makeCompletedFailureLabRun({
+  id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+  scenarioKey: 'APEX_BAD_AUTH',
+  businessIdentifier: 'LABAUTH900',
+  stepKey: 'INJECT_APEX_BAD_AUTH',
+  displayName: 'Inject bad Apex authentication',
+  name: 'Bad Apex Authentication',
+  errorCode: 'AUTHENTICATION_ERROR',
+  category: 'AUTHENTICATION_ERROR',
+  stage: 'AUTHENTICATION',
+  safeMessage: 'Apex request failed authentication.',
+  guidance: 'Authentication failed before FreightBridge parsed the request body.',
+  injectedFault: 'Synthetic Authorization header rejected before parsing.',
+  payloadPreview: {
+    loadId: 'LABAUTH900',
+    authorization: 'REDACTED',
+  },
+});
+
+const completedInvalidJsonLabRun = makeCompletedFailureLabRun({
+  id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+  scenarioKey: 'APEX_INVALID_JSON',
+  businessIdentifier: 'LABJSON900',
+  stepKey: 'INJECT_APEX_INVALID_JSON',
+  displayName: 'Inject invalid Apex JSON',
+  name: 'Invalid Apex JSON',
+  errorCode: 'INVALID_JSON',
+  category: 'SYNTAX_ERROR',
+  stage: 'PARSING',
+  safeMessage: 'Apex payload was not valid JSON.',
+  guidance: 'The request reached FreightBridge, but the body could not be parsed as JSON.',
+  injectedFault: 'Malformed JSON body: {"loadId":',
+  payloadPreview: {
+    body: '{"loadId":',
+  },
+});
+
+const failureRunsByScenario: Record<string, ReturnType<typeof makeCompletedFailureLabRun>> = {
+  APEX_BAD_AUTH: completedBadAuthLabRun,
+  APEX_INVALID_JSON: completedInvalidJsonLabRun,
+  APEX_INVALID_CONTRACT: completedFailureLabRun,
+};
+
+function makeCompletedFailureLabRun({
+  id,
+  scenarioKey,
+  businessIdentifier,
+  stepKey,
+  displayName,
+  name,
+  errorCode,
+  category,
+  stage,
+  safeMessage,
+  guidance,
+  injectedFault,
+  payloadPreview,
+}: {
+  id: string;
+  scenarioKey: string;
+  businessIdentifier: string;
+  stepKey: string;
+  displayName: string;
+  name: string;
+  errorCode: string;
+  category: string;
+  stage: string;
+  safeMessage: string;
+  guidance: string;
+  injectedFault: string;
+  payloadPreview: Record<string, unknown>;
+}) {
+  return {
+    ...completedFailureLabRun,
+    id,
+    scenarioKey,
+    businessIdentifier,
+    resultSummary: {
+      drillOutcome: 'EXPECTED_FAILURE_OBSERVED',
+      failureDrill: {
+        scenarioKey,
+        name,
+        kind: 'FAILURE_DRILL',
+        expected: {
+          errorCode,
+          category,
+          stage,
+          retryable: false,
+          documentType: 'APEX_LOAD_TENDER',
+          transport: 'REST',
+        },
+        observed: {
+          errorId,
+          transactionId,
+          correlationId: `lab-failure-${scenarioKey.toLowerCase()}`,
+          businessIdentifier: stage === 'AUTHENTICATION' || stage === 'PARSING' ? null : businessIdentifier,
+          errorCode,
+          category,
+          stage,
+          retryable: false,
+          safeMessage,
+          processingStatus: 'FAILED',
+          documentType: 'APEX_LOAD_TENDER',
+          transport: 'REST',
+        },
+        drillOutcome: 'EXPECTED_FAILURE_OBSERVED',
+        guidance,
+        injectedFault,
+        payloadPreview,
+        transactionStatusExplanation: 'The drill succeeded because the expected integration failure was correctly produced and recorded.',
+      },
+    },
+    steps: [
+      {
+        ...completedFailureLabRun.steps[0],
+        id: `${id}-step-1`,
+        runId: id,
+        stepKey,
+        displayName,
+        responseSummary: {
+          drillOutcome: 'EXPECTED_FAILURE_OBSERVED',
+          expectedFailure: {
+            errorCode,
+            category,
+            stage,
+            retryable: false,
+          },
+          observedFailure: {
+            errorId,
+            transactionId,
+            businessIdentifier: stage === 'AUTHENTICATION' || stage === 'PARSING' ? null : businessIdentifier,
+            errorCode,
+            category,
+            stage,
+            processingStatus: 'FAILED',
+          },
+        },
+      },
+    ],
+  };
+}
+
+function pendingFailureRun(run: ReturnType<typeof makeCompletedFailureLabRun>) {
+  return {
+    ...run,
+    status: 'READY',
+    steps: run.steps.map((step) => ({
+      ...step,
+      status: 'PENDING',
+      responseSummary: {},
+      relatedTransactionIds: [],
+    })),
+  };
+}
+
 function jsonResponse(payload: unknown, status = 200) {
   return Promise.resolve(
     new Response(JSON.stringify(payload), {
@@ -938,21 +1093,38 @@ function installFetchMock(options: {
     if (path === '/api/lab/runs') {
       if (init?.method === 'POST') {
         const body = JSON.parse(String(init.body));
-        currentLabRun = body.scenarioKey === 'APEX_INVALID_CONTRACT'
-          ? { ...completedFailureLabRun, status: 'READY', steps: completedFailureLabRun.steps.map((step) => ({ ...step, status: 'PENDING', responseSummary: {}, relatedTransactionIds: [] })) }
-          : labRun;
+        const failureRun = failureRunsByScenario[String(body.scenarioKey)];
+        const requestedLoadId = String(body.loadId ?? labRun.businessIdentifier);
+        const isIncidentRecovery =
+          body.scenarioKey === 'FULL_SHIPMENT_LIFECYCLE'
+          && body.commodityDescription === 'Recovered Training Freight';
+
+        currentLabRun = failureRun
+          ? pendingFailureRun(failureRun)
+          : isIncidentRecovery
+            ? {
+                ...labRun,
+                businessIdentifier: requestedLoadId,
+                resultSummary: {
+                  ...labRun.resultSummary,
+                  loadId: requestedLoadId,
+                },
+              }
+            : labRun;
         return jsonResponse(currentLabRun, 201);
       }
       return jsonResponse({ limit: 12, offset: 0, count: 1, runs: [currentLabRun] });
     }
 
-    if (path === `/api/lab/runs/${completedFailureLabRun.id}`) {
-      return jsonResponse(currentLabRun);
-    }
+    for (const failureRun of Object.values(failureRunsByScenario)) {
+      if (path === `/api/lab/runs/${failureRun.id}`) {
+        return jsonResponse(currentLabRun);
+      }
 
-    if (path === `/api/lab/runs/${completedFailureLabRun.id}/run-next`) {
-      currentLabRun = completedFailureLabRun;
-      return jsonResponse({ run: currentLabRun, step: completedFailureLabRun.steps[0], alreadyCompleted: false });
+      if (path === `/api/lab/runs/${failureRun.id}/run-next`) {
+        currentLabRun = failureRun;
+        return jsonResponse({ run: currentLabRun, step: failureRun.steps[0], alreadyCompleted: false });
+      }
     }
 
     if (path === `/api/lab/runs/${labRun.id}`) {
@@ -966,8 +1138,22 @@ function installFetchMock(options: {
           500,
         );
       }
-      currentLabRun = completedLabRun;
-      return jsonResponse({ run: currentLabRun, step: completedLabRun.steps[1], alreadyCompleted: false });
+      const requestedLoadId = currentLabRun.businessIdentifier;
+
+      currentLabRun = {
+        ...completedLabRun,
+        businessIdentifier: requestedLoadId,
+        resultSummary: {
+          ...completedLabRun.resultSummary,
+          loadId: requestedLoadId,
+        },
+      };
+
+      return jsonResponse({
+        run: currentLabRun,
+        step: completedLabRun.steps[1],
+        alreadyCompleted: false,
+      });
     }
 
     if (path === `/api/lab/runs/${labRun.id}/steps/CREATE_APEX_LOAD/execute`) {
@@ -1007,6 +1193,38 @@ async function completeFinalHealthyReview() {
   for (const checkbox of within(review).getAllByRole('checkbox')) {
     await userEvent.click(checkbox);
   }
+}
+
+async function chooseIncidentOption(prompt: RegExp, option: RegExp) {
+  await userEvent.click(within(screen.getByRole('radiogroup', { name: prompt })).getByRole('radio', { name: option }));
+}
+
+async function completeIncidentMission({
+  startButton = /Start Incident/i,
+  lastHealthy,
+  diagnosis,
+  plan,
+  recoveryButton,
+}: {
+  startButton?: RegExp;
+  lastHealthy: RegExp;
+  diagnosis: RegExp;
+  plan: RegExp;
+  recoveryButton: RegExp;
+}) {
+  await userEvent.click(screen.getByRole('button', { name: startButton }));
+  expect(await screen.findByTestId('incident-workspace')).toBeInTheDocument();
+  await chooseIncidentOption(/Where did FreightBridge evidence last look healthy/i, lastHealthy);
+  await chooseIncidentOption(/What is the most accurate FreightBridge diagnosis/i, diagnosis);
+  await chooseIncidentOption(/What should you do next/i, plan);
+  await userEvent.click(screen.getByRole('button', { name: recoveryButton }));
+  expect(await screen.findByTestId('verification-panel')).toHaveTextContent(/SUCCEEDED/i);
+  await userEvent.type(
+    screen.getByLabelText(/Write Mike/i),
+    'Mike, FreightBridge found the stop point, completed the safe retry, and verified a healthy lifecycle recovered.',
+  );
+  await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
+  expect(await screen.findByTestId('incident-debrief')).toBeInTheDocument();
 }
 
 describe('Analyst Console', () => {
@@ -1087,7 +1305,7 @@ describe('Analyst Console', () => {
     expect(screen.getAllByRole('link', { name: /Back to Training/i }).length).toBeGreaterThan(0);
   });
 
-  test('keeps future missions non-playable on Training Home', async () => {
+  test('keeps future incident missions locked until prerequisites are complete', async () => {
     installFetchMock();
     window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
     window.location.hash = '#/learn';
@@ -1097,7 +1315,9 @@ describe('Analyst Console', () => {
     expect(screen.getByText(/Mission 2 - Apex Can't Get a Load Through/i)).toBeInTheDocument();
     expect(screen.getByText(/Mission 10 - Production Incident/i)).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /Locked/i }).length).toBeGreaterThan(0);
-    expect(screen.queryByRole('link', { name: /Mission 2/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId('mission-2-card')).toHaveTextContent(/Locked/i);
+    expect(screen.getByTestId('mission-3-card')).toHaveTextContent(/Locked/i);
+    expect(screen.queryByRole('link', { name: /Open Mission/i })).not.toBeInTheDocument();
   });
 
   test('Mission 1 renders FreightBridge POV and cannot complete before lifecycle success', async () => {
@@ -1189,7 +1409,7 @@ describe('Analyst Console', () => {
     expect(screen.getByTestId('last-healthy-checkpoint')).toHaveTextContent(/Last Healthy Checkpoint/i);
   });
 
-  test('Mission 1 completion persists locally and unlocks the next coming-soon mission card', async () => {
+  test('Mission 1 completion persists locally and unlocks the first incident mission card', async () => {
     installFetchMock();
     window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
     window.location.hash = '#/learn/mission/learn-the-flow';
@@ -1209,7 +1429,8 @@ describe('Analyst Console', () => {
     expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
     expect(screen.getByText(/1 \/ 10/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Mission 1 - Your First Shift/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Training mission not implemented yet/i)).toBeInTheDocument();
+    expect(screen.getByTestId('mission-2-card')).toHaveTextContent(/Open Mission/i);
+    expect(screen.getByTestId('mission-3-card')).toHaveTextContent(/Locked/i);
   });
 
   test('existing LEARN_THE_FLOW progress survives Training Desk reframe', async () => {
@@ -1256,6 +1477,108 @@ describe('Analyst Console', () => {
     expect(screen.getAllByRole('link', { name: /Open in Advanced Console/i }).length).toBeGreaterThan(0);
     expect(screen.queryByText(/MISSION COMPLETE/i)).not.toBeInTheDocument();
   });
+
+  test('Mission 2 uses the real bad-auth drill and unlocks Mission 3 after verified recovery', async () => {
+    const fetchMock = installFetchMock();
+    window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({ version: 1, completedMissions: ['LEARN_THE_FLOW'] }));
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn/mission/apex-bad-auth';
+    render(<App />);
+
+    expect(await screen.findByTestId('incident-mission-page')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Apex Can't Get a Load Through/i })).toBeInTheDocument();
+    await completeIncidentMission({
+      lastHealthy: /Inbound request was received by FreightBridge/i,
+      diagnosis: /failed FreightBridge authentication/i,
+      plan: /valid training authentication/i,
+      recoveryButton: /Retry with valid training authentication/i,
+    });
+
+    expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/AUTHENTICATION_ERROR/i);
+    expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/AUTHENTICATION/i);
+    expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/NOT REACHED/i);
+    expect(screen.getByTestId('incident-workspace')).toHaveAttribute('data-scenario-key', 'APEX_BAD_AUTH');
+    expect(screen.queryByRole('heading', { name: 'APEX_BAD_AUTH' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('verification-panel')).toHaveTextContent(/MATCHED - same incident load/i);
+    expect(screen.getByTestId('incident-summary')).toBeInTheDocument();
+    expect(screen.getByTestId('incident-workspace')).not.toHaveTextContent(token);
+    expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('APEX_BAD_AUTH');
+    await waitFor(() => {
+      const calls = fetchMock.mock.calls
+        .filter(([input, init]) => String(input).endsWith('/api/lab/runs') && init?.method === 'POST')
+        .map(([, init]) => JSON.parse(String(init?.body)).scenarioKey);
+      expect(calls).toContain('APEX_BAD_AUTH');
+      expect(calls).toContain('FULL_SHIPMENT_LIFECYCLE');
+    });
+
+    await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
+    expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
+    expect(screen.getByTestId('mission-3-card')).toHaveTextContent(/Open Mission/i);
+    expect(screen.getByTestId('mission-4-card')).toHaveTextContent(/Locked/i);
+  });
+
+  test('Mission 3 diagnoses malformed JSON after request arrival and keeps later checkpoints not reached', async () => {
+    const fetchMock = installFetchMock();
+    window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({ version: 1, completedMissions: ['LEARN_THE_FLOW', 'APEX_BAD_AUTH'] }));
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn/mission/apex-invalid-json';
+    render(<App />);
+
+    expect(await screen.findByTestId('incident-mission-page')).toBeInTheDocument();
+    await completeIncidentMission({
+      lastHealthy: /Partner authentication succeeded/i,
+      diagnosis: /malformed JSON/i,
+      plan: /resend parseable JSON/i,
+      recoveryButton: /Retry with corrected JSON/i,
+    });
+
+    expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/INVALID_JSON/i);
+    expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/PARSING/i);
+    expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/Business validation/i);
+    expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/NOT REACHED/i);
+    expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('APEX_INVALID_JSON');
+    await waitFor(() => {
+      const calls = fetchMock.mock.calls
+        .filter(([input, init]) => String(input).endsWith('/api/lab/runs') && init?.method === 'POST')
+        .map(([, init]) => JSON.parse(String(init?.body)).scenarioKey);
+      expect(calls).toContain('APEX_INVALID_JSON');
+      expect(calls).toContain('FULL_SHIPMENT_LIFECYCLE');
+    });
+
+    await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
+    expect(await screen.findByTestId('mission-4-card')).toHaveTextContent(/Open Mission/i);
+    expect(screen.getByText(/Mission 5 - Why Is This Shipment Showing Up Twice/i).closest('article')).toHaveTextContent(/Locked/i);
+  });
+
+  test('Mission 4 separates parsed JSON from contract validation and records analyst notes', async () => {
+    installFetchMock();
+    window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({ version: 1, completedMissions: ['LEARN_THE_FLOW', 'APEX_BAD_AUTH', 'APEX_INVALID_JSON'] }));
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn/mission/apex-invalid-contract';
+    render(<App />);
+
+    expect(await screen.findByTestId('incident-mission-page')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /Advanced Console/i }).at(-1)).toHaveAttribute('href', '#/lab');
+    await userEvent.click(screen.getByRole('button', { name: /Start Incident/i }));
+    expect(await screen.findByTestId('incident-workspace')).toHaveTextContent(/INVALID_APEX_LOAD/i);
+    expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/VALIDATION/i);
+    expect(screen.getByRole('heading', { name: /^JSON parsing$/i }).closest('article')).toHaveTextContent(/SUCCEEDED/i);
+    expect(screen.getByRole('heading', { name: /^Apex load contract validation$/i }).closest('article')).toHaveTextContent(/FAILED/i);
+    await userEvent.click(screen.getByText(/Hint 2 - Inspect safe payload preview/i));
+    expect(screen.getByText(/pickup.postalCode as REMOVED/i)).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText(/Notes for this mission/i), 'Parsing passed but contract validation failed.');
+    expect(window.localStorage.getItem('freightbridge.trainingNotes.APEX_INVALID_CONTRACT')).toContain('contract validation failed');
+
+    await chooseIncidentOption(/Where did FreightBridge evidence last look healthy/i, /JSON parsing succeeded/i);
+    await chooseIncidentOption(/What is the most accurate FreightBridge diagnosis/i, /Parsed JSON failed the Apex load contract/i);
+    await chooseIncidentOption(/What should you do next/i, /contract-valid payload/i);
+    await userEvent.click(screen.getByRole('button', { name: /Retry with contract-valid payload/i }));
+    expect(await screen.findByTestId('verification-panel')).toHaveTextContent(/SUCCEEDED/i);
+    await userEvent.type(screen.getByLabelText(/Write Mike/i), 'Mike, JSON parsing passed, contract validation failed, and a contract-valid retry completed healthy recovery.');
+    await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
+    expect(await screen.findByTestId('incident-debrief')).toHaveTextContent(/MISSION COMPLETE/i);
+    expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('APEX_INVALID_CONTRACT');
+  }, 10000);
 
   test('searches transactions and opens detail with retry action', async () => {
     const fetchMock = installFetchMock();

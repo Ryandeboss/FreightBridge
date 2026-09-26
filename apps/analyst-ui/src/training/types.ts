@@ -116,3 +116,44 @@ export type HealthyChecklistItem = {
   label: string;
   evidence: string;
 };
+
+export type IncidentStatus = 'NOT_REACHED' | 'SUCCEEDED' | 'FAILED';
+
+export type IncidentOption = {
+  id: string;
+  label: string;
+  explanation: string;
+};
+
+export type IncidentEvidencePoint = {
+  id: string;
+  checkpoint: string;
+  status: IncidentStatus;
+  source: string;
+  observed: string;
+  meaning: string;
+};
+
+export type IncidentMissionDefinition = {
+  id: string;
+  slug: string;
+  missionNumber: number;
+  title: string;
+  shortTitle: string;
+  scenarioKey: string;
+  briefing: MissionCommunication;
+  partnerMessage: MissionCommunication;
+  symptom: string;
+  evidencePoints: IncidentEvidencePoint[];
+  lastHealthyOptions: IncidentOption[];
+  correctLastHealthyId: string;
+  diagnosisOptions: IncidentOption[];
+  correctDiagnosisId: string;
+  planOptions: IncidentOption[];
+  correctPlanId: string;
+  remediationLabel: string;
+  verification: string;
+  statusPrompt: string;
+  debrief: string[];
+  hints: Hint[];
+};

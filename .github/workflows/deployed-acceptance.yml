@@ -22,6 +22,7 @@ on:
           - milestone23
           - milestone24
           - milestone25
+          - milestone26
       load_id:
         description: Optional load ID. Leave blank to generate a fresh LOAD-prefixed ID.
         required: false
@@ -564,3 +565,42 @@ jobs:
             args+=(--verbose)
           fi
           python scripts/acceptance/milestone25.py "${args[@]}"
+
+  milestone26:
+    name: Milestone 26 beginner incident campaign deployed acceptance
+    runs-on: ubuntu-latest
+    if: inputs.milestone == 'milestone26'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scripts/acceptance/requirements.txt
+
+      - name: Install acceptance dependencies
+        run: python -m pip install -r scripts/acceptance/requirements.txt
+
+      - name: Install Playwright browser
+        run: python -m playwright install --with-deps chromium
+
+      - name: Run Milestone 26 beginner incident campaign deployed acceptance
+        env:
+          APEX_BASE_URL: ${{ secrets.APEX_BASE_URL }}
+          APEX_BEARER_TOKEN: ${{ secrets.APEX_BEARER_TOKEN }}
+          APEX_READONLY_TOKEN: ${{ secrets.APEX_READONLY_TOKEN }}
+          FREIGHTBRIDGE_BASE_URL: ${{ secrets.FREIGHTBRIDGE_BASE_URL }}
+          MIDWEST_BASE_URL: ${{ secrets.MIDWEST_BASE_URL }}
+          MIDWEST_BEARER_TOKEN: ${{ secrets.MIDWEST_BEARER_TOKEN }}
+          MIDWEST_READONLY_TOKEN: ${{ secrets.MIDWEST_READONLY_TOKEN }}
+          OPERATIONS_API_BEARER_TOKEN: ${{ secrets.OPERATIONS_API_BEARER_TOKEN }}
+          ANALYST_UI_BASE_URL: ${{ vars.ANALYST_UI_BASE_URL }}
+        run: |
+          args=()
+          if [ "${{ inputs.verbose }}" = "true" ]; then
+            args+=(--verbose)
+          fi
+          python scripts/acceptance/milestone26.py "${args[@]}"

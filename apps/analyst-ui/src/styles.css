@@ -1026,6 +1026,10 @@ input:disabled {
   box-shadow: inset 4px 0 0 #21a67a;
 }
 
+.mission-card.locked {
+  opacity: 0.72;
+}
+
 .mission-card h2,
 .mission-card p {
   margin: 0;
@@ -1216,6 +1220,18 @@ input:disabled {
 .mission-phase-progress li.complete {
   color: #b8f3dc;
   border-color: rgba(184, 243, 220, 0.55);
+}
+
+.phase-banner {
+  border: 1px solid #dbe3e8;
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  color: #667782;
+  background: #ffffff;
+}
+
+.phase-banner strong {
+  color: #172026;
 }
 
 .workstation-grid {
@@ -1526,6 +1542,73 @@ input:disabled {
 
 .mission-checkpoint.complete {
   border-color: #9bd6c3;
+}
+
+.incident-evidence-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.incident-evidence {
+  display: grid;
+  gap: 0.55rem;
+  min-height: 13.75rem;
+  padding: 1rem;
+  border: 1px solid #dbe3e8;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.incident-evidence.succeeded {
+  border-color: #9bd6c3;
+  background: #f7fffb;
+}
+
+.incident-evidence.failed {
+  border-color: #efb0b0;
+  background: #fff7f7;
+}
+
+.incident-evidence.not-reached {
+  border-color: #c8d4db;
+  background: #f8fafb;
+}
+
+.incident-evidence h3,
+.incident-evidence p {
+  margin: 0;
+}
+
+.incident-evidence small {
+  color: #596a73;
+  line-height: 1.45;
+}
+
+.incident-status {
+  width: fit-content;
+  border: 1px solid #dbe3e8;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  color: #596a73;
+  background: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.incident-evidence.succeeded .incident-status {
+  color: #0b7c5d;
+  border-color: #9bd6c3;
+}
+
+.incident-evidence.failed .incident-status {
+  color: #b42318;
+  border-color: #efb0b0;
+}
+
+.disabled-panel {
+  opacity: 0.7;
 }
 
 .checkpoint-learning-grid,
