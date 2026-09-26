@@ -543,11 +543,6 @@ function generateIncidentLoadId(missionNumber: number): string {
   return `INC${missionNumber}${suffix}`.slice(0, 30);
 }
 
-function generateRecoveryLoadId(missionNumber: number): string {
-  const suffix = Date.now().toString(36).toUpperCase();
-  return `REC${missionNumber}${suffix}`.slice(0, 30);
-}
-
 function readRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
