@@ -109,7 +109,7 @@ def run_browser_acceptance(analyst_ui_base_url: str, operations_token: str) -> d
           ).to_be_visible(timeout=15000)
 
       page.get_by_role('button', name='Start Mission').click()
-      run_training_lifecycle(page)
+      run_training_lifecycle(page)  
 
       answer_final_quiz(page)
       page.get_by_role('button', name='Complete Mission').click()
@@ -165,6 +165,8 @@ def run_training_lifecycle(page) -> None:
 
 
 def answer_final_quiz(page) -> None:
+  from playwright.sync_api import expect
+
   answers = (
     ('Who is Apex?', 'Broker / 3PL'),
     ('Who is Midwest?', 'Carrier / trucking company'),
