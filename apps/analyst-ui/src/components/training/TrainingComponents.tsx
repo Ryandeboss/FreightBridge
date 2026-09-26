@@ -1,6 +1,7 @@
-import { CheckCircle2, Circle, Lock, MessageSquare, XCircle } from 'lucide-react';
+import { CheckCircle2, Circle, Lock, MessageSquare, NotebookPen, XCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
-import type { KnowledgeCheckQuestion, TrainingEntity } from '../../training/types';
+import { useEffect, useState } from 'react';
+import type { Hint, KnowledgeCheckQuestion, MissionCommunication, MissionPhase, TrainingEntity, TrainingEvidence } from '../../training/types';
 
 export function MissionBriefing({ children }: { children: ReactNode }) {
   return (
@@ -36,7 +37,7 @@ export function CharacterMessage({
 export function EntityCard({ entity }: { entity: TrainingEntity }) {
   const Icon = entity.icon;
   return (
-    <article className="entity-card">
+    <article className={`entity-card ${entity.perspective}`} data-testid={entity.testId}>
       <div className="entity-icon" aria-hidden="true">
         <Icon size={24} />
       </div>
@@ -45,6 +46,44 @@ export function EntityCard({ entity }: { entity: TrainingEntity }) {
       <p>{entity.explanation}</p>
       <small>{entity.communication}</small>
     </article>
+  );
+}
+
+export function CommunicationMessage({ message }: { message: MissionCommunication }) {
+  return (
+    <article className={`character-message ${message.kind === 'partner' ? 'partner-message' : ''}`}>
+      <div className="character-avatar" aria-hidden="true">
+        <MessageSquare size={22} />
+      </div>
+      <div>
+        <p className="eyebrow">{message.role}</p>
+        <h2>{message.from}</h2>
+        <p>{message.body}</p>
+      </div>
+    </article>
+  );
+}
+
+export function MissionPhaseProgress({
+  phases,
+  current,
+}: {
+  phases: MissionPhase[];
+  current: MissionPhase;
+}) {
+  const currentIndex = phases.indexOf(current);
+  return (
+    <ol className="mission-phase-progress" aria-label="Mission phases">
+      {phases.map((phase, index) => (
+        <li
+          key={phase}
+          className={index < currentIndex ? 'complete' : index === currentIndex ? 'current' : ''}
+          aria-current={phase === current ? 'step' : undefined}
+        >
+          <span>{phase.toLowerCase()}</span>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -62,6 +101,91 @@ export function EvidencePanel({
       <summary>{title}</summary>
       {children}
     </details>
+  );
+}
+
+export function EvidenceCard({ evidence }: { evidence: TrainingEvidence }) {
+  return (
+    <article className="evidence-card" data-testid={`evidence-${evidence.id}`}>
+      <div className="evidence-card-header">
+        <div>
+          <p className="eyebrow">{evidence.type}</p>
+          <h3>{evidence.summary}</h3>
+        </div>
+        <span>{evidence.source}</span>
+      </div>
+      <div className="observed-meaning-grid">
+        <div>
+          <h4>Observed by FreightBridge</h4>
+          <p>{evidence.observed}</p>
+        </div>
+        <div>
+          <h4>What this means</h4>
+          <p>{evidence.meaning}</p>
+        </div>
+      </div>
+      {(evidence.timestamp || evidence.businessIdentifier) && (
+        <dl className="definition-grid evidence-meta">
+          {evidence.timestamp && <div><dt>Timestamp</dt><dd>{evidence.timestamp}</dd></div>}
+          {evidence.businessIdentifier && <div><dt>Business ID</dt><dd>{evidence.businessIdentifier}</dd></div>}
+        </dl>
+      )}
+      {evidence.raw !== undefined && (
+        <EvidencePanel title="Inspect Raw Data">
+          <pre className="lab-preview">{renderRawEvidence(evidence.raw)}</pre>
+        </EvidencePanel>
+      )}
+    </article>
+  );
+}
+
+export function HintPanel({ hints }: { hints: Hint[] }) {
+  return (
+    <article className="panel hint-panel" data-testid="hint-panel">
+      <div className="panel-header">
+        <h2>Hints</h2>
+      </div>
+      <div className="hint-list">
+        {hints.map((hint, index) => (
+          <details key={hint.id}>
+            <summary>{hint.label}</summary>
+            <p>{hint.body}</p>
+            <small>Hint {index + 1} of {hints.length}</small>
+          </details>
+        ))}
+      </div>
+    </article>
+  );
+}
+
+export function AnalystNotes({ storageKey }: { storageKey: string }) {
+  const [notes, setNotes] = useState('');
+
+  useEffect(() => {
+    setNotes(window.localStorage.getItem(storageKey) ?? '');
+  }, [storageKey]);
+
+  function updateNotes(value: string) {
+    setNotes(value);
+    window.localStorage.setItem(storageKey, value);
+  }
+
+  return (
+    <article className="panel analyst-notes" data-testid="analyst-notes">
+      <div className="panel-header">
+        <h2>Analyst Notes</h2>
+        <NotebookPen size={19} />
+      </div>
+      <label>
+        Notes for this mission
+        <textarea
+          value={notes}
+          onChange={(event) => updateNotes(event.target.value)}
+          placeholder="Write what you observed, what it means, and what you would check next."
+        />
+      </label>
+      <p className="muted-text">Stored locally in this browser. Notes are not sent to FreightBridge.</p>
+    </article>
   );
 }
 
@@ -141,4 +265,10 @@ export function LockedMarker({ unlocked = false }: { unlocked?: boolean }) {
       {unlocked ? 'Coming soon' : 'Locked'}
     </span>
   );
+}
+
+function renderRawEvidence(value: unknown): string {
+  if (value === null || value === undefined) return 'Evidence pending.';
+  if (typeof value === 'string') return value;
+  return JSON.stringify(value, null, 2);
 }

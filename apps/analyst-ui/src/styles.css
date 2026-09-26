@@ -902,6 +902,28 @@ input:disabled {
   font-weight: 800;
 }
 
+.training-role-card {
+  display: grid;
+  gap: 0.2rem;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.training-role-card span {
+  color: #b9d9dc;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.training-role-card strong {
+  overflow-wrap: anywhere;
+}
+
 .training-main {
   width: min(1180px, 100%);
   margin: 0 auto;
@@ -1014,6 +1036,11 @@ input:disabled {
   line-height: 1.5;
 }
 
+.mission-subtitle {
+  color: #344852;
+  font-weight: 800;
+}
+
 .mission-card-header,
 .mission-complete-badge,
 .locked-marker {
@@ -1053,6 +1080,11 @@ input:disabled {
   background: #ffffff;
 }
 
+.partner-message {
+  border-color: #d8e0e5;
+  background: #fbfcfd;
+}
+
 .character-message h2,
 .character-message p {
   margin: 0;
@@ -1087,6 +1119,15 @@ input:disabled {
   border: 1px solid #dbe3e8;
   border-radius: 8px;
   background: #ffffff;
+}
+
+.entity-card.external-partner {
+  box-shadow: inset 4px 0 0 #667782;
+}
+
+.entity-card.learner-organization {
+  border-color: #126064;
+  box-shadow: inset 4px 0 0 #126064;
 }
 
 .entity-card h3,
@@ -1143,6 +1184,153 @@ input:disabled {
   height: 100%;
   border-radius: inherit;
   background: #126064;
+}
+
+.mission-phase-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mission-phase-progress li {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  padding: 0.25rem 0.75rem;
+  color: #d8e6e8;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.mission-phase-progress li.current {
+  color: #172026;
+  background: #ffffff;
+}
+
+.mission-phase-progress li.complete {
+  color: #b8f3dc;
+  border-color: rgba(184, 243, 220, 0.55);
+}
+
+.workstation-grid {
+  grid-template-columns: minmax(0, 1.45fr) minmax(18rem, 0.55fr);
+  align-items: start;
+}
+
+.workstation-timeline {
+  max-height: 24rem;
+  overflow: auto;
+}
+
+.evidence-list,
+.hint-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.evidence-card {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  border: 1px solid #dbe3e8;
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.evidence-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.evidence-card-header h3,
+.evidence-card-header p,
+.observed-meaning-grid h3,
+.observed-meaning-grid h4,
+.observed-meaning-grid p {
+  margin: 0;
+}
+
+.evidence-card-header > span {
+  min-height: 1.55rem;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  color: #3f5663;
+  background: #edf2f5;
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.observed-meaning-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.observed-meaning-grid > div {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.75rem;
+  border: 1px solid #dbe3e8;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.observed-meaning-grid h3,
+.observed-meaning-grid h4 {
+  color: #53636e;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.evidence-meta {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.hint-list details {
+  border: 1px solid #dbe3e8;
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.hint-list summary {
+  cursor: pointer;
+  padding: 0.75rem;
+  color: #126064;
+  font-weight: 800;
+}
+
+.hint-list p,
+.hint-list small {
+  display: block;
+  margin: 0;
+  padding: 0 0.75rem 0.75rem;
+}
+
+.hint-list small {
+  color: #667782;
+  font-weight: 800;
+}
+
+.analyst-notes textarea {
+  min-height: 9rem;
+}
+
+.check-list {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.check-list li + li {
+  margin-top: 0.35rem;
 }
 
 .teaching-grid,
@@ -1394,7 +1582,9 @@ input:disabled {
   .entity-flow,
   .teaching-grid,
   .final-quiz,
-  .status-progression {
+  .status-progression,
+  .workstation-grid,
+  .observed-meaning-grid {
     grid-template-columns: 1fr;
   }
 

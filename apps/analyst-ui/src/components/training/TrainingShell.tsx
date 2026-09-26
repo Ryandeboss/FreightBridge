@@ -1,6 +1,7 @@
-import { BookOpen, Lock, ShieldCheck } from 'lucide-react';
+import { BookOpen, BriefcaseBusiness, GraduationCap, Lock, ShieldCheck } from 'lucide-react';
 import { Link, Outlet } from 'react-router-dom';
 import { useOperationsSession } from '../../auth/OperationsSession';
+import { TRAINING_ROLE } from '../../training/missions';
 
 export function TrainingShell() {
   const { lock } = useOperationsSession();
@@ -14,10 +15,18 @@ export function TrainingShell() {
           </span>
           <span>
             <strong>FreightBridge</strong>
-            <small>Training Mode</small>
+            <small>{TRAINING_ROLE}</small>
           </span>
         </Link>
         <nav aria-label="Training navigation">
+          <Link className="secondary-button" to="/learn">
+            <GraduationCap size={16} />
+            Training Desk
+          </Link>
+          <Link className="secondary-button" to="/learn/mission/learn-the-flow">
+            <BriefcaseBusiness size={16} />
+            Current Mission
+          </Link>
           <Link className="secondary-button" to="/dashboard">
             <BookOpen size={16} />
             Advanced Console

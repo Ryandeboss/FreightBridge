@@ -1056,7 +1056,12 @@ describe('Analyst Console', () => {
     render(<App />);
 
     expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Learn EDI & API integration by doing it/i })).toBeInTheDocument();
+    expect(screen.getByTestId('training-desk')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Welcome to FreightBridge/i })).toBeInTheDocument();
+    expect(screen.getByTestId('training-role')).toHaveTextContent(/FreightBridge Integration Support Analyst/i);
+    expect(screen.getByTestId('external-partner-apex')).toHaveTextContent(/External Trading Partner/i);
+    expect(screen.getByTestId('external-partner-midwest')).toHaveTextContent(/External Trading Partner/i);
+    expect(screen.getByTestId('training-workplace-freightbridge')).toHaveTextContent(/Your Workplace/i);
     expect(screen.getByText(/Training Progress/i)).toBeInTheDocument();
     const advancedConsoleLinks = screen.getAllByRole('link', { name: /Advanced Console/i });
     expect(advancedConsoleLinks[0]).toHaveAttribute('href', '#/dashboard');
@@ -1073,21 +1078,30 @@ describe('Analyst Console', () => {
     render(<App />);
 
     expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
-    expect(screen.getByText(/Mission 2 - Authentication Trouble/i)).toBeInTheDocument();
+    expect(screen.getByText(/Mission 2 - Apex Can't Get a Load Through/i)).toBeInTheDocument();
+    expect(screen.getByText(/Mission 10 - Production Incident/i)).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /Locked/i }).length).toBeGreaterThan(0);
     expect(screen.queryByRole('link', { name: /Mission 2/i })).not.toBeInTheDocument();
   });
 
-  test('Mission 1 renders the three entities and cannot complete before lifecycle success', async () => {
+  test('Mission 1 renders FreightBridge POV and cannot complete before lifecycle success', async () => {
     const fetchMock = installFetchMock();
     window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
     window.location.hash = '#/learn/mission/learn-the-flow';
     render(<App />);
 
     expect(await screen.findByTestId('learn-the-flow-mission-page')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Apex Logistics/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /^FreightBridge$/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Midwest Carrier/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Watch a Healthy Integration/i })).toBeInTheDocument();
+    expect(screen.getByText(/You are at FreightBridge/i)).toBeInTheDocument();
+    expect(screen.getByTestId('external-partner-apex')).toHaveTextContent(/REST API \+ JSON/i);
+    expect(screen.getByTestId('training-workplace-freightbridge')).toHaveTextContent(/Your Workplace/i);
+    expect(screen.getByTestId('external-partner-midwest')).toHaveTextContent(/X12 004010 \+ SFTP/i);
+    expect(screen.getAllByText(/Observed by FreightBridge/i).length).toBeGreaterThan(0);
+    expect(screen.getByTestId('hint-panel')).toHaveTextContent(/Start with what FreightBridge received/i);
+    await userEvent.click(screen.getByText(/Hint 1 - Start with what FreightBridge received/i));
+    expect(screen.getByText(/confirm whether FreightBridge received/i)).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText(/Notes for this mission/i), 'Check the FreightBridge transaction first.');
+    expect(window.localStorage.getItem('freightbridge.trainingNotes.LEARN_THE_FLOW')).toContain('FreightBridge transaction');
     expect(screen.queryByRole('button', { name: /Complete Mission/i })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: /Start Mission/i }));
@@ -1109,14 +1123,14 @@ describe('Analyst Console', () => {
     await userEvent.click(screen.getByRole('button', { name: /Start Mission/i }));
     await userEvent.click(await screen.findByRole('button', { name: /Continue/i }));
 
-    expect(await screen.findByText(/Midwest sent a 997/i)).toBeInTheDocument();
+    expect(await screen.findByText(/FreightBridge received a 997 from Midwest/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('radio', { name: /^Yes$/i }));
     expect(screen.getByText(/Not quite/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Continue/i })).toBeDisabled();
     await userEvent.click(screen.getByRole('radio', { name: /^No$/i }));
     expect(screen.getByText(/997 only confirms/i)).toBeInTheDocument();
 
-    expect(screen.getByText(/Which message tells Apex whether Midwest accepted/i)).toBeInTheDocument();
+    expect(screen.getByText(/Which message tells FreightBridge whether Midwest accepted/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('radio', { name: /^990$/i }));
     expect(screen.getByText(/990 is the tender response/i)).toBeInTheDocument();
   });
@@ -1133,13 +1147,13 @@ describe('Analyst Console', () => {
     await userEvent.click(await screen.findByRole('radio', { name: /^No$/i }));
     await userEvent.click(screen.getByRole('radio', { name: /^990$/i }));
 
-    expect(screen.getByText(/Midwest sends 214 shipment statuses/i)).toBeInTheDocument();
+    expect(screen.getByText(/FreightBridge received 214 shipment updates/i)).toBeInTheDocument();
     expect(screen.getByText('PICKED_UP')).toBeInTheDocument();
     expect(screen.getByText('IN_TRANSIT')).toBeInTheDocument();
     expect(screen.getByText('ARRIVED')).toBeInTheDocument();
     expect(screen.getByText('DELIVERED')).toBeInTheDocument();
-    expect(screen.getByText(/Business event time matters/i)).toBeInTheDocument();
-    expect(screen.getByText(/leaves the current shipment status as DELIVERED/i)).toBeInTheDocument();
+    expect(screen.getByText(/FreightBridge protects current shipment status/i)).toBeInTheDocument();
+    expect(screen.getByText(/keeps the full history and protects current status/i)).toBeInTheDocument();
   });
 
   test('Mission 1 completion persists locally and unlocks the next coming-soon mission card', async () => {
@@ -1153,21 +1167,34 @@ describe('Analyst Console', () => {
     await userEvent.click(await screen.findByRole('button', { name: /Continue/i }));
     await userEvent.click(await screen.findByRole('radio', { name: /^No$/i }));
     await userEvent.click(screen.getByRole('radio', { name: /^990$/i }));
-    await userEvent.click(within(screen.getByRole('radiogroup', { name: /Who is Apex/i })).getByRole('radio', { name: /Broker \/ 3PL/i }));
-    await userEvent.click(within(screen.getByRole('radiogroup', { name: /Who is Midwest/i })).getByRole('radio', { name: /Carrier \/ trucking company/i }));
+    await userEvent.click(within(screen.getByRole('radiogroup', { name: /Who is Apex/i })).getByRole('radio', { name: /External broker \/ 3PL partner/i }));
+    await userEvent.click(within(screen.getByRole('radiogroup', { name: /Who is Midwest/i })).getByRole('radio', { name: /External motor carrier partner/i }));
     await userEvent.click(within(screen.getByRole('radiogroup', { name: /Who generates the Midwest X12 204/i })).getByRole('radio', { name: /^FreightBridge$/i }));
     await userEvent.click(within(screen.getByRole('radiogroup', { name: /What does the 997 mean/i })).getByRole('radio', { name: /Technical acknowledgment/i }));
     await userEvent.click(within(screen.getByRole('radiogroup', { name: /What message carries shipment status/i })).getByRole('radio', { name: /^214$/i }));
 
     await userEvent.click(screen.getByRole('button', { name: /Complete Mission/i }));
-    expect(await screen.findByText(/MISSION COMPLETE - Learn the Flow/i)).toBeInTheDocument();
+    expect(await screen.findByText(/MISSION COMPLETE - Your First Shift/i)).toBeInTheDocument();
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('LEARN_THE_FLOW');
 
-    await userEvent.click(screen.getByRole('link', { name: /Return to Training Home/i }));
+    await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
     expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
-    expect(screen.getByText(/1 \/ 9/i)).toBeInTheDocument();
-    expect(screen.getByText(/Mission 1 - Learn the Flow/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 \/ 10/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Mission 1 - Your First Shift/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Training mission not implemented yet/i)).toBeInTheDocument();
+  });
+
+  test('existing LEARN_THE_FLOW progress survives Training Desk reframe', async () => {
+    installFetchMock();
+    window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({ version: 1, completedMissions: ['LEARN_THE_FLOW'] }));
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn';
+    render(<App />);
+
+    expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
+    expect(screen.getByText(/1 \/ 10/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Complete/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: /Review Mission/i })[0]).toHaveAttribute('href', '#/learn/mission/learn-the-flow');
   });
 
   test('Mission 1 shows a safe failure state when the real lab step fails', async () => {

@@ -6,23 +6,33 @@ import { ApiError } from '../api/client';
 import { createLabRun, runNextLabStep, type LabRun } from '../api/lab';
 import { useOperationsSession } from '../auth/OperationsSession';
 import {
-  CharacterMessage,
+  AnalystNotes,
+  CommunicationMessage,
   EntityCard,
+  EvidenceCard,
   EvidencePanel,
+  HintPanel,
   KnowledgeCheck,
   MissionBriefing,
   MissionObjective,
+  MissionPhaseProgress,
   MissionProgress,
 } from '../components/training/TrainingComponents';
 import {
   finalQuizQuestions,
   LEARN_THE_FLOW_MISSION_ID,
+  missionOneBriefing,
+  missionOneHints,
+  missionOnePhases,
   missionOneTeachingSteps,
+  missionOneTimeline,
+  samplePartnerMessages,
   technicalAckQuestion,
   tenderResponseQuestion,
   trainingEntities,
 } from '../training/missions';
 import { completeMission } from '../training/progress';
+import type { MissionPhase, TeachingStep, TrainingEvidence } from '../training/types';
 import {
   find204Dispatch,
   find204Preview,
@@ -40,6 +50,8 @@ const initialAnswers: Answers = {
   [tenderResponseQuestion.id]: null,
   ...Object.fromEntries(finalQuizQuestions.map((question) => [question.id, null])),
 };
+
+const NOTES_KEY = 'freightbridge.trainingNotes.LEARN_THE_FLOW';
 
 export function LearnTheFlowMissionPage() {
   const { token, handleApiError } = useOperationsSession();
@@ -75,6 +87,11 @@ export function LearnTheFlowMissionPage() {
   const dispatch204 = useMemo(() => find204Dispatch(run), [run]);
   const preview204 = useMemo(() => find204Preview(run), [run]);
   const events = useMemo(() => shipmentEvents(run), [run]);
+  const currentPhase: MissionPhase = lifecycleSucceeded ? 'DEBRIEF' : run ? 'INVESTIGATE' : 'BRIEFING';
+  const evidenceCards = useMemo(
+    () => buildMissionEvidence(run, apexPayload, canonicalShipment, dispatch204, preview204, events),
+    [run, apexPayload, canonicalShipment, dispatch204, preview204, events],
+  );
 
   async function startMission() {
     if (!token) return;
@@ -129,61 +146,72 @@ export function LearnTheFlowMissionPage() {
     <section className="training-stack" data-testid="learn-the-flow-mission-page">
       <Link className="secondary-button training-back-link" to="/learn">
         <ArrowLeft size={16} />
-        Training Home
+        Training Desk
       </Link>
 
       <MissionBriefing>
-        <p className="eyebrow">Mission 1</p>
-        <h1>Learn the Flow</h1>
+        <p className="eyebrow">Mission 1 - Your First Shift</p>
+        <h1>Watch a Healthy Integration</h1>
         <p>
-          Before you troubleshoot integrations, you need to understand what a successful one looks
-          like. This tutorial follows the real Full Shipment Lifecycle Integration Lab scenario.
+          You are at FreightBridge. Before troubleshooting incidents, learn what a healthy partner
+          integration looks like from your workstation.
         </p>
+        <MissionPhaseProgress phases={missionOnePhases} current={currentPhase} />
       </MissionBriefing>
 
-      <CharacterMessage name="Mike" role="Integration Manager">
-        <p>
-          Before I let you work incidents, I want you to understand what a normal shipment looks
-          like. Watch who sends what, and pay close attention to the difference between technical
-          acknowledgments and business decisions.
-        </p>
-      </CharacterMessage>
+      <CommunicationMessage message={missionOneBriefing} />
 
-      <section className="entity-flow" aria-label="Apex to FreightBridge to Midwest flow">
+      <section className="entity-flow" aria-label="FreightBridge workplace and external partners">
         {trainingEntities.map((entity) => (
           <EntityCard key={entity.name} entity={entity} />
         ))}
       </section>
 
-      <article className="panel">
-        <div className="panel-header">
-          <h2>Mission Objectives</h2>
-          <MissionProgress completed={completedObjectives} total={5} />
-        </div>
-        <div className="mission-objectives">
-          <MissionObjective done={Boolean(run)}>Start a real FULL_SHIPMENT_LIFECYCLE lab run.</MissionObjective>
-          <MissionObjective done={lifecycleSucceeded}>Run the lifecycle to success.</MissionObjective>
-          <MissionObjective done={technicalAckCorrect}>Explain why 997 is not load acceptance.</MissionObjective>
-          <MissionObjective done={tenderResponseCorrect}>Identify 990 as the tender response.</MissionObjective>
-          <MissionObjective done={finalQuizCorrect}>Pass the final beginner quiz.</MissionObjective>
-        </div>
-        <div className="lab-actions">
-          {!run ? (
-            <button className="primary-button" type="button" onClick={startMission} disabled={isWorking}>
-              <Play size={16} />
-              Start Mission
-            </button>
-          ) : (
-            <button className="primary-button" type="button" onClick={continueMission} disabled={nextActionDisabled || lifecycleSucceeded}>
-              <RefreshCw size={16} />
-              Continue
-            </button>
-          )}
-          <Link className="secondary-button" to="/lab">
-            Open in Advanced Console
-          </Link>
-        </div>
-      </article>
+      <section className="content-grid two-column">
+        <article className="panel">
+          <div className="panel-header">
+            <h2>Mission Objectives</h2>
+            <MissionProgress completed={completedObjectives} total={5} />
+          </div>
+          <div className="mission-objectives">
+            <MissionObjective done={Boolean(run)}>Start a real FULL_SHIPMENT_LIFECYCLE lab run.</MissionObjective>
+            <MissionObjective done={lifecycleSucceeded}>Run the lifecycle to success.</MissionObjective>
+            <MissionObjective done={technicalAckCorrect}>Explain why 997 is not load acceptance.</MissionObjective>
+            <MissionObjective done={tenderResponseCorrect}>Identify 990 as the tender response.</MissionObjective>
+            <MissionObjective done={finalQuizCorrect}>Pass the final beginner quiz.</MissionObjective>
+          </div>
+          <div className="lab-actions">
+            {!run ? (
+              <button className="primary-button" type="button" onClick={startMission} disabled={isWorking}>
+                <Play size={16} />
+                Start Mission
+              </button>
+            ) : (
+              <button className="primary-button" type="button" onClick={continueMission} disabled={nextActionDisabled || lifecycleSucceeded}>
+                <RefreshCw size={16} />
+                Continue
+              </button>
+            )}
+            <Link className="secondary-button" to="/lab">
+              Open in Advanced Console
+            </Link>
+          </div>
+        </article>
+
+        <article className="panel">
+          <div className="panel-header">
+            <h2>FreightBridge Event Timeline</h2>
+          </div>
+          <ol className="timeline workstation-timeline">
+            {missionOneTimeline.map((event, index) => (
+              <li key={event}>
+                <span>Step {index + 1}</span>
+                <strong>{event}</strong>
+              </li>
+            ))}
+          </ol>
+        </article>
+      </section>
 
       {(error || lifecycleFailed) && (
         <article className="panel training-alert" role="alert">
@@ -198,66 +226,57 @@ export function LearnTheFlowMissionPage() {
         </article>
       )}
 
+      <section className="content-grid workstation-grid" data-testid="training-workstation">
+        <article className="panel">
+          <div className="panel-header">
+            <h2>Evidence</h2>
+          </div>
+          <div className="evidence-list">
+            {evidenceCards.map((evidence) => (
+              <EvidenceCard key={evidence.id} evidence={evidence} />
+            ))}
+          </div>
+        </article>
+        <div className="training-stack">
+          <HintPanel hints={missionOneHints} />
+          <AnalystNotes storageKey={NOTES_KEY} />
+        </div>
+      </section>
+
       <section className="teaching-grid">
-        <TeachingCard
-          title={missionOneTeachingSteps[0].title}
-          plainLanguage={missionOneTeachingSteps[0].plainLanguage}
-          advancedDetails={missionOneTeachingSteps[0].advancedDetails}
-          evidenceTitle="View raw Apex JSON"
-          evidence={apexPayload}
-        >
-          <dl className="definition-grid">
-            <div><dt>Load ID</dt><dd>{String(apexPayload.loadId ?? run?.businessIdentifier ?? 'Pending')}</dd></div>
-            <div><dt>Origin</dt><dd>{locationLine(apexPayload.pickup)}</dd></div>
-            <div><dt>Destination</dt><dd>{locationLine(apexPayload.delivery)}</dd></div>
-            <div><dt>BOL</dt><dd>{String(apexPayload.bolNumber ?? 'Pending')}</dd></div>
-            <div><dt>PO</dt><dd>{String(apexPayload.purchaseOrderNumber ?? 'Pending')}</dd></div>
-            <div><dt>Customer Reference</dt><dd>{String(apexPayload.customerReference ?? 'Pending')}</dd></div>
-          </dl>
-        </TeachingCard>
-
-        <TeachingCard
-          title={missionOneTeachingSteps[1].title}
-          plainLanguage={missionOneTeachingSteps[1].plainLanguage}
-          advancedDetails={missionOneTeachingSteps[1].advancedDetails}
-          evidenceTitle="View canonical shipment"
-          evidence={canonicalShipment}
-        >
-          <p className="muted-text">
-            FreightBridge first translates everyone&apos;s information into one internal language.
-          </p>
-        </TeachingCard>
-
-        <TeachingCard
-          title={missionOneTeachingSteps[2].title}
-          plainLanguage={missionOneTeachingSteps[2].plainLanguage}
-          advancedDetails={missionOneTeachingSteps[2].advancedDetails}
-          evidenceTitle="View raw X12"
-          evidence={String(preview204?.x12 ?? '204 preview pending.')}
-        >
-          <dl className="definition-grid">
-            <div><dt>Document</dt><dd>X12 204</dd></div>
-            <div><dt>Simple meaning</dt><dd>Will you haul this load?</dd></div>
-            <div><dt>Generated by</dt><dd>FreightBridge</dd></div>
-          </dl>
-        </TeachingCard>
-
-        <TeachingCard
-          title={missionOneTeachingSteps[3].title}
-          plainLanguage={missionOneTeachingSteps[3].plainLanguage}
-          advancedDetails={missionOneTeachingSteps[3].advancedDetails}
-          evidenceTitle="View SFTP dispatch metadata"
-          evidence={dispatch204}
-        />
+        {missionOneTeachingSteps.slice(0, 4).map((step, index) => (
+          <TeachingCard
+            key={step.id}
+            step={step}
+            evidenceTitle={index === 0 ? 'Inspect Raw Data' : index === 2 ? 'Inspect Raw X12' : 'Inspect Raw Data'}
+            evidence={index === 0 ? apexPayload : index === 1 ? canonicalShipment : index === 2 ? String(preview204?.x12 ?? '204 preview pending.') : dispatch204}
+          >
+            {index === 0 && (
+              <dl className="definition-grid">
+                <div><dt>Load ID</dt><dd>{String(apexPayload.loadId ?? run?.businessIdentifier ?? 'Pending')}</dd></div>
+                <div><dt>Origin</dt><dd>{locationLine(apexPayload.pickup)}</dd></div>
+                <div><dt>Destination</dt><dd>{locationLine(apexPayload.delivery)}</dd></div>
+                <div><dt>BOL</dt><dd>{String(apexPayload.bolNumber ?? 'Pending')}</dd></div>
+                <div><dt>PO</dt><dd>{String(apexPayload.purchaseOrderNumber ?? 'Pending')}</dd></div>
+                <div><dt>Customer Reference</dt><dd>{String(apexPayload.customerReference ?? 'Pending')}</dd></div>
+              </dl>
+            )}
+            {index === 2 && (
+              <dl className="definition-grid">
+                <div><dt>Document</dt><dd>X12 204</dd></div>
+                <div><dt>Simple meaning</dt><dd>Will you haul this load?</dd></div>
+                <div><dt>Generated by</dt><dd>FreightBridge</dd></div>
+              </dl>
+            )}
+          </TeachingCard>
+        ))}
       </section>
 
       {technicalAckSeen && (
         <section className="training-stack">
           <TeachingCard
-            title={missionOneTeachingSteps[4].title}
-            plainLanguage={missionOneTeachingSteps[4].plainLanguage}
-            advancedDetails={missionOneTeachingSteps[4].advancedDetails}
-            evidenceTitle="View 997 details"
+            step={missionOneTeachingSteps[4]}
+            evidenceTitle="Inspect 997 Details"
             evidence={run?.resultSummary.technicalAcknowledgmentDetail ?? run?.resultSummary.technicalAcknowledgment}
           />
           <KnowledgeCheck
@@ -271,10 +290,8 @@ export function LearnTheFlowMissionPage() {
       {tenderResponseSeen && technicalAckCorrect && (
         <section className="training-stack">
           <TeachingCard
-            title={missionOneTeachingSteps[5].title}
-            plainLanguage={missionOneTeachingSteps[5].plainLanguage}
-            advancedDetails={missionOneTeachingSteps[5].advancedDetails}
-            evidenceTitle="View 990 result"
+            step={missionOneTeachingSteps[5]}
+            evidenceTitle="Inspect 990 Result"
             evidence={run?.resultSummary.tenderStatus}
           />
           <KnowledgeCheck
@@ -288,10 +305,8 @@ export function LearnTheFlowMissionPage() {
       {events.length > 0 && tenderResponseCorrect && (
         <section className="training-stack">
           <TeachingCard
-            title={missionOneTeachingSteps[6].title}
-            plainLanguage={missionOneTeachingSteps[6].plainLanguage}
-            advancedDetails={missionOneTeachingSteps[6].advancedDetails}
-            evidenceTitle="View raw 214 event history"
+            step={missionOneTeachingSteps[6]}
+            evidenceTitle="Inspect 214 Event History"
             evidence={events}
           >
             <div className="status-progression" aria-label="214 status progression">
@@ -301,10 +316,8 @@ export function LearnTheFlowMissionPage() {
             </div>
           </TeachingCard>
           <TeachingCard
-            title={missionOneTeachingSteps[7].title}
-            plainLanguage={missionOneTeachingSteps[7].plainLanguage}
-            advancedDetails={missionOneTeachingSteps[7].advancedDetails}
-            evidenceTitle="View event-time evidence"
+            step={missionOneTeachingSteps[7]}
+            evidenceTitle="Inspect Event-Time Evidence"
             evidence={events}
           />
         </section>
@@ -314,14 +327,13 @@ export function LearnTheFlowMissionPage() {
         <section className="training-stack">
           <article className="panel">
             <div className="panel-header">
-              <h2>Final Flow Summary</h2>
+              <h2>Debrief</h2>
             </div>
             <div className="flow-summary">
-              <p><strong>APEX</strong>: I need this load moved.</p>
-              <p>REST / JSON to <strong>FREIGHTBRIDGE</strong>: I&apos;ll translate and track it.</p>
-              <p>X12 204 / SFTP to <strong>MIDWEST</strong>: Will you haul this load?</p>
-              <p><strong>MIDWEST</strong>: I received it - 997. I accept it - 990. Picked up / in transit / arrived / delivered - 214.</p>
-              <p><strong>FREIGHTBRIDGE</strong>: REST / JSON updates back to Apex.</p>
+              <p><strong>Apex Logistics</strong>: external partner claim/request enters FreightBridge.</p>
+              <p><strong>FreightBridge</strong>: authenticates, validates, maps, generates X12, sends, tracks, and logs.</p>
+              <p><strong>Midwest Carrier</strong>: external partner messages are visible only when FreightBridge receives files, acknowledgments, or support communication.</p>
+              <p><strong>FreightBridge</strong>: callbacks and status updates are verified from our transaction evidence.</p>
             </div>
           </article>
 
@@ -343,12 +355,11 @@ export function LearnTheFlowMissionPage() {
             </div>
             {completed ? (
               <>
-                <h3>MISSION COMPLETE - Learn the Flow</h3>
+                <h3>MISSION COMPLETE - Your First Shift</h3>
                 <p>
-                  You successfully followed a shipment from Apex, through FreightBridge, to Midwest
-                  and back.
+                  You followed a shipment from the evidence available to a FreightBridge Integration Support Analyst.
                 </p>
-                <Link className="primary-button" to="/learn">Return to Training Home</Link>
+                <Link className="primary-button" to="/learn">Return to Training Desk</Link>
               </>
             ) : (
               <>
@@ -364,6 +375,12 @@ export function LearnTheFlowMissionPage() {
           </article>
         </section>
       )}
+
+      <section className="content-grid two-column" aria-label="Synthetic partner communication examples">
+        {samplePartnerMessages.map((message) => (
+          <CommunicationMessage key={message.from} message={message} />
+        ))}
+      </section>
     </section>
   );
 }
@@ -374,16 +391,12 @@ function generateTrainingLoadId(): string {
 }
 
 function TeachingCard({
-  title,
-  plainLanguage,
-  advancedDetails,
+  step,
   evidenceTitle,
   evidence,
   children,
 }: {
-  title: string;
-  plainLanguage: string;
-  advancedDetails?: string;
+  step: TeachingStep;
   evidenceTitle: string;
   evidence: unknown;
   children?: ReactNode;
@@ -391,13 +404,32 @@ function TeachingCard({
   return (
     <article className="panel teaching-card">
       <div className="panel-header">
-        <h2>{title}</h2>
+        <div>
+          <p className="eyebrow">{step.source}</p>
+          <h2>{step.title}</h2>
+        </div>
       </div>
-      <p>{plainLanguage}</p>
+      <div className="observed-meaning-grid">
+        <div>
+          <h3>Observed by FreightBridge</h3>
+          <p>{step.observed}</p>
+        </div>
+        <div>
+          <h3>What this means</h3>
+          <p>{step.plainLanguage}</p>
+        </div>
+      </div>
       {children}
-      {advancedDetails && (
+      <EvidencePanel title="What would I check here?">
+        <ul className="check-list">
+          {step.analystCheck.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      </EvidencePanel>
+      {step.advancedDetails && (
         <EvidencePanel title="Advanced details">
-          <p>{advancedDetails}</p>
+          <p>{step.advancedDetails}</p>
         </EvidencePanel>
       )}
       <EvidencePanel title={evidenceTitle}>
@@ -405,4 +437,67 @@ function TeachingCard({
       </EvidencePanel>
     </article>
   );
+}
+
+function buildMissionEvidence(
+  run: LabRun | null,
+  apexPayload: Record<string, unknown>,
+  canonicalShipment: Record<string, unknown>,
+  dispatch204: Record<string, unknown> | null,
+  preview204: Record<string, unknown> | null,
+  events: Record<string, unknown>[],
+): TrainingEvidence[] {
+  return [
+    {
+      id: 'inbound-apex',
+      type: 'Inbound API Request',
+      source: 'FreightBridge API Gateway',
+      summary: 'Message received from Apex',
+      observed: run ? 'FreightBridge accepted an Apex load-tender workflow into the Lab run.' : 'Waiting for a real Lab run.',
+      meaning: 'Apex reached FreightBridge; the next analyst question is whether authentication, parsing, and validation succeeded.',
+      timestamp: run?.createdAt,
+      businessIdentifier: run?.businessIdentifier,
+      raw: apexPayload,
+    },
+    {
+      id: 'canonical',
+      type: 'Transaction Record',
+      source: 'FreightBridge Domain Processor',
+      summary: 'Canonical shipment created',
+      observed: Object.keys(canonicalShipment).length > 0 ? 'FreightBridge has normalized shipment data.' : 'Canonical shipment evidence pending.',
+      meaning: 'FreightBridge has an internal representation that can be mapped to partner-specific formats.',
+      businessIdentifier: run?.businessIdentifier,
+      raw: canonicalShipment,
+    },
+    {
+      id: 'x12-204',
+      type: 'X12 Document',
+      source: 'FreightBridge X12 Mapper',
+      summary: '204 generated for Midwest',
+      observed: preview204 ? 'FreightBridge generated X12 204 preview/control metadata.' : '204 evidence pending.',
+      meaning: 'The integration platform produced the carrier load tender; this is FreightBridge evidence, not Apex internals.',
+      businessIdentifier: run?.businessIdentifier,
+      raw: preview204?.x12 ?? preview204,
+    },
+    {
+      id: 'sftp-activity',
+      type: 'SFTP Activity',
+      source: 'FreightBridge SFTP Transport',
+      summary: 'SFTP delivery metadata',
+      observed: dispatch204 ? 'FreightBridge recorded delivery metadata for the outbound 204.' : 'SFTP activity pending.',
+      meaning: 'For carrier complaints, this is where an analyst checks remote path and file delivery disposition.',
+      businessIdentifier: run?.businessIdentifier,
+      raw: dispatch204,
+    },
+    {
+      id: 'status-history',
+      type: 'Shipment Status History',
+      source: 'Inbound Midwest EDI',
+      summary: '214 event history',
+      observed: events.length > 0 ? `${events.length} Midwest status events received by FreightBridge.` : '214 status events pending.',
+      meaning: 'FreightBridge can verify received status events and protect current status using business event time.',
+      businessIdentifier: run?.businessIdentifier,
+      raw: events,
+    },
+  ];
 }

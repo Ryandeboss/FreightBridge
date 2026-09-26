@@ -1,9 +1,23 @@
 import type { ComponentType } from 'react';
 import type { LucideProps } from 'lucide-react';
 
-export type MissionDifficulty = 'Tutorial' | 'Beginner' | 'Intermediate' | 'Advanced';
+export type TrainingRole = 'Integration Support Analyst';
+export type MissionDifficulty = 'ORIENTATION' | 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'FINAL SHIFT';
 export type MissionStatus = 'available' | 'completed' | 'coming-soon' | 'locked';
 export type MissionPhase = 'BRIEFING' | 'INVESTIGATE' | 'DIAGNOSE' | 'PLAN' | 'ACT' | 'VERIFY' | 'REPORT' | 'DEBRIEF';
+export type CommunicationKind = 'manager' | 'partner';
+export type EvidenceType =
+  | 'Inbound API Request'
+  | 'Outbound API Callback'
+  | 'Transaction Record'
+  | 'Processing Log'
+  | 'Integration Error'
+  | 'X12 Document'
+  | 'SFTP Activity'
+  | 'Partner Message'
+  | 'Mapping Information'
+  | 'Business Trace'
+  | 'Shipment Status History';
 
 export type TrainingProgress = {
   version: 1;
@@ -14,6 +28,7 @@ export type TrainingMission = {
   id: string;
   slug: string;
   title: string;
+  subtitle?: string;
   difficulty: MissionDifficulty;
   summary: string;
   implemented: boolean;
@@ -23,9 +38,36 @@ export type TrainingMission = {
 export type TrainingEntity = {
   name: string;
   role: string;
+  perspective: 'learner-organization' | 'external-partner';
   explanation: string;
   communication: string;
   icon: ComponentType<LucideProps>;
+  testId?: string;
+};
+
+export type MissionCommunication = {
+  kind: CommunicationKind;
+  from: string;
+  role: string;
+  body: string;
+};
+
+export type TrainingEvidence = {
+  id: string;
+  type: EvidenceType;
+  source: string;
+  summary: string;
+  observed: string;
+  meaning: string;
+  timestamp?: string;
+  businessIdentifier?: string;
+  raw?: unknown;
+};
+
+export type Hint = {
+  id: string;
+  label: string;
+  body: string;
 };
 
 export type KnowledgeCheckOption = {
@@ -46,4 +88,7 @@ export type TeachingStep = {
   title: string;
   plainLanguage: string;
   advancedDetails?: string;
+  source: string;
+  observed: string;
+  analystCheck: string[];
 };
