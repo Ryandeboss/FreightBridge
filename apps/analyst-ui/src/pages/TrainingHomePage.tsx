@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { CommunicationMessage, EntityCard, LockedMarker } from '../components/training/TrainingComponents';
 import {
   firstShiftIntro,
-  LEARN_THE_FLOW_MISSION_ID,
   PLANNED_MISSION_COUNT,
   TRAINING_ROLE,
   trainingEntities,
@@ -14,8 +13,10 @@ import { hasCompletedMission, loadTrainingProgress } from '../training/progress'
 export function TrainingHomePage() {
   const progress = loadTrainingProgress();
   const completedCount = progress.completedMissions.length;
-  const learnTheFlowComplete = hasCompletedMission(progress, LEARN_THE_FLOW_MISSION_ID);
-  const currentMission = trainingMissions[0];
+  const currentMission = trainingMissions.find((mission) => mission.implemented && isMissionUnlocked(mission.id, progress) && !hasCompletedMission(progress, mission.id))
+    ?? trainingMissions.find((mission) => mission.implemented && isMissionUnlocked(mission.id, progress))
+    ?? trainingMissions[0];
+  const currentMissionComplete = hasCompletedMission(progress, currentMission.id);
 
   return (
     <section className="training-stack" data-testid="training-home-page">
@@ -31,10 +32,10 @@ export function TrainingHomePage() {
           <strong>FreightBridge {TRAINING_ROLE}</strong>
         </div>
         <div className="training-mode-choice">
-          <Link className="training-choice primary" to="/learn/mission/learn-the-flow">
+          <Link className="training-choice primary" to={`/learn/mission/${currentMission.slug}`}>
             <span>
               <strong>Start Current Mission</strong>
-              <small>{currentMission.title}: {currentMission.subtitle}</small>
+              <small>{currentMission.title}{currentMission.subtitle ? `: ${currentMission.subtitle}` : ''}</small>
             </span>
             <ArrowRight size={18} />
           </Link>
@@ -91,7 +92,7 @@ export function TrainingHomePage() {
           <p className="muted-text">{currentMission.summary}</p>
           <div className="lab-actions">
             <Link className="primary-button" to={`/learn/mission/${currentMission.slug}`}>
-              {learnTheFlowComplete ? 'Review Mission' : 'Start Mission'}
+              {currentMissionComplete ? 'Review Mission' : 'Start Mission'}
             </Link>
           </div>
         </article>
@@ -113,10 +114,15 @@ export function TrainingHomePage() {
       <section className="mission-roadmap" aria-label="Training mission roadmap" data-testid="mission-board">
         {trainingMissions.map((mission, index) => {
           const completed = hasCompletedMission(progress, mission.id);
-          const unlockedComingSoon = mission.unlocksAfter === LEARN_THE_FLOW_MISSION_ID && learnTheFlowComplete;
-          const playable = mission.implemented;
+          const unlocked = isMissionUnlocked(mission.id, progress);
+          const playable = mission.implemented && unlocked;
+          const comingSoon = !mission.implemented && unlocked;
           return (
-            <article className={`mission-card ${completed ? 'completed' : ''}`} key={mission.id}>
+            <article
+              className={`mission-card ${completed ? 'completed' : ''} ${!unlocked ? 'locked' : ''}`}
+              key={mission.id}
+              data-testid={`mission-${index + 1}-card`}
+            >
               <div className="mission-card-header">
                 <span>{mission.difficulty}</span>
                 {completed && (
@@ -125,7 +131,7 @@ export function TrainingHomePage() {
                     Complete
                   </span>
                 )}
-                {!playable && <LockedMarker unlocked={unlockedComingSoon} />}
+                {!playable && <LockedMarker unlocked={comingSoon} />}
               </div>
               <h2>{mission.title}</h2>
               {mission.subtitle && <p className="mission-subtitle">{mission.subtitle}</p>}
@@ -136,7 +142,7 @@ export function TrainingHomePage() {
                 </Link>
               ) : (
                 <button className="secondary-button" type="button" disabled>
-                  {unlockedComingSoon ? 'Training mission not implemented yet' : 'Locked'}
+                  {comingSoon ? 'Training mission not implemented yet' : 'Locked'}
                 </button>
               )}
             </article>
@@ -145,4 +151,10 @@ export function TrainingHomePage() {
       </section>
     </section>
   );
+}
+
+function isMissionUnlocked(missionId: string, progress: ReturnType<typeof loadTrainingProgress>): boolean {
+  const mission = trainingMissions.find((candidate) => candidate.id === missionId);
+  if (!mission?.unlocksAfter) return true;
+  return hasCompletedMission(progress, mission.unlocksAfter);
 }

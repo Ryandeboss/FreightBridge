@@ -8,6 +8,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { FailureDetailPage } from './pages/FailureDetailPage';
 import { FailuresPage } from './pages/FailuresPage';
 import { IntegrationLabPage } from './pages/IntegrationLabPage';
+import { IncidentMissionPage } from './pages/IncidentMissionPage';
 import { LearnTheFlowMissionPage } from './pages/LearnTheFlowMissionPage';
 import { MappingDetailPage, MappingsPage } from './pages/MappingsPage';
 import { PartnerDetailPage, PartnersPage } from './pages/PartnersPage';
@@ -29,6 +30,7 @@ function AppRoutes() {
           <Route index element={<Navigate to="/learn" replace />} />
           <Route path="/learn" element={<TrainingHomePage />} />
           <Route path="/learn/mission/learn-the-flow" element={<LearnTheFlowMissionPage />} />
+          <Route path="/learn/mission/:missionSlug" element={<IncidentMissionPage />} />
         </Route>
         <Route element={<AppShell />}>
           <Route path="/dashboard" element={<DashboardPage />} />
