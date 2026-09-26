@@ -1,7 +1,11 @@
 # Mission 4 - The JSON Looks Fine - Why Was It Rejected?
 
-Mission 4 uses the real `APEX_INVALID_CONTRACT` Integration Lab failure drill.
+Mission 4 is backed internally by the real `APEX_INVALID_CONTRACT` Integration Lab failure drill. The implementation key is not shown to the learner before diagnosis.
 
-The learner investigates a request whose JSON parses successfully but fails the Apex load tender contract. FreightBridge evidence shows `INVALID_APEX_LOAD` at the `VALIDATION` stage because the safe payload preview removes `pickup.postalCode`.
+The evidence sequence teaches:
 
-The correct last healthy checkpoint is JSON parsing. The safe action is to ask Apex to resend a contract-valid payload, then verify the corrected request through a clean `FULL_SHIPMENT_LIFECYCLE` retry.
+`RECEIVED -> AUTHENTICATION SUCCEEDED -> PARSING SUCCEEDED -> VALIDATION FAILED`
+
+The safe payload preview removes `pickup.postalCode`, so the JSON is syntactically readable but does not satisfy the Apex load contract. The correct last healthy checkpoint remains **JSON parsing succeeded**.
+
+The safe action is to resend a contract-valid training payload and verify that the same incident load advances beyond validation and completes the healthy lifecycle.

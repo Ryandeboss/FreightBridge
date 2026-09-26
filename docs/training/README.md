@@ -30,6 +30,14 @@ Missions 2-4 use existing real Integration Lab failure drills:
 - `APEX_INVALID_JSON`
 - `APEX_INVALID_CONTRACT`
 
+These names are internal implementation/test keys. Training Mode keeps them out of the learner-facing briefing and investigation UI so the scenario name does not reveal the diagnosis.
+
+The beginner checkpoint progression mirrors the real inbound pipeline:
+
+- Mission 2: request received -> authentication failed
+- Mission 3: request received -> authentication succeeded -> parsing failed
+- Mission 4: request received -> authentication succeeded -> parsing succeeded -> validation failed
+
 See [FreightBridge employee POV](freightbridge-employee-pov.md) for the observation rules and role framing.
 See [Healthy integration baseline](healthy-integration-baseline.md) for the Mission 1 checkpoint model.
 See [Incident game loop](incident-game-loop.md) for the beginner incident mission structure.

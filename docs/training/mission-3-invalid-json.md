@@ -1,7 +1,11 @@
 # Mission 3 - The Request Arrived, But FreightBridge Can't Read It
 
-Mission 3 uses the real `APEX_INVALID_JSON` Integration Lab failure drill.
+Mission 3 is backed internally by the real `APEX_INVALID_JSON` Integration Lab failure drill. The implementation key is not shown to the learner before diagnosis.
 
-The learner investigates a request that reached FreightBridge but could not become structured load data. FreightBridge evidence shows `INVALID_JSON` at the `PARSING` stage, so business validation, canonical shipment creation, Midwest 204 generation, and downstream carrier evidence were not reached.
+The backend authenticates the Apex request before attempting JSON parsing. The evidence sequence therefore teaches:
 
-The correct last healthy checkpoint is inbound request arrival. The safe action is to ask Apex to resend parseable JSON, then verify the corrected request through a clean `FULL_SHIPMENT_LIFECYCLE` retry.
+`RECEIVED -> AUTHENTICATION SUCCEEDED -> PARSING FAILED -> VALIDATION NOT REACHED`
+
+The correct last healthy checkpoint is **Partner authentication succeeded**. JSON parsing is the first failed checkpoint. The safe action is to resend parseable training JSON and verify that the same incident load advances beyond parsing and completes the healthy lifecycle.
+
+This mission distinguishes request arrival and authentication from payload readability.

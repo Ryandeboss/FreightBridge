@@ -208,7 +208,7 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
             <MissionProgress completed={objectives} total={8} />
           </div>
           <div className="mission-objectives">
-            <MissionObjective done={Boolean(incidentRun)}>Run the real {mission.scenarioKey} failure drill.</MissionObjective>
+            <MissionObjective done={Boolean(incidentRun)}>Run the controlled FreightBridge failure drill.</MissionObjective>
             <MissionObjective done={phaseOrder(phase) >= phaseOrder('INVESTIGATE')}>Inspect FreightBridge evidence.</MissionObjective>
             <MissionObjective done={lastHealthyId === mission.correctLastHealthyId}>Choose the last healthy checkpoint.</MissionObjective>
             <MissionObjective done={diagnosisId === mission.correctDiagnosisId}>Diagnose where the flow stopped.</MissionObjective>
@@ -257,17 +257,20 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
       )}
 
       {incidentRun && (
-        <section className="training-stack" data-testid="incident-workspace">
+        <section
+          className="training-stack"
+          data-testid="incident-workspace"
+          data-scenario-key={mission.scenarioKey}
+        >
           <article className="panel">
             <div className="panel-header">
               <div>
                 <p className="eyebrow">FreightBridge Failure Drill</p>
-                <h2>{mission.scenarioKey}</h2>
+                <h2>Incident Evidence</h2>
               </div>
               <span className="badge badge-danger">Incident observed</span>
             </div>
             <dl className="definition-grid">
-              <div><dt>Scenario</dt><dd>{incidentRun.scenarioKey}</dd></div>
               <div><dt>Run Status</dt><dd>{incidentRun.status}</dd></div>
               <div><dt>Incident Load</dt><dd data-testid="incident-load-id">{incidentRun.businessIdentifier}</dd></div>
               <div><dt>Processing Status</dt><dd>{String(observed?.processingStatus ?? 'FAILED')}</dd></div>
@@ -388,7 +391,7 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
             {recoveryRun && (
               <dl className="definition-grid">
                 <div><dt>Incident Load</dt><dd>{incidentRun.businessIdentifier}</dd></div>
-                <div><dt>Recovery Scenario</dt><dd>{recoveryRun.scenarioKey}</dd></div>
+                <div><dt>Recovery Path</dt><dd>Corrected healthy lifecycle</dd></div>
                 <div><dt>Recovery Load</dt><dd>{recoveryRun.businessIdentifier}</dd></div>
                 <div>
                   <dt>Correlation</dt>

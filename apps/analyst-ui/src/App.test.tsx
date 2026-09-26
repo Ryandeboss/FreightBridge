@@ -1488,7 +1488,7 @@ describe('Analyst Console', () => {
     expect(await screen.findByTestId('incident-mission-page')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Apex Can't Get a Load Through/i })).toBeInTheDocument();
     await completeIncidentMission({
-      lastHealthy: /No healthy processing checkpoint/i,
+      lastHealthy: /Inbound request was received by FreightBridge/i,
       diagnosis: /failed FreightBridge authentication/i,
       plan: /valid training authentication/i,
       recoveryButton: /Retry with valid training authentication/i,
@@ -1497,6 +1497,8 @@ describe('Analyst Console', () => {
     expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/AUTHENTICATION_ERROR/i);
     expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/AUTHENTICATION/i);
     expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/NOT REACHED/i);
+    expect(screen.getByTestId('incident-workspace')).toHaveAttribute('data-scenario-key', 'APEX_BAD_AUTH');
+    expect(screen.queryByRole('heading', { name: 'APEX_BAD_AUTH' })).not.toBeInTheDocument();
     expect(screen.getByTestId('verification-panel')).toHaveTextContent(/MATCHED - same incident load/i);
     expect(screen.getByTestId('incident-summary')).toBeInTheDocument();
     expect(screen.getByTestId('incident-workspace')).not.toHaveTextContent(token);
@@ -1524,7 +1526,7 @@ describe('Analyst Console', () => {
 
     expect(await screen.findByTestId('incident-mission-page')).toBeInTheDocument();
     await completeIncidentMission({
-      lastHealthy: /Inbound request reached FreightBridge/i,
+      lastHealthy: /Partner authentication succeeded/i,
       diagnosis: /malformed JSON/i,
       plan: /resend parseable JSON/i,
       recoveryButton: /Retry with corrected JSON/i,

@@ -124,7 +124,7 @@ def run_browser_acceptance(analyst_ui_base_url: str, operations_token: str) -> d
         slug='apex-bad-auth',
         scenario_key='APEX_BAD_AUTH',
         expected_error='AUTHENTICATION_ERROR',
-        last_healthy='No healthy processing checkpoint',
+        last_healthy='Inbound request was received by FreightBridge',
         diagnosis='failed FreightBridge authentication',
         plan='valid training authentication',
         recovery='Retry with valid training authentication',
@@ -138,7 +138,7 @@ def run_browser_acceptance(analyst_ui_base_url: str, operations_token: str) -> d
         slug='apex-invalid-json',
         scenario_key='APEX_INVALID_JSON',
         expected_error='INVALID_JSON',
-        last_healthy='Inbound request reached FreightBridge',
+        last_healthy='Partner authentication succeeded',
         diagnosis='malformed JSON',
         plan='resend parseable JSON',
         recovery='Retry with corrected JSON',
@@ -189,8 +189,8 @@ def run_incident_mission(
     page.get_by_role('button', name='Start Incident').click()
   workspace = page.get_by_test_id('incident-workspace')
   expect(workspace).to_be_visible(timeout=30000)
-  expect(workspace).to_contain_text(scenario_key)
-  expect(workspace).to_contain_text(expected_error)
+  expect(workspace).to_have_attribute('data-scenario-key', scenario_key)
+  expect(page.get_by_test_id('technical-classification')).to_contain_text(expected_error)
   expect(workspace).to_contain_text(re.compile('FAILED|NOT REACHED'))
   incident_load = page.get_by_test_id('incident-load-id').inner_text().strip()
   assert_truth(bool(incident_load), 'Incident correlation', 'Incident load identifier was empty.')
