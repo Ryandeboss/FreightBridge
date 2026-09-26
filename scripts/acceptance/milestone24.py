@@ -137,7 +137,8 @@ def run_training_lifecycle(page) -> None:
   while time.time() < deadline:
     if page.get_by_role('alert').count() > 0 and page.get_by_role('alert').first.is_visible():
       raise AcceptanceFailure('Training lifecycle', 'Mission displayed an unexpected failure alert.')
-    if page.get_by_text('Debrief').count() > 0 and page.get_by_text('Debrief').first.is_visible():
+    debrief_heading = page.get_by_role('heading', name='Debrief', exact=True)
+    if debrief_heading.count() > 0 and debrief_heading.is_visible():
       return
     if page.get_by_role('radiogroup', name=re.compile('you see a 997', re.IGNORECASE)).count() > 0:
       group = page.get_by_role('radiogroup', name=re.compile('you see a 997', re.IGNORECASE))
