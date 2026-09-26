@@ -112,7 +112,11 @@ def run_browser_acceptance(analyst_ui_base_url: str, operations_token: str) -> d
           completedMissions: ['LEARN_THE_FLOW']
         }));
       """)
-      page.goto(f'{analyst_ui_base_url.rstrip("/")}/#/learn', wait_until='domcontentloaded')
+      # TrainingHomePage reads progress from localStorage when it renders.
+      # Writing localStorage does not itself trigger a React rerender, and
+      # navigating to the same hash route is not guaranteed to remount it.
+      # Reload so the deployed UI reads the seeded Mission 1 completion.
+      page.reload(wait_until='domcontentloaded')
       expect(page.get_by_test_id('training-home-page')).to_be_visible(timeout=15000)
       expect(page.get_by_test_id('mission-1-card')).to_contain_text('Complete')
       expect(page.get_by_test_id('mission-2-card')).to_contain_text('Open Mission')
