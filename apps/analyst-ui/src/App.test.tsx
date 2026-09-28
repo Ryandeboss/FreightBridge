@@ -545,10 +545,73 @@ const completedInvalidJsonLabRun = makeCompletedFailureLabRun({
   },
 });
 
+const completedDuplicateShipmentLabRun = makeCompletedFailureLabRun({
+  id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+  scenarioKey: 'APEX_DUPLICATE_SHIPMENT',
+  businessIdentifier: 'LABDUP900',
+  stepKey: 'INJECT_DUPLICATE_SHIPMENT',
+  displayName: 'Inject duplicate shipment',
+  name: 'Duplicate Apex Shipment',
+  errorCode: 'DUPLICATE_SHIPMENT',
+  category: 'DUPLICATE_TRANSACTION',
+  stage: 'BUSINESS_VALIDATION',
+  safeMessage: 'Duplicate shipment rejected safely.',
+  guidance: 'Repeated request without Idempotency-Key is a duplicate shipment failure. Repeating with a valid idempotency key is a safe replay.',
+  injectedFault: 'Second request reuses the same loadId without Idempotency-Key.',
+  payloadPreview: {
+    loadId: 'LABDUP900',
+    baselineCreated: true,
+    secondAttempt: 'same loadId without Idempotency-Key',
+  },
+});
+
+const completedControlMismatchLabRun = makeCompletedFailureLabRun({
+  id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+  scenarioKey: 'X12_214_CONTROL_MISMATCH',
+  businessIdentifier: 'LAB214900',
+  stepKey: 'INJECT_X12_214_CONTROL_MISMATCH',
+  displayName: 'Inject 214 control mismatch',
+  name: '214 Control Mismatch',
+  errorCode: 'CONTROL_NUMBER_MISMATCH',
+  category: 'SYNTAX_ERROR',
+  stage: 'PARSING',
+  safeMessage: 'X12 transaction control numbers did not match.',
+  guidance: 'Check envelope control numbers before troubleshooting business mapping.',
+  injectedFault: 'SE02 changed so it does not match ST02.',
+  payloadPreview: {
+    x12: 'ST*214*1234~B10*MWC214*LAB214900*MWCX~AT7*AF****20260924*1500*UT~SE*7*9999~',
+    st02: '1234',
+    se02: '9999',
+  },
+});
+
+const completedUnsupportedStatusLabRun = makeCompletedFailureLabRun({
+  id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+  scenarioKey: 'X12_214_UNSUPPORTED_STATUS',
+  businessIdentifier: 'LABZZ900',
+  stepKey: 'INJECT_X12_214_UNSUPPORTED_STATUS',
+  displayName: 'Inject unsupported 214 status',
+  name: '214 Unsupported Status',
+  errorCode: 'UNSUPPORTED_AT7_CODE',
+  category: 'MAPPING_ERROR',
+  stage: 'MAPPING',
+  safeMessage: 'Unsupported AT7 status code.',
+  guidance: 'Check the trading-partner implementation guide and the active 214 status-code mapping.',
+  injectedFault: 'AT7-01 changed to unsupported code ZZ.',
+  payloadPreview: {
+    x12: 'ST*214*5678~B10*MWCZZ*LABZZ900*MWCX~AT7*ZZ****20260924*1500*UT~SE*7*5678~',
+    at701: 'ZZ',
+    supportedStatusCodes: ['AF', 'IT', 'AR', 'D1'],
+  },
+});
+
 const failureRunsByScenario: Record<string, ReturnType<typeof makeCompletedFailureLabRun>> = {
   APEX_BAD_AUTH: completedBadAuthLabRun,
   APEX_INVALID_JSON: completedInvalidJsonLabRun,
   APEX_INVALID_CONTRACT: completedFailureLabRun,
+  APEX_DUPLICATE_SHIPMENT: completedDuplicateShipmentLabRun,
+  X12_214_CONTROL_MISMATCH: completedControlMismatchLabRun,
+  X12_214_UNSUPPORTED_STATUS: completedUnsupportedStatusLabRun,
 };
 
 function makeCompletedFailureLabRun({
@@ -580,6 +643,8 @@ function makeCompletedFailureLabRun({
   injectedFault: string;
   payloadPreview: Record<string, unknown>;
 }) {
+  const documentType = scenarioKey.startsWith('X12_') ? '214' : 'APEX_LOAD_TENDER';
+  const transport = scenarioKey.startsWith('X12_') ? 'SFTP' : 'REST';
   return {
     ...completedFailureLabRun,
     id,
@@ -596,8 +661,8 @@ function makeCompletedFailureLabRun({
           category,
           stage,
           retryable: false,
-          documentType: 'APEX_LOAD_TENDER',
-          transport: 'REST',
+          documentType,
+          transport,
         },
         observed: {
           errorId,
@@ -610,8 +675,8 @@ function makeCompletedFailureLabRun({
           retryable: false,
           safeMessage,
           processingStatus: 'FAILED',
-          documentType: 'APEX_LOAD_TENDER',
-          transport: 'REST',
+          documentType,
+          transport,
         },
         drillOutcome: 'EXPECTED_FAILURE_OBSERVED',
         guidance,
@@ -1205,15 +1270,20 @@ async function completeIncidentMission({
   diagnosis,
   plan,
   recoveryButton,
+  evidenceSourceIds = [],
 }: {
   startButton?: RegExp;
   lastHealthy: RegExp;
   diagnosis: RegExp;
   plan: RegExp;
   recoveryButton: RegExp;
+  evidenceSourceIds?: string[];
 }) {
   await userEvent.click(screen.getByRole('button', { name: startButton }));
   expect(await screen.findByTestId('incident-workspace')).toBeInTheDocument();
+  for (const sourceId of evidenceSourceIds) {
+    await userEvent.click(within(screen.getByTestId(`evidence-source-${sourceId}`)).getAllByText(/^Inspect/i)[0]);
+  }
   await chooseIncidentOption(/Where did FreightBridge evidence last look healthy/i, lastHealthy);
   await chooseIncidentOption(/What is the most accurate FreightBridge diagnosis/i, diagnosis);
   await chooseIncidentOption(/What should you do next/i, plan);
@@ -1578,6 +1648,95 @@ describe('Analyst Console', () => {
     await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
     expect(await screen.findByTestId('incident-debrief')).toHaveTextContent(/MISSION COMPLETE/i);
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('APEX_INVALID_CONTRACT');
+    await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
+    expect(await screen.findByTestId('mission-5-card')).toHaveTextContent(/Open Mission/i);
+  }, 10000);
+
+  test('Mission 5 requires duplicate and idempotency evidence before diagnosis', async () => {
+    installFetchMock();
+    window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({ version: 1, completedMissions: ['LEARN_THE_FLOW', 'APEX_BAD_AUTH', 'APEX_INVALID_JSON', 'APEX_INVALID_CONTRACT'] }));
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn/mission/duplicate-shipment';
+    render(<App />);
+
+    expect(await screen.findByTestId('incident-mission-page')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Start Incident/i }));
+    expect(await screen.findByTestId('incident-workspace')).toHaveAttribute('data-scenario-key', 'APEX_DUPLICATE_SHIPMENT');
+    expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/Duplicate Protection/i);
+    expect(screen.getByTestId('diagnosis-gate')).toHaveTextContent(/Inspect the required evidence/i);
+    await chooseIncidentOption(/Where did FreightBridge evidence last look healthy/i, /Original shipment was established/i);
+    expect(within(screen.getByTestId('diagnosis-panel')).getByRole('radio', { name: /same shipment was resent/i })).toBeDisabled();
+
+    await userEvent.click(within(screen.getByTestId('evidence-source-transaction')).getAllByText(/^Inspect/i)[0]);
+    await userEvent.click(within(screen.getByTestId('evidence-source-idempotency')).getAllByText(/^Inspect/i)[0]);
+    await chooseIncidentOption(/What is the most accurate FreightBridge diagnosis/i, /same shipment was resent without an idempotency key/i);
+    await chooseIncidentOption(/What should you do next/i, /safe replay/i);
+    await userEvent.click(screen.getByRole('button', { name: /Verify safe replay protection/i }));
+    expect(await screen.findByTestId('verification-panel')).toHaveTextContent(/same incident load/i);
+    await userEvent.type(screen.getByLabelText(/Write Mike/i), 'Mike, the same load was resent without idempotency protection; FreightBridge preserved the original and blocked duplicate downstream work.');
+    await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
+    expect(await screen.findByTestId('incident-summary')).toHaveTextContent(/same load correlated/i);
+    expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('DUPLICATE_SHIPMENT');
+
+    await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
+    expect(await screen.findByTestId('mission-6-card')).toHaveTextContent(/Open Mission/i);
+    expect(screen.getByTestId('mission-7-card')).toHaveTextContent(/Locked/i);
+  }, 10000);
+
+  test('Mission 6 teaches 214 ST02 and SE02 control-number correlation', async () => {
+    installFetchMock();
+    window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({ version: 1, completedMissions: ['LEARN_THE_FLOW', 'APEX_BAD_AUTH', 'APEX_INVALID_JSON', 'APEX_INVALID_CONTRACT', 'DUPLICATE_SHIPMENT'] }));
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn/mission/x12-envelope-mismatch';
+    render(<App />);
+
+    expect(await screen.findByTestId('incident-mission-page')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Start Incident/i }));
+    expect(await screen.findByTestId('incident-workspace')).toHaveAttribute('data-scenario-key', 'X12_214_CONTROL_MISMATCH');
+    await userEvent.click(within(screen.getByTestId('evidence-source-sftp')).getAllByText(/^Inspect/i)[0]);
+    await userEvent.click(within(screen.getByTestId('evidence-source-raw-x12')).getAllByText(/^Inspect/i)[0]);
+    expect(screen.getByTestId('evidence-source-raw-x12')).toHaveTextContent(/ST\*214\*1234/i);
+    expect(screen.getByTestId('evidence-source-raw-x12')).toHaveTextContent(/SE\*7\*9999/i);
+    await chooseIncidentOption(/Where did FreightBridge evidence last look healthy/i, /214 file reached FreightBridge/i);
+    await chooseIncidentOption(/What is the most accurate FreightBridge diagnosis/i, /ST02 and SE02/i);
+    await chooseIncidentOption(/What should you do next/i, /Correct the 214 transaction-set control numbers/i);
+    await userEvent.click(screen.getByRole('button', { name: /Retry corrected 214 controls/i }));
+    expect(await screen.findByTestId('recovery-correlation')).toHaveTextContent(/same incident load/i);
+    await userEvent.type(screen.getByLabelText(/Write Mike/i), 'Mike, Midwest file arrival was verified, but ST02 and SE02 mismatched; corrected controls recovered the same load status flow.');
+    await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
+    expect(await screen.findByTestId('incident-debrief')).toHaveTextContent(/MISSION COMPLETE/i);
+    expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('X12_ENVELOPE_MISMATCH');
+
+    await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
+    expect(await screen.findByTestId('mission-7-card')).toHaveTextContent(/Open Mission/i);
+  }, 10000);
+
+  test('Mission 7 separates valid X12 parsing from unsupported 214 status mapping', async () => {
+    installFetchMock();
+    window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({ version: 1, completedMissions: ['LEARN_THE_FLOW', 'APEX_BAD_AUTH', 'APEX_INVALID_JSON', 'APEX_INVALID_CONTRACT', 'DUPLICATE_SHIPMENT', 'X12_ENVELOPE_MISMATCH'] }));
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn/mission/status-callback-missing';
+    render(<App />);
+
+    expect(await screen.findByTestId('incident-mission-page')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Start Incident/i }));
+    expect(await screen.findByTestId('incident-workspace')).toHaveAttribute('data-scenario-key', 'X12_214_UNSUPPORTED_STATUS');
+    await userEvent.click(within(screen.getByTestId('evidence-source-raw-x12')).getAllByText(/^Inspect/i)[0]);
+    await userEvent.click(within(screen.getByTestId('evidence-source-mapping')).getAllByText(/^Inspect/i)[0]);
+    expect(screen.getByTestId('evidence-source-raw-x12')).toHaveTextContent(/AT7\*ZZ/i);
+    expect(screen.getByTestId('evidence-source-mapping')).toHaveTextContent(/AF, IT, AR, and D1/i);
+    await chooseIncidentOption(/Where did FreightBridge evidence last look healthy/i, /passed X12 parsing/i);
+    await chooseIncidentOption(/What is the most accurate FreightBridge diagnosis/i, /unsupported status code ZZ/i);
+    await chooseIncidentOption(/What should you do next/i, /supported AT7 value/i);
+    await userEvent.click(screen.getByRole('button', { name: /Retry corrected supported 214 status/i }));
+    expect(await screen.findByTestId('verification-panel')).toHaveTextContent(/Shipment Status/i);
+    await userEvent.type(screen.getByLabelText(/Write Mike/i), 'Mike, Midwest sent a valid 214 structure, but AT7 ZZ is unsupported mapping; corrected supported status recovered Apex-facing evidence.');
+    await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
+    expect(await screen.findByTestId('incident-debrief')).toHaveTextContent(/semantic mapping/i);
+    expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('STATUS_CALLBACK_MISSING');
+
+    await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
+    expect(await screen.findByTestId('mission-8-card')).toHaveTextContent(/Locked/i);
   }, 10000);
 
   test('searches transactions and opens detail with retry action', async () => {

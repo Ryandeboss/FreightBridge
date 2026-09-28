@@ -152,6 +152,6 @@ Mission 1 is marked complete only when:
 - the required checkpoint knowledge checks are answered correctly
 - the final healthy-flow review is completed correctly
 
-After completion, `LEARN_THE_FLOW` is saved to local training progress. The mission ID remains unchanged for compatibility with users who completed earlier Training Mode milestones. Mission 2 becomes visible as coming soon, but it is not implemented.
+After completion, `LEARN_THE_FLOW` is saved to local training progress. The mission ID remains unchanged for compatibility with users who completed earlier Training Mode milestones. Mission 2 unlocks as the first beginner incident.
 
 Replay starts a new real `FULL_SHIPMENT_LIFECYCLE` run and resets current mission answers while preserving historical completion progress.

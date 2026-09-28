@@ -54,6 +54,7 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
   const [lastHealthyId, setLastHealthyId] = useState<string | null>(null);
   const [diagnosisId, setDiagnosisId] = useState<string | null>(null);
   const [planId, setPlanId] = useState<string | null>(null);
+  const [inspectedEvidenceIds, setInspectedEvidenceIds] = useState<string[]>([]);
   const [statusUpdate, setStatusUpdate] = useState('');
   const [recoveryState, setRecoveryState] = useState<RecoveryState>('IDLE');
   const [working, setWorking] = useState(false);
@@ -65,7 +66,9 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
   const failureDrill = useMemo(() => readRecord(incidentRun?.resultSummary.failureDrill), [incidentRun]);
   const observed = readRecord(failureDrill?.observed);
   const expected = readRecord(failureDrill?.expected);
-  const canDiagnose = lastHealthyId === mission.correctLastHealthyId && diagnosisId === mission.correctDiagnosisId;
+  const requiredEvidenceIds = mission.requiredEvidenceSourceIds ?? [];
+  const requiredEvidenceInspected = requiredEvidenceIds.every((id) => inspectedEvidenceIds.includes(id));
+  const canDiagnose = requiredEvidenceInspected && lastHealthyId === mission.correctLastHealthyId && diagnosisId === mission.correctDiagnosisId;
   const canPlan = planId === mission.correctPlanId;
   const recoveryCorrelated = Boolean(
     incidentRun &&
@@ -103,6 +106,7 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
     setLastHealthyId(null);
     setDiagnosisId(null);
     setPlanId(null);
+    setInspectedEvidenceIds([]);
     try {
       const created = await createLabRun(token, {
         scenarioKey: mission.scenarioKey,
@@ -129,6 +133,12 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
     setError(null);
     setRecoveryState('RUNNING');
     try {
+      if (mission.recoveryMode === 'INCIDENT_VERIFICATION') {
+        setRecoveryRun(incidentRun);
+        setRecoveryState('SUCCEEDED');
+        setPhase('VERIFY');
+        return;
+      }
       let nextRun = await createLabRun(token, {
         scenarioKey: 'FULL_SHIPMENT_LIFECYCLE',
         loadId: incidentRun.businessIdentifier,
@@ -162,6 +172,10 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
     }
   }
 
+  function markEvidenceInspected(id: string) {
+    setInspectedEvidenceIds((current) => current.includes(id) ? current : [...current, id]);
+  }
+
   function finishMission() {
     if (!canReport) return;
     completeMission(mission.id);
@@ -177,7 +191,7 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
       </Link>
 
       <MissionBriefing>
-        <p className="eyebrow">Mission {mission.missionNumber} - Beginner Incident</p>
+        <p className="eyebrow">Mission {mission.missionNumber} - {mission.missionNumber >= 5 ? 'Intermediate' : 'Beginner'} Incident</p>
         <h1>{mission.title.replace(/^Mission \d+ - /, '')}</h1>
         <p>{mission.symptom}</p>
         <MissionPhaseProgress phases={missionPhases} current={phase} />
@@ -209,7 +223,9 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
           </div>
           <div className="mission-objectives">
             <MissionObjective done={Boolean(incidentRun)}>Run the controlled FreightBridge failure drill.</MissionObjective>
-            <MissionObjective done={phaseOrder(phase) >= phaseOrder('INVESTIGATE')}>Inspect FreightBridge evidence.</MissionObjective>
+            <MissionObjective done={requiredEvidenceIds.length === 0 ? phaseOrder(phase) >= phaseOrder('INVESTIGATE') : requiredEvidenceInspected}>
+              Inspect required FreightBridge evidence.
+            </MissionObjective>
             <MissionObjective done={lastHealthyId === mission.correctLastHealthyId}>Choose the last healthy checkpoint.</MissionObjective>
             <MissionObjective done={diagnosisId === mission.correctDiagnosisId}>Diagnose where the flow stopped.</MissionObjective>
             <MissionObjective done={planId === mission.correctPlanId}>Choose a safe remediation plan.</MissionObjective>
@@ -314,6 +330,61 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
             <AnalystNotes storageKey={`freightbridge.trainingNotes.${mission.id}`} />
           </section>
 
+          {mission.evidenceSources && (
+            <article className="panel" data-testid="intermediate-evidence-workspace">
+              <div className="panel-header">
+                <div>
+                  <p className="eyebrow">Investigation Workspace</p>
+                  <h2>Evidence Sources</h2>
+                </div>
+                <span className="badge badge-info">
+                  {inspectedEvidenceIds.length} / {requiredEvidenceIds.length || mission.evidenceSources.length} inspected
+                </span>
+              </div>
+              <p className="muted-text">
+                Inspect at least two relevant FreightBridge evidence sources before making the final diagnosis.
+              </p>
+              <div className="intermediate-evidence-grid">
+                {mission.evidenceSources.map((source) => {
+                  const inspected = inspectedEvidenceIds.includes(source.id);
+                  const required = requiredEvidenceIds.includes(source.id);
+                  return (
+                    <details
+                      key={source.id}
+                      className={`evidence-panel intermediate-source ${inspected ? 'inspected' : ''}`}
+                      data-testid={`evidence-source-${source.id}`}
+                      onToggle={(event) => {
+                        if (event.currentTarget.open) markEvidenceInspected(source.id);
+                      }}
+                    >
+                      <summary>
+                        <span>{source.inspectedLabel}</span>
+                        {required && <small>Required</small>}
+                      </summary>
+                      <div className="evidence-source-body">
+                        <p className="eyebrow">{source.source}</p>
+                        <h3>{source.title}</h3>
+                        <p>{source.summary}</p>
+                        <ul className="check-list">
+                          {source.details.map((detail) => <li key={detail}>{detail}</li>)}
+                        </ul>
+                        {source.rawFrom && (
+                          <pre className="lab-preview">{renderRawEvidence(source.rawFrom, incidentRun, failureDrill)}</pre>
+                        )}
+                      </div>
+                    </details>
+                  );
+                })}
+              </div>
+              {!requiredEvidenceInspected && requiredEvidenceIds.length > 0 && (
+                <div className="knowledge-feedback incorrect" data-testid="diagnosis-gate">
+                  <AlertTriangle size={18} />
+                  <p>Inspect the required evidence sources before selecting a final diagnosis.</p>
+                </div>
+              )}
+            </article>
+          )}
+
           <ChoicePanel
             testId="last-healthy-checkpoint-selector"
             title="Last Healthy Checkpoint"
@@ -334,7 +405,7 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
             options={mission.diagnosisOptions}
             selected={diagnosisId}
             correctId={mission.correctDiagnosisId}
-            disabled={lastHealthyId !== mission.correctLastHealthyId}
+            disabled={lastHealthyId !== mission.correctLastHealthyId || !requiredEvidenceInspected}
             onSelect={(id) => {
               setDiagnosisId(id);
               if (id === mission.correctDiagnosisId && lastHealthyId === mission.correctLastHealthyId) {
@@ -391,7 +462,7 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
             {recoveryRun && (
               <dl className="definition-grid">
                 <div><dt>Incident Load</dt><dd>{incidentRun.businessIdentifier}</dd></div>
-                <div><dt>Recovery Path</dt><dd>Corrected healthy lifecycle</dd></div>
+                <div><dt>Recovery Path</dt><dd>{mission.recoveryMode === 'INCIDENT_VERIFICATION' ? 'Protected incident verification' : 'Corrected healthy lifecycle'}</dd></div>
                 <div><dt>Recovery Load</dt><dd>{recoveryRun.businessIdentifier}</dd></div>
                 <div>
                   <dt>Correlation</dt>
@@ -545,4 +616,39 @@ function generateIncidentLoadId(missionNumber: number): string {
 
 function readRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function renderRawEvidence(
+  source: 'failureDrill' | 'payloadPreview' | 'x12Fault' | 'observedFailure' | 'steps' | 'resultSummary',
+  run: LabRun,
+  failureDrill: Record<string, unknown> | null,
+): string {
+  const stepResponse = run.steps.find((step) => Object.keys(step.responseSummary ?? {}).length > 0)?.responseSummary;
+  const value = (() => {
+    switch (source) {
+      case 'failureDrill':
+        return failureDrill;
+      case 'payloadPreview':
+        return failureDrill?.payloadPreview ?? stepResponse?.payloadPreview;
+      case 'x12Fault':
+        return stepResponse?.x12Fault ?? failureDrill?.payloadPreview;
+      case 'observedFailure':
+        return failureDrill?.observed ?? stepResponse?.observedFailure;
+      case 'steps':
+        return run.steps.map((step) => ({
+          stepKey: step.stepKey,
+          status: step.status,
+          relatedTransactionIds: step.relatedTransactionIds,
+          requestSummary: step.requestSummary,
+          responseSummary: step.responseSummary,
+        }));
+      case 'resultSummary':
+        return run.resultSummary;
+      default:
+        return null;
+    }
+  })();
+  if (value === null || value === undefined) return 'Evidence pending.';
+  if (typeof value === 'string') return value;
+  return JSON.stringify(value, null, 2);
 }
