@@ -141,3 +141,17 @@ def run_next(
   return LabStepExecutionResponse.model_validate(
     {'run': run, 'step': step, 'already_completed': already_completed}
   ).model_dump(mode='json', by_alias=True)
+
+
+@router.post('/runs/{run_id}/recover', dependencies=[Depends(require_operations_access)])
+def recover_run(
+  run_id: UUID,
+  service: IntegrationLabService = Depends(get_lab_service),
+) -> dict[str, object]:
+  try:
+    run = service.recover_run(run_id)
+  except LabExecutionError as exc:
+    raise lab_error(exc) from exc
+  except psycopg.Error as exc:
+    raise dependency_error('Integration Lab recovery failed.') from exc
+  return LabRunView.model_validate(run).model_dump(mode='json', by_alias=True)

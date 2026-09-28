@@ -1155,6 +1155,75 @@ function installFetchMock(options: {
       return jsonResponse(readiness);
     }
 
+    if (
+      path.startsWith('/api/lab/runs/')
+      && path.endsWith('/recover')
+      && init?.method === 'POST'
+    ) {
+      const scenarioKey = String(currentLabRun.scenarioKey);
+      const currentResultSummary = (currentLabRun.resultSummary as Record<string, unknown>) ?? {};
+      let recovery: Record<string, unknown>;
+
+      if (scenarioKey === 'APEX_DUPLICATE_SHIPMENT') {
+        recovery = {
+          status: 'SUCCEEDED',
+          recoveryKind: 'IDEMPOTENT_REPLAY',
+          sameBusinessIdentifier: true,
+          idempotentReplay: true,
+          originalTransactionId: 'orig-transaction',
+          replayTransactionId: 'replay-transaction',
+          originalShipmentReused: true,
+          downstream204CountBefore: 0,
+          downstream204CountAfter: 0,
+          duplicate204Created: false,
+        };
+      } else if (scenarioKey === 'X12_214_CONTROL_MISMATCH') {
+        recovery = {
+          status: 'SUCCEEDED',
+          recoveryKind: 'CORRECTED_214_CONTROLS',
+          sameBusinessIdentifier: true,
+          correctedSt02: '1234',
+          correctedSe02: '1234',
+          controlCorrelation: 'MATCHED',
+          correctedAt7: 'AF',
+          parseStatus: 'SUCCEEDED',
+          mappingStatus: 'SUCCEEDED',
+          normalizedShipmentStatus: 'PICKED_UP',
+          apexFacingEvidence: true,
+          correctedX12: 'ST*214*1234~AT7*AF****20260924*1500*UT~SE*7*1234~',
+        };
+      } else if (scenarioKey === 'X12_214_UNSUPPORTED_STATUS') {
+        recovery = {
+          status: 'SUCCEEDED',
+          recoveryKind: 'CORRECTED_214_STATUS',
+          sameBusinessIdentifier: true,
+          correctedSt02: '5678',
+          correctedSe02: '5678',
+          controlCorrelation: 'MATCHED',
+          correctedAt7: 'AF',
+          parseStatus: 'SUCCEEDED',
+          mappingStatus: 'SUCCEEDED',
+          normalizedShipmentStatus: 'PICKED_UP',
+          apexFacingEvidence: true,
+          correctedX12: 'ST*214*5678~AT7*AF****20260924*1500*UT~SE*7*5678~',
+        };
+      } else {
+        return jsonResponse(
+          { detail: { error: { code: 'LAB_RECOVERY_NOT_SUPPORTED', message: 'Recovery not supported.' } } },
+          409,
+        );
+      }
+
+      currentLabRun = {
+        ...currentLabRun,
+        resultSummary: {
+          ...currentResultSummary,
+          recovery,
+        },
+      };
+      return jsonResponse(currentLabRun);
+    }
+
     if (path === '/api/lab/runs') {
       if (init?.method === 'POST') {
         const body = JSON.parse(String(init.body));
@@ -1673,6 +1742,9 @@ describe('Analyst Console', () => {
     await chooseIncidentOption(/What should you do next/i, /safe replay/i);
     await userEvent.click(screen.getByRole('button', { name: /Verify safe replay protection/i }));
     expect(await screen.findByTestId('verification-panel')).toHaveTextContent(/same incident load/i);
+    expect(screen.getByTestId('verification-panel')).toHaveTextContent(/Idempotent Replay/i);
+    expect(screen.getByTestId('verification-panel')).toHaveTextContent(/Duplicate 204 Created/i);
+    expect(screen.getByTestId('verification-panel')).toHaveTextContent(/NO/i);
     await userEvent.type(screen.getByLabelText(/Write Mike/i), 'Mike, the same load was resent without idempotency protection; FreightBridge preserved the original and blocked duplicate downstream work.');
     await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
     expect(await screen.findByTestId('incident-summary')).toHaveTextContent(/same load correlated/i);
@@ -1702,6 +1774,10 @@ describe('Analyst Console', () => {
     await chooseIncidentOption(/What should you do next/i, /Correct the 214 transaction-set control numbers/i);
     await userEvent.click(screen.getByRole('button', { name: /Retry corrected 214 controls/i }));
     expect(await screen.findByTestId('recovery-correlation')).toHaveTextContent(/same incident load/i);
+    expect(screen.getByTestId('verification-panel')).toHaveTextContent(/Control Correlation/i);
+    expect(screen.getByTestId('verification-panel')).toHaveTextContent(/MATCHED/i);
+    expect(screen.getByTestId('verification-panel')).toHaveTextContent(/Parsing/i);
+    expect(screen.getByTestId('verification-panel')).toHaveTextContent(/Mapping/i);
     await userEvent.type(screen.getByLabelText(/Write Mike/i), 'Mike, Midwest file arrival was verified, but ST02 and SE02 mismatched; corrected controls recovered the same load status flow.');
     await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
     expect(await screen.findByTestId('incident-debrief')).toHaveTextContent(/MISSION COMPLETE/i);
@@ -1730,6 +1806,9 @@ describe('Analyst Console', () => {
     await chooseIncidentOption(/What should you do next/i, /supported AT7 value/i);
     await userEvent.click(screen.getByRole('button', { name: /Retry corrected supported 214 status/i }));
     expect(await screen.findByTestId('verification-panel')).toHaveTextContent(/Shipment Status/i);
+    expect(screen.getByTestId('verification-panel')).toHaveTextContent(/Corrected AT7-01/i);
+    expect(screen.getByTestId('verification-panel')).toHaveTextContent(/Apex-Facing Evidence/i);
+    expect(screen.getByTestId('verification-panel')).toHaveTextContent(/PRESENT/i);
     await userEvent.type(screen.getByLabelText(/Write Mike/i), 'Mike, Midwest sent a valid 214 structure, but AT7 ZZ is unsupported mapping; corrected supported status recovered Apex-facing evidence.');
     await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
     expect(await screen.findByTestId('incident-debrief')).toHaveTextContent(/semantic mapping/i);

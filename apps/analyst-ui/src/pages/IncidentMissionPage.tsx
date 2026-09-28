@@ -2,7 +2,7 @@ import { AlertTriangle, ArrowLeft, CheckCircle2, ExternalLink, Play, RefreshCw }
 import { useMemo, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
-import { createLabRun, runNextLabStep, type LabRun } from '../api/lab';
+import { createLabRun, recoverLabRun, runNextLabStep, type LabRun } from '../api/lab';
 import { useOperationsSession } from '../auth/OperationsSession';
 import {
   AnalystNotes,
@@ -66,6 +66,10 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
   const failureDrill = useMemo(() => readRecord(incidentRun?.resultSummary.failureDrill), [incidentRun]);
   const observed = readRecord(failureDrill?.observed);
   const expected = readRecord(failureDrill?.expected);
+  const recoveryEvidence = useMemo(
+    () => readRecord(recoveryRun?.resultSummary.recovery),
+    [recoveryRun],
+  );
   const requiredEvidenceIds = mission.requiredEvidenceSourceIds ?? [];
   const requiredEvidenceInspected = requiredEvidenceIds.every((id) => inspectedEvidenceIds.includes(id));
   const canDiagnose = requiredEvidenceInspected && lastHealthyId === mission.correctLastHealthyId && diagnosisId === mission.correctDiagnosisId;
@@ -73,7 +77,11 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
   const recoveryCorrelated = Boolean(
     incidentRun &&
     recoveryRun &&
-    recoveryRun.businessIdentifier === incidentRun.businessIdentifier
+    recoveryRun.businessIdentifier === incidentRun.businessIdentifier &&
+    (
+      mission.missionNumber < 5 ||
+      recoveryEvidence?.sameBusinessIdentifier === true
+    )
   );
   const selectedLastHealthy = mission.lastHealthyOptions.find((option) => option.id === lastHealthyId);
   const selectedDiagnosis = mission.diagnosisOptions.find((option) => option.id === diagnosisId);
@@ -108,7 +116,7 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
     setPlanId(null);
     setInspectedEvidenceIds([]);
     try {
-      const created = await createLabRun(token, {
+      let nextIncidentRun = await createLabRun(token, {
         scenarioKey: mission.scenarioKey,
         loadId: generateIncidentLoadId(mission.missionNumber),
         equipmentType: 'VAN_53',
@@ -116,8 +124,16 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
         pieces: 22,
         commodityDescription: 'Training Incident Freight',
       });
-      const executed = await runNextLabStep(token, created.id);
-      setIncidentRun(executed.run);
+      let guard = 0;
+      while (nextIncidentRun.status !== 'SUCCEEDED' && nextIncidentRun.status !== 'FAILED' && guard < 10) {
+        const executed = await runNextLabStep(token, nextIncidentRun.id);
+        nextIncidentRun = executed.run;
+        guard += 1;
+      }
+      if (nextIncidentRun.status !== 'SUCCEEDED') {
+        throw new Error('Controlled incident drill did not reach its expected observed-failure result.');
+      }
+      setIncidentRun(nextIncidentRun);
       setPhase('INVESTIGATE');
     } catch (nextError) {
       handleApiError(nextError);
@@ -133,12 +149,23 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
     setError(null);
     setRecoveryState('RUNNING');
     try {
-      if (mission.recoveryMode === 'INCIDENT_VERIFICATION') {
-        setRecoveryRun(incidentRun);
-        setRecoveryState('SUCCEEDED');
-        setPhase('VERIFY');
+      if (mission.missionNumber >= 5) {
+        const recoveredRun = await recoverLabRun(token, incidentRun.id);
+        const proof = readRecord(recoveredRun.resultSummary.recovery);
+        const correlated =
+          recoveredRun.businessIdentifier === incidentRun.businessIdentifier &&
+          proof?.sameBusinessIdentifier === true;
+        const succeeded = proof?.status === 'SUCCEEDED' && correlated;
+        setRecoveryRun(recoveredRun);
+        setRecoveryState(succeeded ? 'SUCCEEDED' : 'FAILED');
+        if (succeeded) {
+          setPhase('VERIFY');
+        } else {
+          setError('Server-backed recovery did not produce complete same-load verification evidence.');
+        }
         return;
       }
+
       let nextRun = await createLabRun(token, {
         scenarioKey: 'FULL_SHIPMENT_LIFECYCLE',
         loadId: incidentRun.businessIdentifier,
@@ -229,7 +256,7 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
             <MissionObjective done={lastHealthyId === mission.correctLastHealthyId}>Choose the last healthy checkpoint.</MissionObjective>
             <MissionObjective done={diagnosisId === mission.correctDiagnosisId}>Diagnose where the flow stopped.</MissionObjective>
             <MissionObjective done={planId === mission.correctPlanId}>Choose a safe remediation plan.</MissionObjective>
-            <MissionObjective done={recoveryState === 'SUCCEEDED'}>Verify recovery with a healthy Lab retry.</MissionObjective>
+            <MissionObjective done={recoveryState === 'SUCCEEDED'}>{mission.missionNumber >= 5 ? 'Verify server-backed incident recovery.' : 'Verify recovery with a healthy Lab retry.'}</MissionObjective>
             <MissionObjective done={statusUpdate.trim().length >= 40}>Send Mike a status update.</MissionObjective>
             <MissionObjective done={completed || alreadyCompleted}>Complete the debrief.</MissionObjective>
           </div>
@@ -435,8 +462,10 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
               <h2>Act</h2>
             </div>
             <p>
-              {mission.remediationLabel}. FreightBridge will retry the same incident load through the clean
-              training path, then verify that the previously failing flow now progresses normally.
+              {mission.remediationLabel}.{' '}
+              {mission.missionNumber >= 5
+                ? 'FreightBridge will perform the mission-specific server-backed remediation on the same incident load and return concrete recovery evidence.'
+                : 'FreightBridge will retry the same incident load through the clean training path, then verify that the previously failing flow now progresses normally.'}
             </p>
             <div className="lab-actions">
               <button className="primary-button" type="button" onClick={runRecovery} disabled={!canPlan || working || recoveryState === 'SUCCEEDED'}>
@@ -460,7 +489,8 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
             </div>
             <p>{mission.verification}</p>
             {recoveryRun && (
-              <dl className="definition-grid">
+              <>
+                <dl className="definition-grid">
                 <div><dt>Incident Load</dt><dd>{incidentRun.businessIdentifier}</dd></div>
                 <div><dt>Recovery Path</dt><dd>{mission.recoveryMode === 'INCIDENT_VERIFICATION' ? 'Protected incident verification' : 'Corrected healthy lifecycle'}</dd></div>
                 <div><dt>Recovery Load</dt><dd>{recoveryRun.businessIdentifier}</dd></div>
@@ -470,10 +500,55 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
                     {recoveryCorrelated ? 'MATCHED - same incident load' : 'MISMATCH'}
                   </dd>
                 </div>
-                <div><dt>Recovery Status</dt><dd>{recoveryRun.status}</dd></div>
+                <div><dt>Recovery Status</dt><dd>{mission.missionNumber >= 5 ? String(recoveryEvidence?.status ?? recoveryRun.status) : recoveryRun.status}</dd></div>
                 <div><dt>Tender Status</dt><dd>{String(recoveryRun.resultSummary.tenderStatus ?? 'Pending')}</dd></div>
-                <div><dt>Shipment Status</dt><dd>{String(recoveryRun.resultSummary.shipmentStatus ?? 'Pending')}</dd></div>
+                <div><dt>Shipment Status</dt><dd>{String(recoveryEvidence?.normalizedShipmentStatus ?? recoveryRun.resultSummary.shipmentStatus ?? 'Pending')}</dd></div>
+                {mission.missionNumber >= 5 && (
+                  <>
+                    <div><dt>Recovery Action</dt><dd>{String(recoveryEvidence?.recoveryKind ?? 'Unknown')}</dd></div>
+                    {recoveryEvidence?.idempotentReplay !== undefined && (
+                      <div><dt>Idempotent Replay</dt><dd>{recoveryEvidence.idempotentReplay === true ? 'YES' : 'NO'}</dd></div>
+                    )}
+                    {recoveryEvidence?.originalTransactionId && (
+                      <div><dt>Original Transaction</dt><dd>{String(recoveryEvidence.originalTransactionId)}</dd></div>
+                    )}
+                    {recoveryEvidence?.replayTransactionId && (
+                      <div><dt>Replay Transaction</dt><dd>{String(recoveryEvidence.replayTransactionId)}</dd></div>
+                    )}
+                    {recoveryEvidence?.duplicate204Created !== undefined && (
+                      <div><dt>Duplicate 204 Created</dt><dd>{recoveryEvidence.duplicate204Created === true ? 'YES' : 'NO'}</dd></div>
+                    )}
+                    {recoveryEvidence?.correctedSt02 && (
+                      <div><dt>Corrected ST02</dt><dd>{String(recoveryEvidence.correctedSt02)}</dd></div>
+                    )}
+                    {recoveryEvidence?.correctedSe02 && (
+                      <div><dt>Corrected SE02</dt><dd>{String(recoveryEvidence.correctedSe02)}</dd></div>
+                    )}
+                    {recoveryEvidence?.controlCorrelation && (
+                      <div><dt>Control Correlation</dt><dd>{String(recoveryEvidence.controlCorrelation)}</dd></div>
+                    )}
+                    {recoveryEvidence?.correctedAt7 && (
+                      <div><dt>Corrected AT7-01</dt><dd>{String(recoveryEvidence.correctedAt7)}</dd></div>
+                    )}
+                    {recoveryEvidence?.parseStatus && (
+                      <div><dt>Parsing</dt><dd>{String(recoveryEvidence.parseStatus)}</dd></div>
+                    )}
+                    {recoveryEvidence?.mappingStatus && (
+                      <div><dt>Mapping</dt><dd>{String(recoveryEvidence.mappingStatus)}</dd></div>
+                    )}
+                    {recoveryEvidence?.apexFacingEvidence !== undefined && (
+                      <div><dt>Apex-Facing Evidence</dt><dd>{recoveryEvidence.apexFacingEvidence === true ? 'PRESENT' : 'MISSING'}</dd></div>
+                    )}
+                  </>
+                )}
               </dl>
+              {mission.missionNumber >= 5 && typeof recoveryEvidence?.correctedX12 === 'string' && (
+                <details className="technical-classification">
+                  <summary>Inspect corrected recovery X12</summary>
+                  <pre className="lab-preview">{recoveryEvidence.correctedX12}</pre>
+                </details>
+              )}
+              </>
             )}
           </article>
 

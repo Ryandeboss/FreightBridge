@@ -378,6 +378,88 @@ class IntegrationLabService:
       return run, None, False
     return self.execute_step(run_id, step['step_key'])
 
+  # Milestone 27 server-backed recovery.
+  def recover_run(self, run_id: UUID) -> dict[str, object]:
+    run = self.repository.get_run(run_id)
+    if run is None:
+      raise LabExecutionError('LAB_RUN_NOT_FOUND', 'Integration Lab run was not found.')
+
+    scenario_key = str(run['scenario_key'])
+    supported = {
+      'APEX_DUPLICATE_SHIPMENT',
+      'X12_214_CONTROL_MISMATCH',
+      'X12_214_UNSUPPORTED_STATUS',
+    }
+    if scenario_key not in supported:
+      raise LabExecutionError(
+        'LAB_RECOVERY_NOT_SUPPORTED',
+        f'No Milestone 27 recovery is defined for {scenario_key}.',
+      )
+
+    load_id = str(run['business_identifier'])
+    baseline_dispatch: dict[str, object] | None = None
+
+    if scenario_key.startswith('X12_214_'):
+      snapshot = dict(run['input_snapshot'])
+      payload = self._apex_payload(snapshot)
+      self._create_apex_load(load_id, payload)
+      baseline_dispatch = self.apex.post(
+        f'/v1/load-tenders/{load_id}/dispatch',
+        headers={'Idempotency-Key': f'lab-{run_id}-m27-recovery-baseline'},
+      )
+
+    try:
+      recovery = self.failure_drills.recover(run)
+    except LabDrillMismatch as exc:
+      raise LabExecutionError(exc.code, exc.message) from exc
+
+    if recovery.get('sameBusinessIdentifier') is not True:
+      raise LabExecutionError(
+        'LAB_RECOVERY_NOT_VERIFIED',
+        'Recovery did not preserve the incident business identifier.',
+      )
+
+    if scenario_key == 'APEX_DUPLICATE_SHIPMENT':
+      if recovery.get('idempotentReplay') is not True or recovery.get('duplicate204Created') is True:
+        raise LabExecutionError(
+          'LAB_RECOVERY_NOT_VERIFIED',
+          'Duplicate-shipment safe replay proof was incomplete.',
+        )
+    else:
+      statuses = self.apex.get(f'/v1/loads/{load_id}/shipment-statuses')
+      events = [
+        event
+        for event in statuses.get('events', [])
+        if isinstance(event, dict)
+      ]
+      recovery.update({
+        'baselineDispatchStatus': (
+          baseline_dispatch.get('status')
+          if isinstance(baseline_dispatch, dict)
+          else None
+        ),
+        'normalizedShipmentStatus': statuses.get('currentStatus'),
+        'apexStatusEventCount': len(events),
+        'apexFacingEvidence': bool(events),
+      })
+      if not events:
+        raise LabExecutionError(
+          'LAB_RECOVERY_NOT_VERIFIED',
+          'Corrected 214 did not produce Apex-facing shipment-status evidence.',
+        )
+
+    result_summary = dict(run.get('result_summary') or {})
+    result_summary['recovery'] = recovery
+    self.repository.update_run_summary(
+      run_id,
+      result_summary,
+      status=str(run['status']),
+    )
+    refreshed = self.repository.get_run(run_id)
+    if refreshed is None:
+      raise LabExecutionError('LAB_RUN_NOT_FOUND', 'Integration Lab run was not found after recovery.')
+    return refreshed
+
   def _execute(self, run_id: UUID, step_key: str) -> tuple[dict[str, object], dict[str, object]]:
     run = self.repository.get_run(run_id)
     if run is None:

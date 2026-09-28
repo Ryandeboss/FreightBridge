@@ -130,6 +130,7 @@ def run_browser_acceptance(analyst_ui_base_url: str, operations_token: str) -> d
         plan='safe replay',
         recovery='Verify safe replay protection',
         expected_text='DUPLICATE_SHIPMENT',
+        recovery_expectations=('IDEMPOTENT_REPLAY', 'Idempotent Replay', 'Duplicate 204 Created', 'NO'),
       )
       expect(page.get_by_test_id('mission-6-card')).to_contain_text('Open Mission', timeout=15000)
 
@@ -144,6 +145,7 @@ def run_browser_acceptance(analyst_ui_base_url: str, operations_token: str) -> d
         plan='Correct the 214 transaction-set control numbers',
         recovery='Retry corrected 214 controls',
         expected_text='CONTROL_NUMBER_MISMATCH',
+        recovery_expectations=('CORRECTED_214_CONTROLS', 'Control Correlation', 'MATCHED', 'Parsing', 'Mapping'),
       )
       expect(page.get_by_test_id('mission-7-card')).to_contain_text('Open Mission', timeout=15000)
 
@@ -158,6 +160,7 @@ def run_browser_acceptance(analyst_ui_base_url: str, operations_token: str) -> d
         plan='supported AT7 value',
         recovery='Retry corrected supported 214 status',
         expected_text='UNSUPPORTED_AT7_CODE',
+        recovery_expectations=('CORRECTED_214_STATUS', 'Corrected AT7-01', 'Apex-Facing Evidence', 'PRESENT'),
       )
       expect(page.get_by_test_id('mission-8-card')).to_contain_text('Locked', timeout=15000)
 
@@ -194,6 +197,7 @@ def run_intermediate_mission(
   plan: str,
   recovery: str,
   expected_text: str,
+  recovery_expectations: tuple[str, ...],
 ) -> None:
   from playwright.sync_api import expect
 
@@ -218,8 +222,11 @@ def run_intermediate_mission(
   choose_radio(page, 'What is the most accurate FreightBridge diagnosis', diagnosis)
   choose_radio(page, 'What should you do next', plan)
   page.get_by_test_id('remediation-action').get_by_role('button', name=re.compile(re.escape(recovery), re.IGNORECASE)).click()
-  expect(page.get_by_test_id('verification-panel')).to_contain_text('SUCCEEDED', timeout=120000)
+  verification = page.get_by_test_id('verification-panel')
+  expect(verification).to_contain_text('SUCCEEDED', timeout=120000)
   expect(page.get_by_test_id('recovery-correlation')).to_contain_text('same incident load', timeout=15000)
+  for expected_recovery_text in recovery_expectations:
+    expect(verification).to_contain_text(expected_recovery_text, timeout=15000)
   page.get_by_label(re.compile('Write Mike', re.IGNORECASE)).fill(
     f'Mike, FreightBridge verified {scenario_key}, selected the last healthy checkpoint, took the safe action, and proved same-load recovery.'
   )

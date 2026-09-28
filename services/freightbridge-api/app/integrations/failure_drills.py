@@ -234,6 +234,42 @@ class ControlledX12FaultFactory:
     }
     return filename, x12.encode('utf-8'), metadata
 
+  def build_recovery_214(
+    self,
+    *,
+    scenario_key: str,
+    load_id: str,
+    run_id: UUID,
+  ) -> tuple[str, bytes, dict[str, object]]:
+    if scenario_key not in ('X12_214_CONTROL_MISMATCH', 'X12_214_UNSUPPORTED_STATUS'):
+      raise ValueError(f'Unsupported Milestone 27 recovery scenario: {scenario_key}')
+    short = run_id.hex[:8].upper()
+    numeric = (int(run_id.hex[:8], 16) + 37) % 999999999 or 1
+    interchange = f'{numeric:09d}'
+    group = str(numeric % 999999 or 907)
+    transaction = f'{numeric % 9999 or 1:04d}'
+    occurred = datetime.now(timezone.utc).replace(second=0, microsecond=0) + timedelta(minutes=10)
+    x12 = self._baseline_214(
+      load_id=load_id,
+      interchange_control=interchange,
+      group_control=group,
+      transaction_control=transaction,
+      occurred_at=occurred,
+    )
+    filename = f'MWCX_FREIGHTBRIDGE_214_RECOVERY_{short}.edi'
+    metadata = {
+      'fileName': filename,
+      'interchangeControlNumber': interchange,
+      'groupControlNumber': group,
+      'transactionControlNumber': transaction,
+      'st02': transaction,
+      'se02': transaction,
+      'statusCode': 'AF',
+      'correctedFrom': scenario_key,
+      'x12Preview': x12,
+    }
+    return filename, x12.encode('utf-8'), metadata
+
   def _baseline_214(
     self,
     *,
@@ -283,6 +319,171 @@ class ControlledFailureDrillService:
       return self._execute_host_key_probe(run, definition)
     raise ValueError(f'Unsupported failure drill step: {step_key}')
 
+  # Milestone 27 server-backed recovery.
+  def recover(self, run: dict[str, object]) -> dict[str, object]:
+    scenario_key = str(run['scenario_key'])
+    if scenario_key == 'APEX_DUPLICATE_SHIPMENT':
+      return self._recover_duplicate_shipment(run)
+    if scenario_key in ('X12_214_CONTROL_MISMATCH', 'X12_214_UNSUPPORTED_STATUS'):
+      return self._recover_x12_214(run)
+    raise LabDrillMismatch(
+      'LAB_RECOVERY_NOT_SUPPORTED',
+      f'No controlled recovery is defined for {scenario_key}.',
+    )
+
+  def _recover_duplicate_shipment(self, run: dict[str, object]) -> dict[str, object]:
+    load_id = str(run['business_identifier'])
+    payload = self._apex_payload(dict(run['input_snapshot']))
+    replay_key = f"lab-{run['id']}-duplicate-replay"
+    before_204 = self._document_count(load_id, '204')
+    result = self._ingest_apex(
+      raw_body=json.dumps(payload).encode('utf-8'),
+      authorization_header=self._valid_apex_authorization(),
+      correlation_id=resolve_correlation_id(f"lab-{run['id']}-duplicate-recovery"),
+      idempotency_key=replay_key,
+    )
+    after_204 = self._document_count(load_id, '204')
+    if not getattr(result, 'idempotent_replay', False):
+      raise LabDrillMismatch(
+        'LAB_RECOVERY_NOT_VERIFIED',
+        'Duplicate-shipment recovery did not return an idempotent replay.',
+      )
+    if getattr(result, 'original_transaction_id', None) is None:
+      raise LabDrillMismatch(
+        'LAB_RECOVERY_NOT_VERIFIED',
+        'Duplicate-shipment recovery did not reference the original transaction.',
+      )
+    if after_204 != before_204:
+      raise LabDrillMismatch(
+        'LAB_RECOVERY_NOT_VERIFIED',
+        'Safe replay unexpectedly created additional 204 processing.',
+      )
+    return {
+      'status': 'SUCCEEDED',
+      'recoveryKind': 'IDEMPOTENT_REPLAY',
+      'sameBusinessIdentifier': getattr(result, 'shipment_number', None) == load_id,
+      'loadId': load_id,
+      'idempotencyKey': replay_key,
+      'idempotentReplay': True,
+      'originalTransactionId': str(result.original_transaction_id),
+      'replayTransactionId': str(result.transaction_id),
+      'shipmentId': str(result.shipment_id),
+      'shipmentNumber': result.shipment_number,
+      'originalShipmentReused': True,
+      'downstream204CountBefore': before_204,
+      'downstream204CountAfter': after_204,
+      'duplicate204Created': after_204 > before_204,
+    }
+
+  def _recover_x12_214(self, run: dict[str, object]) -> dict[str, object]:
+    scenario_key = str(run['scenario_key'])
+    load_id = str(run['business_identifier'])
+    filename, payload, metadata = self.x12_factory.build_recovery_214(
+      scenario_key=scenario_key,
+      load_id=load_id,
+      run_id=UUID(str(run['id'])),
+    )
+    with self.sftp_client_factory() as client:
+      remote_path = client.upload_bytes_atomic(OUTBOUND_DIR, filename, payload)
+    with connect() as audit_connection:
+      with connect() as business_connection:
+        poll = MidwestSftpOutboundPollService(
+          audit_connection=audit_connection,
+          business_connection=business_connection,
+          configuration_repository=IntegrationConfigurationRepository(audit_connection),
+        ).poll(correlation_id=resolve_correlation_id(f"lab-{run['id']}-{scenario_key}-recovery"))
+    body = poll.response_body()
+    target = next(
+      (
+        item
+        for item in body.get('processed', [])
+        if isinstance(item, dict) and item.get('fileName') == filename
+      ),
+      None,
+    )
+    if target is None:
+      raise LabDrillMismatch(
+        'LAB_RECOVERY_NOT_VERIFIED',
+        f'Recovery poll did not process corrected file {filename}.',
+      )
+    if target.get('status') != 'ARCHIVED':
+      raise LabDrillMismatch(
+        'LAB_RECOVERY_NOT_VERIFIED',
+        f'Corrected 214 was not archived successfully: {target.get("status")}.',
+      )
+    transaction_id = target.get('transactionId')
+    if not transaction_id:
+      raise LabDrillMismatch(
+        'LAB_RECOVERY_NOT_VERIFIED',
+        'Corrected 214 did not expose a FreightBridge transaction ID.',
+      )
+    transaction = self._transaction_snapshot(str(transaction_id))
+    if transaction.get('processingStatus') != 'SUCCEEDED':
+      raise LabDrillMismatch(
+        'LAB_RECOVERY_NOT_VERIFIED',
+        'Corrected 214 transaction did not finish successfully.',
+      )
+    return {
+      'status': 'SUCCEEDED',
+      'recoveryKind': (
+        'CORRECTED_214_CONTROLS'
+        if scenario_key == 'X12_214_CONTROL_MISMATCH'
+        else 'CORRECTED_214_STATUS'
+      ),
+      'sameBusinessIdentifier': transaction.get('businessIdentifier') == load_id,
+      'loadId': load_id,
+      'fileName': filename,
+      'remotePath': remote_path,
+      'correctedX12': metadata['x12Preview'],
+      'correctedSt02': metadata['st02'],
+      'correctedSe02': metadata['se02'],
+      'controlCorrelation': (
+        'MATCHED'
+        if metadata['st02'] == metadata['se02']
+        else 'MISMATCH'
+      ),
+      'correctedAt7': metadata['statusCode'],
+      'parseStatus': 'SUCCEEDED',
+      'mappingStatus': 'SUCCEEDED',
+      'transactionId': str(transaction_id),
+      'transactionStage': transaction.get('processingStage'),
+      'transactionStatus': transaction.get('processingStatus'),
+      'targetStatus': target.get('status'),
+    }
+
+  def _document_count(self, business_identifier: str, document_type: str) -> int:
+    try:
+      with connect() as connection:
+        trace = OperationsRepository(connection).get_business_trace(business_identifier)
+      return sum(
+        1
+        for transaction in trace.get('transactions', [])
+        if str(transaction.get('document_type')) == document_type
+      )
+    except Exception:
+      return 0
+
+  def _transaction_snapshot(self, transaction_id: str) -> dict[str, object]:
+    with connect() as connection:
+      detail = OperationsRepository(connection).get_transaction_detail(UUID(transaction_id))
+    if detail is None:
+      raise LabDrillMismatch(
+        'LAB_RECOVERY_NOT_VERIFIED',
+        'Corrected recovery transaction detail was not found.',
+      )
+    transaction = detail['transaction']
+    return {
+      'id': str(transaction['id']),
+      'businessIdentifier': (
+        str(transaction['business_identifier'])
+        if transaction.get('business_identifier')
+        else None
+      ),
+      'documentType': str(transaction['document_type']),
+      'processingStage': str(transaction['processing_stage']),
+      'processingStatus': str(transaction['processing_status']),
+    }
+
   def _execute_apex_failure(self, run: dict[str, object], definition: FailureDrillDefinition) -> tuple[dict[str, object], dict[str, object]]:
     snapshot = dict(run['input_snapshot'])
     payload = self._apex_payload(snapshot)
@@ -312,18 +513,23 @@ class ControlledFailureDrillService:
   def _create_duplicate_baseline(self, run: dict[str, object], definition: FailureDrillDefinition) -> tuple[dict[str, object], dict[str, object]]:
     payload = self._apex_payload(dict(run['input_snapshot']))
     correlation_id = resolve_correlation_id(f"lab-{run['id']}-duplicate-baseline")
+    replay_key = f"lab-{run['id']}-duplicate-replay"
     result = self._ingest_apex(
       raw_body=json.dumps(payload).encode('utf-8'),
       authorization_header=self._valid_apex_authorization(),
       correlation_id=correlation_id,
+      idempotency_key=replay_key,
     )
     response = result.response_body()
     response.update({
       'drillOutcome': 'BASELINE_CREATED',
       'guidance': definition.guidance,
+      'safeReplayKey': replay_key,
       '_relatedTransactionIds': [str(result.transaction_id)],
     })
-    return self._safe_request(definition, payload_preview=payload), response
+    request = self._safe_request(definition, payload_preview=payload)
+    request['safeReplayKey'] = replay_key
+    return request, response
 
   def _execute_x12_failure(self, run: dict[str, object], definition: FailureDrillDefinition) -> tuple[dict[str, object], dict[str, object]]:
     load_id = str(run['business_identifier'])
@@ -495,7 +701,14 @@ class ControlledFailureDrillService:
       'payloadPreview': payload_preview,
     }
 
-  def _ingest_apex(self, *, raw_body: bytes, authorization_header: str, correlation_id: str):
+  def _ingest_apex(
+    self,
+    *,
+    raw_body: bytes,
+    authorization_header: str,
+    correlation_id: str,
+    idempotency_key: str | None = None,
+  ):
     with connect() as audit_connection:
       with connect() as business_connection:
         return ApexLoadTenderIngestionService(
@@ -506,7 +719,7 @@ class ControlledFailureDrillService:
           raw_body=raw_body,
           authorization_header=authorization_header,
           correlation_id=correlation_id,
-          idempotency_key=None,
+          idempotency_key=idempotency_key,
         )
 
   def _valid_apex_authorization(self) -> str:
