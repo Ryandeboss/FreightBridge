@@ -134,6 +134,18 @@ export type IncidentEvidencePoint = {
   meaning: string;
 };
 
+export type IncidentEvidenceSource = {
+  id: string;
+  title: string;
+  source: string;
+  summary: string;
+  inspectedLabel: string;
+  details: string[];
+  rawFrom?: 'failureDrill' | 'payloadPreview' | 'x12Fault' | 'observedFailure' | 'steps' | 'resultSummary';
+};
+
+export type IncidentRecoveryMode = 'HEALTHY_RETRY' | 'INCIDENT_VERIFICATION';
+
 export type IncidentMissionDefinition = {
   id: string;
   slug: string;
@@ -145,6 +157,8 @@ export type IncidentMissionDefinition = {
   partnerMessage: MissionCommunication;
   symptom: string;
   evidencePoints: IncidentEvidencePoint[];
+  evidenceSources?: IncidentEvidenceSource[];
+  requiredEvidenceSourceIds?: string[];
   lastHealthyOptions: IncidentOption[];
   correctLastHealthyId: string;
   diagnosisOptions: IncidentOption[];
@@ -152,6 +166,7 @@ export type IncidentMissionDefinition = {
   planOptions: IncidentOption[];
   correctPlanId: string;
   remediationLabel: string;
+  recoveryMode?: IncidentRecoveryMode;
   verification: string;
   statusPrompt: string;
   debrief: string[];

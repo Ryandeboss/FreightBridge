@@ -124,3 +124,11 @@ export function executeLabStep(token: string, runId: string, stepKey: string): P
 export function runNextLabStep(token: string, runId: string): Promise<LabExecutionResponse> {
   return requestJson(`/api/lab/runs/${encodeURIComponent(runId)}/run-next`, { token, method: 'POST' });
 }
+
+
+export function recoverLabRun(token: string, runId: string): Promise<LabRun> {
+  return requestJson(`/api/lab/runs/${encodeURIComponent(runId)}/recover`, {
+    token,
+    method: 'POST',
+  });
+}

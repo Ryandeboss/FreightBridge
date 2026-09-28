@@ -17,8 +17,12 @@ Training Mode currently implements:
 - Mission 2 - Apex Can't Get a Load Through
 - Mission 3 - The Request Arrived, But FreightBridge Can't Read It
 - Mission 4 - The JSON Looks Fine - Why Was It Rejected?
+- Mission 5 - Why Is This Shipment Showing Up Twice?
+- Mission 6 - Midwest Sent the Status, But FreightBridge Rejected It
+- Mission 7 - Midwest Sent the Status. Why Didn't Apex Get It?
 - FreightBridge workstation shell with progressive healthy-flow checkpoints
 - beginner incident workspace with briefing, investigation, diagnosis, plan, action, verification, report, and debrief phases
+- intermediate incident workspace with required evidence inspection and same-load recovery verification
 - Follow This Load panel for the active training load
 - checkpoint questions, hints, Analyst Notes, replay, and debrief
 - browser-local mission completion progress
@@ -37,6 +41,14 @@ The beginner checkpoint progression mirrors the real inbound pipeline:
 - Mission 2: request received -> authentication failed
 - Mission 3: request received -> authentication succeeded -> parsing failed
 - Mission 4: request received -> authentication succeeded -> parsing succeeded -> validation failed
+
+Missions 5-7 use existing real Integration Lab failure drills:
+
+- `APEX_DUPLICATE_SHIPMENT`
+- `X12_214_CONTROL_MISMATCH`
+- `X12_214_UNSUPPORTED_STATUS`
+
+The intermediate missions require the learner to inspect at least two relevant FreightBridge evidence sources before diagnosis. They focus on duplicate protection/idempotency, X12 transaction-set control-number correlation, and the difference between valid X12 syntax and supported partner mapping.
 
 See [FreightBridge employee POV](freightbridge-employee-pov.md) for the observation rules and role framing.
 See [Healthy integration baseline](healthy-integration-baseline.md) for the Mission 1 checkpoint model.
@@ -76,14 +88,14 @@ The value is versioned and contains only non-sensitive mission completion IDs. O
 - Beginner: Mission 2 - Apex Can't Get a Load Through - implemented after Mission 1 completion
 - Beginner: Mission 3 - The Request Arrived, But FreightBridge Can't Read It - implemented after Mission 2 completion
 - Beginner: Mission 4 - The JSON Looks Fine - Why Was It Rejected? - implemented after Mission 3 completion
-- Intermediate: Mission 5 - Why Is This Shipment Showing Up Twice? - locked placeholder
-- Advanced: Mission 6 - The EDI Envelope Doesn't Match - locked placeholder
-- Advanced: Mission 7 - Midwest Sent the Status, Apex Never Got It - locked placeholder
+- Intermediate: Mission 5 - Why Is This Shipment Showing Up Twice? - implemented after Mission 4 completion
+- Intermediate: Mission 6 - Midwest Sent the Status, But FreightBridge Rejected It - implemented after Mission 5 completion
+- Intermediate: Mission 7 - Midwest Sent the Status. Why Didn't Apex Get It? - implemented after Mission 6 completion
 - Advanced: Mission 8 - This Partner Is Sending the Wrong X12 Version - locked placeholder
 - Advanced: Mission 9 - Midwest SFTP Suddenly Stops Working - locked placeholder
 - Final Shift: Mission 10 - Production Incident - locked placeholder
 
-Missions 1-4 are playable. Missions 5-10 remain locked or coming soon.
+Missions 1-7 are playable. Missions 8-10 remain locked or coming soon.
 
 ## Manual Acceptance
 
@@ -107,6 +119,9 @@ Missions 1-4 are playable. Missions 5-10 remain locked or coming soon.
 18. Complete Mission 2 using `APEX_BAD_AUTH`.
 19. Complete Mission 3 using `APEX_INVALID_JSON`.
 20. Complete Mission 4 using `APEX_INVALID_CONTRACT`.
-21. Confirm Missions 5-10 remain locked or coming soon.
-22. Open Advanced Console.
-23. Use Back to Training to return to Training Desk.
+21. Complete Mission 5 using `APEX_DUPLICATE_SHIPMENT`.
+22. Complete Mission 6 using `X12_214_CONTROL_MISMATCH`.
+23. Complete Mission 7 using `X12_214_UNSUPPORTED_STATUS`.
+24. Confirm Mission 8 remains locked.
+25. Open Advanced Console.
+26. Use Back to Training to return to Training Desk.

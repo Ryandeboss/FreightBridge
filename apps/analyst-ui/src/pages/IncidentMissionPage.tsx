@@ -2,7 +2,7 @@ import { AlertTriangle, ArrowLeft, CheckCircle2, ExternalLink, Play, RefreshCw }
 import { useMemo, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
-import { createLabRun, runNextLabStep, type LabRun } from '../api/lab';
+import { createLabRun, recoverLabRun, runNextLabStep, type LabRun } from '../api/lab';
 import { useOperationsSession } from '../auth/OperationsSession';
 import {
   AnalystNotes,
@@ -54,6 +54,7 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
   const [lastHealthyId, setLastHealthyId] = useState<string | null>(null);
   const [diagnosisId, setDiagnosisId] = useState<string | null>(null);
   const [planId, setPlanId] = useState<string | null>(null);
+  const [inspectedEvidenceIds, setInspectedEvidenceIds] = useState<string[]>([]);
   const [statusUpdate, setStatusUpdate] = useState('');
   const [recoveryState, setRecoveryState] = useState<RecoveryState>('IDLE');
   const [working, setWorking] = useState(false);
@@ -65,12 +66,22 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
   const failureDrill = useMemo(() => readRecord(incidentRun?.resultSummary.failureDrill), [incidentRun]);
   const observed = readRecord(failureDrill?.observed);
   const expected = readRecord(failureDrill?.expected);
-  const canDiagnose = lastHealthyId === mission.correctLastHealthyId && diagnosisId === mission.correctDiagnosisId;
+  const recoveryEvidence = useMemo(
+    () => readRecord(recoveryRun?.resultSummary.recovery),
+    [recoveryRun],
+  );
+  const requiredEvidenceIds = mission.requiredEvidenceSourceIds ?? [];
+  const requiredEvidenceInspected = requiredEvidenceIds.every((id) => inspectedEvidenceIds.includes(id));
+  const canDiagnose = requiredEvidenceInspected && lastHealthyId === mission.correctLastHealthyId && diagnosisId === mission.correctDiagnosisId;
   const canPlan = planId === mission.correctPlanId;
   const recoveryCorrelated = Boolean(
     incidentRun &&
     recoveryRun &&
-    recoveryRun.businessIdentifier === incidentRun.businessIdentifier
+    recoveryRun.businessIdentifier === incidentRun.businessIdentifier &&
+    (
+      mission.missionNumber < 5 ||
+      recoveryEvidence?.sameBusinessIdentifier === true
+    )
   );
   const selectedLastHealthy = mission.lastHealthyOptions.find((option) => option.id === lastHealthyId);
   const selectedDiagnosis = mission.diagnosisOptions.find((option) => option.id === diagnosisId);
@@ -103,8 +114,9 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
     setLastHealthyId(null);
     setDiagnosisId(null);
     setPlanId(null);
+    setInspectedEvidenceIds([]);
     try {
-      const created = await createLabRun(token, {
+      let nextIncidentRun = await createLabRun(token, {
         scenarioKey: mission.scenarioKey,
         loadId: generateIncidentLoadId(mission.missionNumber),
         equipmentType: 'VAN_53',
@@ -112,8 +124,16 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
         pieces: 22,
         commodityDescription: 'Training Incident Freight',
       });
-      const executed = await runNextLabStep(token, created.id);
-      setIncidentRun(executed.run);
+      let guard = 0;
+      while (nextIncidentRun.status !== 'SUCCEEDED' && nextIncidentRun.status !== 'FAILED' && guard < 10) {
+        const executed = await runNextLabStep(token, nextIncidentRun.id);
+        nextIncidentRun = executed.run;
+        guard += 1;
+      }
+      if (nextIncidentRun.status !== 'SUCCEEDED') {
+        throw new Error('Controlled incident drill did not reach its expected observed-failure result.');
+      }
+      setIncidentRun(nextIncidentRun);
       setPhase('INVESTIGATE');
     } catch (nextError) {
       handleApiError(nextError);
@@ -129,6 +149,23 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
     setError(null);
     setRecoveryState('RUNNING');
     try {
+      if (mission.missionNumber >= 5) {
+        const recoveredRun = await recoverLabRun(token, incidentRun.id);
+        const proof = readRecord(recoveredRun.resultSummary.recovery);
+        const correlated =
+          recoveredRun.businessIdentifier === incidentRun.businessIdentifier &&
+          proof?.sameBusinessIdentifier === true;
+        const succeeded = proof?.status === 'SUCCEEDED' && correlated;
+        setRecoveryRun(recoveredRun);
+        setRecoveryState(succeeded ? 'SUCCEEDED' : 'FAILED');
+        if (succeeded) {
+          setPhase('VERIFY');
+        } else {
+          setError('Server-backed recovery did not produce complete same-load verification evidence.');
+        }
+        return;
+      }
+
       let nextRun = await createLabRun(token, {
         scenarioKey: 'FULL_SHIPMENT_LIFECYCLE',
         loadId: incidentRun.businessIdentifier,
@@ -162,6 +199,10 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
     }
   }
 
+  function markEvidenceInspected(id: string) {
+    setInspectedEvidenceIds((current) => current.includes(id) ? current : [...current, id]);
+  }
+
   function finishMission() {
     if (!canReport) return;
     completeMission(mission.id);
@@ -177,7 +218,7 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
       </Link>
 
       <MissionBriefing>
-        <p className="eyebrow">Mission {mission.missionNumber} - Beginner Incident</p>
+        <p className="eyebrow">Mission {mission.missionNumber} - {mission.missionNumber >= 5 ? 'Intermediate' : 'Beginner'} Incident</p>
         <h1>{mission.title.replace(/^Mission \d+ - /, '')}</h1>
         <p>{mission.symptom}</p>
         <MissionPhaseProgress phases={missionPhases} current={phase} />
@@ -209,11 +250,13 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
           </div>
           <div className="mission-objectives">
             <MissionObjective done={Boolean(incidentRun)}>Run the controlled FreightBridge failure drill.</MissionObjective>
-            <MissionObjective done={phaseOrder(phase) >= phaseOrder('INVESTIGATE')}>Inspect FreightBridge evidence.</MissionObjective>
+            <MissionObjective done={requiredEvidenceIds.length === 0 ? phaseOrder(phase) >= phaseOrder('INVESTIGATE') : requiredEvidenceInspected}>
+              Inspect required FreightBridge evidence.
+            </MissionObjective>
             <MissionObjective done={lastHealthyId === mission.correctLastHealthyId}>Choose the last healthy checkpoint.</MissionObjective>
             <MissionObjective done={diagnosisId === mission.correctDiagnosisId}>Diagnose where the flow stopped.</MissionObjective>
             <MissionObjective done={planId === mission.correctPlanId}>Choose a safe remediation plan.</MissionObjective>
-            <MissionObjective done={recoveryState === 'SUCCEEDED'}>Verify recovery with a healthy Lab retry.</MissionObjective>
+            <MissionObjective done={recoveryState === 'SUCCEEDED'}>{mission.missionNumber >= 5 ? 'Verify server-backed incident recovery.' : 'Verify recovery with a healthy Lab retry.'}</MissionObjective>
             <MissionObjective done={statusUpdate.trim().length >= 40}>Send Mike a status update.</MissionObjective>
             <MissionObjective done={completed || alreadyCompleted}>Complete the debrief.</MissionObjective>
           </div>
@@ -314,6 +357,61 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
             <AnalystNotes storageKey={`freightbridge.trainingNotes.${mission.id}`} />
           </section>
 
+          {mission.evidenceSources && (
+            <article className="panel" data-testid="intermediate-evidence-workspace">
+              <div className="panel-header">
+                <div>
+                  <p className="eyebrow">Investigation Workspace</p>
+                  <h2>Evidence Sources</h2>
+                </div>
+                <span className="badge badge-info">
+                  {inspectedEvidenceIds.length} / {requiredEvidenceIds.length || mission.evidenceSources.length} inspected
+                </span>
+              </div>
+              <p className="muted-text">
+                Inspect at least two relevant FreightBridge evidence sources before making the final diagnosis.
+              </p>
+              <div className="intermediate-evidence-grid">
+                {mission.evidenceSources.map((source) => {
+                  const inspected = inspectedEvidenceIds.includes(source.id);
+                  const required = requiredEvidenceIds.includes(source.id);
+                  return (
+                    <details
+                      key={source.id}
+                      className={`evidence-panel intermediate-source ${inspected ? 'inspected' : ''}`}
+                      data-testid={`evidence-source-${source.id}`}
+                      onToggle={(event) => {
+                        if (event.currentTarget.open) markEvidenceInspected(source.id);
+                      }}
+                    >
+                      <summary>
+                        <span>{source.inspectedLabel}</span>
+                        {required && <small>Required</small>}
+                      </summary>
+                      <div className="evidence-source-body">
+                        <p className="eyebrow">{source.source}</p>
+                        <h3>{source.title}</h3>
+                        <p>{source.summary}</p>
+                        <ul className="check-list">
+                          {source.details.map((detail) => <li key={detail}>{detail}</li>)}
+                        </ul>
+                        {source.rawFrom && (
+                          <pre className="lab-preview">{renderRawEvidence(source.rawFrom, incidentRun, failureDrill)}</pre>
+                        )}
+                      </div>
+                    </details>
+                  );
+                })}
+              </div>
+              {!requiredEvidenceInspected && requiredEvidenceIds.length > 0 && (
+                <div className="knowledge-feedback incorrect" data-testid="diagnosis-gate">
+                  <AlertTriangle size={18} />
+                  <p>Inspect the required evidence sources before selecting a final diagnosis.</p>
+                </div>
+              )}
+            </article>
+          )}
+
           <ChoicePanel
             testId="last-healthy-checkpoint-selector"
             title="Last Healthy Checkpoint"
@@ -334,7 +432,7 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
             options={mission.diagnosisOptions}
             selected={diagnosisId}
             correctId={mission.correctDiagnosisId}
-            disabled={lastHealthyId !== mission.correctLastHealthyId}
+            disabled={lastHealthyId !== mission.correctLastHealthyId || !requiredEvidenceInspected}
             onSelect={(id) => {
               setDiagnosisId(id);
               if (id === mission.correctDiagnosisId && lastHealthyId === mission.correctLastHealthyId) {
@@ -364,8 +462,10 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
               <h2>Act</h2>
             </div>
             <p>
-              {mission.remediationLabel}. FreightBridge will retry the same incident load through the clean
-              training path, then verify that the previously failing flow now progresses normally.
+              {mission.remediationLabel}.{' '}
+              {mission.missionNumber >= 5
+                ? 'FreightBridge will perform the mission-specific server-backed remediation on the same incident load and return concrete recovery evidence.'
+                : 'FreightBridge will retry the same incident load through the clean training path, then verify that the previously failing flow now progresses normally.'}
             </p>
             <div className="lab-actions">
               <button className="primary-button" type="button" onClick={runRecovery} disabled={!canPlan || working || recoveryState === 'SUCCEEDED'}>
@@ -389,9 +489,10 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
             </div>
             <p>{mission.verification}</p>
             {recoveryRun && (
-              <dl className="definition-grid">
+              <>
+                <dl className="definition-grid">
                 <div><dt>Incident Load</dt><dd>{incidentRun.businessIdentifier}</dd></div>
-                <div><dt>Recovery Path</dt><dd>Corrected healthy lifecycle</dd></div>
+                <div><dt>Recovery Path</dt><dd>{mission.recoveryMode === 'INCIDENT_VERIFICATION' ? 'Protected incident verification' : 'Corrected healthy lifecycle'}</dd></div>
                 <div><dt>Recovery Load</dt><dd>{recoveryRun.businessIdentifier}</dd></div>
                 <div>
                   <dt>Correlation</dt>
@@ -399,10 +500,55 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
                     {recoveryCorrelated ? 'MATCHED - same incident load' : 'MISMATCH'}
                   </dd>
                 </div>
-                <div><dt>Recovery Status</dt><dd>{recoveryRun.status}</dd></div>
+                <div><dt>Recovery Status</dt><dd>{mission.missionNumber >= 5 ? String(recoveryEvidence?.status ?? recoveryRun.status) : recoveryRun.status}</dd></div>
                 <div><dt>Tender Status</dt><dd>{String(recoveryRun.resultSummary.tenderStatus ?? 'Pending')}</dd></div>
-                <div><dt>Shipment Status</dt><dd>{String(recoveryRun.resultSummary.shipmentStatus ?? 'Pending')}</dd></div>
+                <div><dt>Shipment Status</dt><dd>{String(recoveryEvidence?.normalizedShipmentStatus ?? recoveryRun.resultSummary.shipmentStatus ?? 'Pending')}</dd></div>
+                {mission.missionNumber >= 5 && (
+                  <>
+                    <div><dt>Recovery Action</dt><dd>{String(recoveryEvidence?.recoveryKind ?? 'Unknown')}</dd></div>
+                    {recoveryEvidence?.idempotentReplay !== undefined && (
+                      <div><dt>Idempotent Replay</dt><dd>{recoveryEvidence.idempotentReplay === true ? 'YES' : 'NO'}</dd></div>
+                    )}
+                    {recoveryEvidence?.originalTransactionId && (
+                      <div><dt>Original Transaction</dt><dd>{String(recoveryEvidence.originalTransactionId)}</dd></div>
+                    )}
+                    {recoveryEvidence?.replayTransactionId && (
+                      <div><dt>Replay Transaction</dt><dd>{String(recoveryEvidence.replayTransactionId)}</dd></div>
+                    )}
+                    {recoveryEvidence?.duplicate204Created !== undefined && (
+                      <div><dt>Duplicate 204 Created</dt><dd>{recoveryEvidence.duplicate204Created === true ? 'YES' : 'NO'}</dd></div>
+                    )}
+                    {recoveryEvidence?.correctedSt02 && (
+                      <div><dt>Corrected ST02</dt><dd>{String(recoveryEvidence.correctedSt02)}</dd></div>
+                    )}
+                    {recoveryEvidence?.correctedSe02 && (
+                      <div><dt>Corrected SE02</dt><dd>{String(recoveryEvidence.correctedSe02)}</dd></div>
+                    )}
+                    {recoveryEvidence?.controlCorrelation && (
+                      <div><dt>Control Correlation</dt><dd>{String(recoveryEvidence.controlCorrelation)}</dd></div>
+                    )}
+                    {recoveryEvidence?.correctedAt7 && (
+                      <div><dt>Corrected AT7-01</dt><dd>{String(recoveryEvidence.correctedAt7)}</dd></div>
+                    )}
+                    {recoveryEvidence?.parseStatus && (
+                      <div><dt>Parsing</dt><dd>{String(recoveryEvidence.parseStatus)}</dd></div>
+                    )}
+                    {recoveryEvidence?.mappingStatus && (
+                      <div><dt>Mapping</dt><dd>{String(recoveryEvidence.mappingStatus)}</dd></div>
+                    )}
+                    {recoveryEvidence?.apexFacingEvidence !== undefined && (
+                      <div><dt>Apex-Facing Evidence</dt><dd>{recoveryEvidence.apexFacingEvidence === true ? 'PRESENT' : 'MISSING'}</dd></div>
+                    )}
+                  </>
+                )}
               </dl>
+              {mission.missionNumber >= 5 && typeof recoveryEvidence?.correctedX12 === 'string' && (
+                <details className="technical-classification">
+                  <summary>Inspect corrected recovery X12</summary>
+                  <pre className="lab-preview">{recoveryEvidence.correctedX12}</pre>
+                </details>
+              )}
+              </>
             )}
           </article>
 
@@ -545,4 +691,39 @@ function generateIncidentLoadId(missionNumber: number): string {
 
 function readRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function renderRawEvidence(
+  source: 'failureDrill' | 'payloadPreview' | 'x12Fault' | 'observedFailure' | 'steps' | 'resultSummary',
+  run: LabRun,
+  failureDrill: Record<string, unknown> | null,
+): string {
+  const stepResponse = run.steps.find((step) => Object.keys(step.responseSummary ?? {}).length > 0)?.responseSummary;
+  const value = (() => {
+    switch (source) {
+      case 'failureDrill':
+        return failureDrill;
+      case 'payloadPreview':
+        return failureDrill?.payloadPreview ?? stepResponse?.payloadPreview;
+      case 'x12Fault':
+        return stepResponse?.x12Fault ?? failureDrill?.payloadPreview;
+      case 'observedFailure':
+        return failureDrill?.observed ?? stepResponse?.observedFailure;
+      case 'steps':
+        return run.steps.map((step) => ({
+          stepKey: step.stepKey,
+          status: step.status,
+          relatedTransactionIds: step.relatedTransactionIds,
+          requestSummary: step.requestSummary,
+          responseSummary: step.responseSummary,
+        }));
+      case 'resultSummary':
+        return run.resultSummary;
+      default:
+        return null;
+    }
+  })();
+  if (value === null || value === undefined) return 'Evidence pending.';
+  if (typeof value === 'string') return value;
+  return JSON.stringify(value, null, 2);
 }

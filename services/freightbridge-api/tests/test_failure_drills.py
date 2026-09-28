@@ -270,7 +270,7 @@ class DrillTestService(ControlledFailureDrillService):
   def _valid_apex_authorization(self) -> str:
     return 'Bearer test-token'
 
-  def _ingest_apex(self, *, raw_body: bytes, authorization_header: str, correlation_id: str):
+  def _ingest_apex(self, *, raw_body: bytes, authorization_header: str, correlation_id: str, idempotency_key: str | None = None):
     if self.ingest_succeeds:
       return type('Result', (), {'transaction_id': TRANSACTION_ID})()
     raise IntegrationAPIError(
