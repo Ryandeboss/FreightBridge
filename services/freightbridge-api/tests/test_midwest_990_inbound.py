@@ -865,6 +865,28 @@ def test_sftp_outbound_poll_routes_990_214_and_997_by_transaction_type() -> None
   assert '/archive/MWCX_APEX_214_000000907.edi' in fake_sftp.files
 
 
+def test_sftp_outbound_poll_bounds_file_scoped_correlation_ids() -> None:
+  file_name = f'MWCX_APEX_214_{"9" * 90}.edi'
+  fake_sftp = FakeSftpClient({
+    f'/outbound/{file_name}': midwest_214().encode('utf-8'),
+  })
+  status_service = FakeTypedIngestionService('214')
+  service = MidwestSftpOutboundPollService(
+    audit_connection=DummyConnection(),
+    business_connection=DummyConnection(),
+    client_factory=lambda: fake_sftp,
+    ingestion_service=FakeTypedIngestionService('990'),
+    shipment_status_ingestion_service=status_service,
+  )
+
+  result = service.poll(correlation_id='corr-route-with-long-sftp-file-name')
+
+  assert result.processed[0].status == 'ARCHIVED'
+  assert len(status_service.calls) == 1
+  assert status_service.calls[0].startswith('fb-')
+  assert len(status_service.calls[0]) <= 120
+
+
 def test_sftp_outbound_poll_moves_unsupported_transaction_to_error() -> None:
   unsupported = midwest_214().replace('ST*214*0001', 'ST*204*0001').replace('SE*7*0001', 'SE*7*0001')
   fake_sftp = FakeSftpClient({'/outbound/MWCX_APEX_204_000000907.edi': unsupported.encode('utf-8')})

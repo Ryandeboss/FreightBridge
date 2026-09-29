@@ -93,10 +93,13 @@ def test_milestone27_status_recovery_processes_exact_corrected_file_without_dire
   assert recovery['parseStatus'] == 'SUCCEEDED'
   assert recovery['mappingStatus'] == 'SUCCEEDED'
   assert recovery['apexDeliveryStatus'] == 'DELIVERED_TO_APEX'
+  assert recovery['apexFacingEvidence'] is True
   assert recovery['targetStatus'] == 'ARCHIVED'
   assert ingested['transport'] == Transport.SFTP
   assert str(ingested['raw_payload_location']).startswith('/outbound/')
   assert b'AT7*AF' in ingested['raw_body']
+  assert str(ingested['correlation_id']).startswith('fb-')
+  assert len(str(ingested['correlation_id'])) <= 120
 
 
 class FakeReplayResult:

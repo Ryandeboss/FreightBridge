@@ -4,6 +4,7 @@ import hashlib
 from app.domain import Transport
 from app.infrastructure.configuration_repository import IntegrationConfigurationRepository
 from app.infrastructure.repositories import FreightBridgeRepository, IntegrationRepository
+from app.integrations.common.correlation import resolve_correlation_id
 from app.integrations.common.errors import IntegrationAPIError
 from app.integrations.midwest.inbound_214_service import Midwest214IngestionService
 from app.integrations.midwest.inbound_990_service import Midwest990IngestionService
@@ -108,11 +109,12 @@ class MidwestSftpOutboundPollService:
         source_path = _join(OUTBOUND_DIR, file_name)
         try:
           payload = client.download_bytes(source_path)
-          transaction_type = _detect_transaction_type(payload, correlation_id=f'{correlation_id}:{file_name}')
-          ingestion_service = self._ingestion_service_for(transaction_type, correlation_id=f'{correlation_id}:{file_name}')
+          file_correlation_id = resolve_correlation_id(f'{correlation_id}:{file_name}')
+          transaction_type = _detect_transaction_type(payload, correlation_id=file_correlation_id)
+          ingestion_service = self._ingestion_service_for(transaction_type, correlation_id=file_correlation_id)
           ingestion_result = ingestion_service.ingest(
             raw_body=payload,
-            correlation_id=f'{correlation_id}:{file_name}',
+            correlation_id=file_correlation_id,
             transport=Transport.SFTP,
             raw_payload_location=source_path,
           )

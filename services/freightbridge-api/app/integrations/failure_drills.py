@@ -387,7 +387,7 @@ class ControlledFailureDrillService:
       load_id=load_id,
       run_id=UUID(str(run['id'])),
     )
-    correlation_id = resolve_correlation_id(f"lab-{run['id']}-{scenario_key}-recovery")
+    correlation_id = resolve_correlation_id(f"lab-{run['id']}-{scenario_key}-recovery:{filename}")
     try:
       with self.sftp_client_factory() as client:
         remote_path = client.upload_bytes_atomic(OUTBOUND_DIR, filename, payload)
@@ -401,7 +401,7 @@ class ControlledFailureDrillService:
                 configuration_repository=IntegrationConfigurationRepository(audit_connection),
               ).ingest(
                 raw_body=downloaded,
-                correlation_id=f'{correlation_id}:{filename}',
+                correlation_id=correlation_id,
                 transport=Transport.SFTP,
                 raw_payload_location=remote_path,
               )
@@ -458,6 +458,7 @@ class ControlledFailureDrillService:
       'mappingStatus': 'SUCCEEDED',
       'transactionId': str(transaction_id),
       'apexDeliveryStatus': result.apex_delivery_status,
+      'apexFacingEvidence': result.apex_delivery_status == 'DELIVERED_TO_APEX',
       'normalizedShipmentStatus': result.current_status,
       'transactionStage': transaction.get('processingStage'),
       'transactionStatus': transaction.get('processingStatus'),
