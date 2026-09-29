@@ -3,6 +3,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from app.integrations.failure_drills import ControlledFailureDrillService, ControlledX12FaultFactory
+from app.domain import Transport
 from app.integrations.x12 import parse_x12, validate_x12_envelopes
 from app.integrations.midwest.mapping_214 import map_midwest_214
 
@@ -39,6 +40,63 @@ def test_milestone27_status_recovery_214_uses_supported_status() -> None:
 
   assert metadata['statusCode'] == 'AF'
   assert mapped.status.value == 'PICKED_UP'
+
+
+def test_milestone27_status_recovery_processes_exact_corrected_file_without_directory_poll(monkeypatch) -> None:
+  ingested: dict[str, object] = {}
+
+  class FakeConnection:
+    def __enter__(self):
+      return self
+
+    def __exit__(self, exc_type, exc, tb):
+      return None
+
+  class FakeConfigurationRepository:
+    def __init__(self, connection) -> None:
+      self.connection = connection
+
+  class FakeMidwest214IngestionService:
+    def __init__(self, **kwargs) -> None:
+      self.kwargs = kwargs
+
+    def ingest(self, *, raw_body: bytes, correlation_id: str, transport, raw_payload_location: str):
+      ingested['raw_body'] = raw_body
+      ingested['correlation_id'] = correlation_id
+      ingested['transport'] = transport
+      ingested['raw_payload_location'] = raw_payload_location
+      return type(
+        'Result',
+        (),
+        {
+          'transaction_id': UUID('44444444-4444-4444-8444-444444444444'),
+          'apex_delivery_status': 'DELIVERED_TO_APEX',
+          'current_status': 'PICKED_UP',
+        },
+      )()
+
+  def directory_poll_must_not_be_used(*args, **kwargs):
+    raise AssertionError('Recovery should process the exact corrected file, not poll the whole outbound directory.')
+
+  monkeypatch.setattr('app.integrations.failure_drills.connect', lambda: FakeConnection())
+  monkeypatch.setattr('app.integrations.failure_drills.IntegrationConfigurationRepository', FakeConfigurationRepository)
+  monkeypatch.setattr('app.integrations.failure_drills.Midwest214IngestionService', FakeMidwest214IngestionService)
+  monkeypatch.setattr('app.integrations.failure_drills.MidwestSftpOutboundPollService', directory_poll_must_not_be_used)
+
+  service = ExactFileRecoveryService(sftp_client_factory=ExactFileSftpClient)
+  recovery = service.recover(_x12_run('X12_214_UNSUPPORTED_STATUS'))
+
+  assert recovery['status'] == 'SUCCEEDED'
+  assert recovery['recoveryKind'] == 'CORRECTED_214_STATUS'
+  assert recovery['sameBusinessIdentifier'] is True
+  assert recovery['correctedAt7'] == 'AF'
+  assert recovery['parseStatus'] == 'SUCCEEDED'
+  assert recovery['mappingStatus'] == 'SUCCEEDED'
+  assert recovery['apexDeliveryStatus'] == 'DELIVERED_TO_APEX'
+  assert recovery['targetStatus'] == 'ARCHIVED'
+  assert ingested['transport'] == Transport.SFTP
+  assert str(ingested['raw_payload_location']).startswith('/outbound/')
+  assert b'AT7*AF' in ingested['raw_body']
 
 
 class FakeReplayResult:
@@ -128,3 +186,47 @@ def test_milestone27_duplicate_recovery_is_real_idempotent_replay() -> None:
   assert recovery['idempotentReplay'] is True
   assert recovery['originalShipmentReused'] is True
   assert recovery['duplicate204Created'] is False
+
+
+def _x12_run(scenario_key: str) -> dict[str, object]:
+  return {
+    'id': RUN_ID,
+    'scenario_key': scenario_key,
+    'business_identifier': 'LABRECOVER27',
+    'input_snapshot': {'loadId': 'LABRECOVER27'},
+  }
+
+
+class ExactFileRecoveryService(ControlledFailureDrillService):
+  def _transaction_snapshot(self, transaction_id: str) -> dict[str, object]:
+    assert transaction_id == '44444444-4444-4444-8444-444444444444'
+    return {
+      'id': transaction_id,
+      'businessIdentifier': 'LABRECOVER27',
+      'documentType': '214',
+      'processingStage': 'COMPLETED',
+      'processingStatus': 'SUCCEEDED',
+    }
+
+
+class ExactFileSftpClient:
+  files: dict[str, bytes] = {}
+
+  def __enter__(self):
+    return self
+
+  def __exit__(self, exc_type, exc, tb):
+    return None
+
+  def upload_bytes_atomic(self, directory: str, file_name: str, payload: bytes) -> str:
+    path = f'{directory}/{file_name}'
+    self.files[path] = payload
+    return path
+
+  def download_bytes(self, path: str) -> bytes:
+    return self.files[path]
+
+  def rename_to_unique_archive(self, source_path: str, destination_path: str, payload: bytes) -> str:
+    assert self.files[source_path] == payload
+    self.files[destination_path] = self.files.pop(source_path)
+    return destination_path
