@@ -1912,3 +1912,119 @@ input:disabled {
     margin-left: 0;
   }
 }
+
+/* === Milestone 28: FreightBridge Ops Desk === */
+.ops-desk-shell { min-height: 100vh; color: #18232a; background: #f4f6f8; }
+.ops-topbar { position: sticky; top: 0; z-index: 30; min-height: 4rem; display: grid; grid-template-columns: 14rem minmax(0, 1fr) auto; align-items: center; gap: 1rem; padding: .55rem 1rem; border-bottom: 1px solid #dbe3e8; background: rgba(255,255,255,.97); backdrop-filter: blur(12px); }
+.ops-brand, .ops-shift-status { display: flex; align-items: center; gap: .65rem; }
+.ops-brand { min-width: 0; color: #172026; }
+.ops-brand:hover { text-decoration: none; }
+.ops-brand > span:last-child, .ops-shift-status > div { display: flex; align-items: flex-start; flex-direction: column; }
+.ops-brand strong, .ops-brand small, .ops-shift-status strong, .ops-shift-status small { line-height: 1.2; }
+.ops-brand small, .ops-shift-status small { color: #667782; font-size: .72rem; font-weight: 700; }
+.ops-shift-status { justify-self: center; gap: .55rem; }
+.ops-health-dot { width: .62rem; height: .62rem; flex: 0 0 auto; border-radius: 999px; background: #17a673; box-shadow: 0 0 0 4px rgba(23,166,115,.12); }
+.ops-workspace { min-height: calc(100vh - 4rem); display: grid; grid-template-columns: 13.5rem minmax(0,1fr) 17rem; }
+.ops-left-rail, .ops-coach { position: sticky; top: 4rem; align-self: start; height: calc(100vh - 4rem); overflow: auto; }
+.ops-left-rail { display: flex; flex-direction: column; gap: 1.2rem; padding: 1rem .8rem; border-right: 1px solid #dbe3e8; background: #fff; }
+.ops-left-rail > div { display: grid; gap: .2rem; }
+.ops-rail-label { margin: 0 0 .3rem; padding: 0 .55rem; color: #82919a; font-size: .68rem; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.ops-nav-link { min-height: 2.45rem; display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: .6rem; padding: .55rem .65rem; border-radius: 7px; color: #41515a; font-size: .86rem; font-weight: 800; }
+.ops-nav-link:hover { text-decoration: none; color: #172026; background: #f2f6f7; }
+.ops-nav-link.active { color: #0f6267; background: #eaf5f5; }
+.ops-nav-count, .ops-count-badge { min-width: 1.35rem; height: 1.35rem; display: inline-grid; place-items: center; border-radius: 999px; color: #fff; background: #126064; font-size: .68rem; font-weight: 900; }
+.ops-rail-footer { margin-top: auto; padding-top: .75rem; border-top: 1px solid #e4eaed; }
+.ops-rail-footer small { padding-left: .65rem; color: #87949c; font-size: .7rem; }
+.ops-main { min-width: 0; padding: 1rem 1.2rem 1.5rem; }
+.ops-main > * { width: min(100%,1180px); margin-inline: auto; }
+.ops-coach { display: flex; flex-direction: column; gap: .9rem; padding: 1rem; border-left: 1px solid #dbe3e8; background: #fbfcfd; }
+.ops-coach-header { display: flex; align-items: center; gap: .65rem; }
+.ops-coach-header > div:last-child { display: grid; }
+.ops-coach-header small { color: #667782; font-size: .72rem; font-weight: 700; }
+.ops-coach-avatar, .ops-manager-avatar { display: grid; place-items: center; flex: 0 0 auto; border-radius: 8px; color: #fff; background: #126064; font-weight: 900; }
+.ops-coach-avatar { width: 2.2rem; height: 2.2rem; }
+.ops-manager-avatar { width: 2rem; height: 2rem; }
+.ops-coach-message, .ops-coach-tip { display: grid; gap: .35rem; padding: .8rem; border: 1px solid #d8e4e8; border-radius: 8px; background: #fff; }
+.ops-coach-message p, .ops-coach-tip span { margin: 0; color: #53636e; font-size: .82rem; line-height: 1.48; }
+.ops-coach-checklist { display: grid; gap: .55rem; margin: 0; padding-left: 1.15rem; color: #53636e; font-size: .8rem; line-height: 1.4; }
+.ops-coach-console-link { justify-content: center; }
+.ops-role-mini { display: grid; gap: .15rem; margin-top: auto; padding-top: .75rem; border-top: 1px solid #dbe3e8; }
+.ops-role-mini span { color: #82919a; font-size: .68rem; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
+.ops-role-mini strong { font-size: .8rem; }
+.ops-home { display: grid; gap: 1rem; }
+.ops-home-priority-grid, .ops-middle-grid { display: grid; gap: 1rem; align-items: stretch; }
+.ops-home-priority-grid { grid-template-columns: minmax(0,1.5fr) minmax(19rem,.7fr); }
+.ops-middle-grid { grid-template-columns: minmax(0,1.3fr) minmax(18rem,.7fr); }
+.ops-welcome-card, .ops-inbox-card, .ops-partner-section, .ops-roadmap-section { border: 1px solid #dbe3e8; border-radius: 10px; background: #fff; box-shadow: 0 1px 2px rgba(20,37,45,.04); }
+.ops-welcome-card { display: grid; gap: .9rem; padding: 1.15rem 1.25rem; }
+.ops-card-topline, .ops-section-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+.ops-card-topline h1, .ops-section-heading h2, .ops-card-topline p, .ops-section-heading p { margin: 0; }
+.ops-card-topline h1 { margin-top: .15rem; font-size: clamp(1.75rem,3vw,2.45rem); line-height: 1.08; }
+.ops-section-heading h2 { margin-top: .12rem; font-size: 1rem; }
+.ops-section-heading > small, .ops-section-heading > span { color: #667782; font-size: .75rem; font-weight: 800; }
+.ops-live-badge { display: inline-flex; align-items: center; gap: .35rem; padding: .3rem .55rem; border-radius: 999px; color: #096246; background: #e5f7ef; font-size: .72rem; font-weight: 900; }
+.ops-welcome-copy { max-width: 58rem; margin: 0; color: #53636e; line-height: 1.55; }
+.ops-role-progress-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .75rem; align-items: stretch; }
+.training-role-card.ops-role-card { width: auto; border-color: #d4e4e6; color: #1b333a; background: #eef7f7; }
+.training-role-card.ops-role-card span { color: #52777a; }
+.ops-progress-tile { min-width: 8.5rem; display: grid; align-content: center; gap: .1rem; padding: .75rem .9rem; border: 1px solid #dbe3e8; border-radius: 8px; background: #fbfcfd; }
+.ops-progress-tile span, .ops-progress-tile small { color: #667782; font-size: .7rem; font-weight: 800; }
+.ops-progress-tile strong { font-size: 1.05rem; }
+.ops-primary-actions { display: flex; flex-wrap: wrap; gap: .55rem; }
+.ops-primary-actions .primary-button, .ops-primary-actions .secondary-button { min-height: 2.45rem; }
+.ops-inbox-card { display: grid; align-content: start; gap: .75rem; padding: 1rem; }
+.ops-inbox-item { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: .65rem; padding: .75rem; border: 1px solid #dbe3e8; border-radius: 8px; color: #24343c; background: #fff; }
+.ops-inbox-item:hover { text-decoration: none; }
+.ops-inbox-item.active { border-color: #a9cfd2; background: #f0f8f8; box-shadow: inset 3px 0 0 #126064; }
+.ops-inbox-item.muted { color: #687881; background: #f8fafb; }
+.ops-inbox-item > span:nth-child(2) { min-width: 0; display: grid; gap: .16rem; }
+.ops-inbox-item small { color: #667782; font-size: .67rem; font-weight: 900; text-transform: uppercase; }
+.ops-inbox-item strong { overflow: hidden; font-size: .84rem; text-overflow: ellipsis; }
+.ops-inbox-item span span { color: #667782; font-size: .76rem; line-height: 1.38; }
+.ops-inbox-icon { width: 2rem; height: 2rem; display: grid; place-items: center; border-radius: 7px; color: #126064; background: #dff1f1; }
+.ops-focus-card, .ops-tools-card { display: grid; align-content: start; gap: .85rem; }
+.ops-focus-sequence { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .55rem; }
+.ops-focus-sequence > span { display: flex; align-items: center; gap: .45rem; padding: .65rem; border-radius: 8px; color: #475963; background: #f5f8f9; font-size: .76rem; font-weight: 800; }
+.ops-focus-sequence strong { width: 1.3rem; height: 1.3rem; display: inline-grid; place-items: center; flex: 0 0 auto; border-radius: 999px; color: #fff; background: #126064; font-size: .68rem; }
+.ops-manager-note { display: grid; grid-template-columns: auto minmax(0,1fr); gap: .65rem; padding-top: .75rem; border-top: 1px solid #e2e8eb; }
+.ops-manager-note > div:last-child { display: grid; gap: .15rem; }
+.ops-manager-note small { color: #667782; font-size: .7rem; font-weight: 800; }
+.ops-manager-note p { margin: .15rem 0 0; color: #53636e; font-size: .8rem; line-height: 1.48; }
+.ops-tool-links { display: grid; gap: .45rem; }
+.ops-tool-links a { display: grid; grid-template-columns: auto minmax(0,1fr); gap: .6rem; align-items: center; padding: .65rem; border: 1px solid #dce4e8; border-radius: 8px; color: #31444e; background: #fbfcfd; }
+.ops-tool-links a:hover { text-decoration: none; border-color: #a9cfd2; background: #f1f8f8; }
+.ops-tool-links span { display: grid; }
+.ops-tool-links small { color: #73818a; font-size: .7rem; }
+.ops-partner-section, .ops-roadmap-section { display: grid; gap: .8rem; padding: 1rem; }
+.entity-flow.ops-partner-strip { grid-template-columns: repeat(3,minmax(0,1fr)); gap: .65rem; }
+.ops-partner-strip .entity-card { min-height: 0; gap: .4rem; padding: .75rem; }
+.ops-partner-strip .entity-icon { width: 2rem; height: 2rem; }
+.ops-partner-strip .entity-card p { color: #53636e; font-size: .78rem; line-height: 1.4; }
+.ops-partner-strip .entity-card small { font-size: .7rem; }
+.mission-roadmap.ops-mission-strip { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(17.5rem,20rem); grid-template-columns: none; gap: .7rem; overflow-x: auto; padding: .1rem .1rem .55rem; scroll-snap-type: x proximity; }
+.mission-card.ops-mission-card { min-height: 13rem; gap: .55rem; scroll-snap-align: start; box-shadow: none; }
+.ops-mission-card h2 { font-size: .98rem; }
+.ops-mission-card p { font-size: .78rem; line-height: 1.42; }
+.ops-mission-card .primary-button, .ops-mission-card .secondary-button { margin-top: auto; }
+@media (max-width: 1180px) { .ops-workspace { grid-template-columns: 13rem minmax(0,1fr); } .ops-coach { display: none; } }
+@media (max-width: 900px) {
+  .ops-topbar { grid-template-columns: minmax(0,1fr) auto; }
+  .ops-shift-status { display: none; }
+  .ops-workspace { grid-template-columns: 1fr; }
+  .ops-left-rail { position: static; height: auto; display: flex; flex-direction: row; gap: .4rem; overflow-x: auto; padding: .55rem .75rem; border-right: 0; border-bottom: 1px solid #dbe3e8; }
+  .ops-left-rail > div { display: flex; flex: 0 0 auto; }
+  .ops-left-rail .ops-rail-label, .ops-left-rail .ops-rail-footer small { display: none; }
+  .ops-rail-footer { margin-top: 0; padding-top: 0; border-top: 0; }
+  .ops-nav-link { min-height: 2.2rem; grid-template-columns: auto auto auto; white-space: nowrap; }
+  .ops-main { padding: .85rem; }
+  .ops-home-priority-grid, .ops-middle-grid, .ops-role-progress-row { grid-template-columns: 1fr; }
+  .ops-progress-tile { min-width: 0; }
+}
+@media (max-width: 680px) {
+  .ops-card-topline, .ops-section-heading { align-items: stretch; flex-direction: column; }
+  .ops-primary-actions { display: grid; }
+  .ops-primary-actions .primary-button, .ops-primary-actions .secondary-button { justify-content: center; width: 100%; }
+  .ops-focus-sequence, .entity-flow.ops-partner-strip { grid-template-columns: 1fr; }
+  .mission-roadmap.ops-mission-strip { grid-auto-columns: minmax(15.5rem,86vw); }
+}
+/* === End Milestone 28 === */

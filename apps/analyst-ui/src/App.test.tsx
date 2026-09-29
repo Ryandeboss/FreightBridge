@@ -1430,6 +1430,10 @@ describe('Analyst Console', () => {
 
     expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
     expect(screen.getByTestId('training-desk')).toBeInTheDocument();
+    expect(screen.getByTestId('ops-desk-shell')).toBeInTheDocument();
+    expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Inbox/i);
+    expect(screen.getByTestId('ops-current-focus')).toHaveTextContent(/Current Mission/i);
+    expect(screen.getByTestId('ops-coach')).toHaveTextContent(/Mike/i);
     expect(screen.getByRole('heading', { name: /Welcome to FreightBridge/i })).toBeInTheDocument();
     expect(screen.getByTestId('training-role')).toHaveTextContent(/FreightBridge Integration Support Analyst/i);
     expect(screen.getByTestId('external-partner-apex')).toHaveTextContent(/External Trading Partner/i);
