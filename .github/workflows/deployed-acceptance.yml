@@ -1,4 +1,4 @@
-﻿name: Deployed Acceptance
+name: Deployed Acceptance
 
 on:
   workflow_dispatch:
@@ -644,4 +644,3 @@ jobs:
             args+=(--verbose)
           fi
           python scripts/acceptance/milestone27.py "${args[@]}"
-
