@@ -2577,12 +2577,12 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
     expect(screen.queryByRole('button', { name: /^Save$/i })).not.toBeInTheDocument();
 
     window.location.hash = '#/learn/tools/partners?partnerCode=MWCX';
-    expect(await screen.findByTestId('compact-partner-profile')).toHaveTextContent(/X12_SFTP/i);
+    await waitFor(() => expect(screen.getByTestId('compact-partner-profile')).toHaveTextContent(/X12_SFTP/i));
     expect(screen.queryByRole('button', { name: /^Save$/i })).not.toBeInTheDocument();
 
     window.location.hash = '#/learn/tools/errors?errorId=' + errorId;
-    const errorPanel = await screen.findByTestId('compact-error-detail');
-    expect(errorPanel).toHaveTextContent(/MIDWEST_DELIVERY_FAILED/i);
+    await waitFor(() => expect(screen.getByTestId('compact-error-detail')).toHaveTextContent(/MIDWEST_DELIVERY_FAILED/i));
+    const errorPanel = screen.getByTestId('compact-error-detail');
     expect(errorPanel).toHaveTextContent(/Retryable/i);
     expect(screen.queryByRole('button', { name: /Resolve/i })).not.toBeInTheDocument();
   });
