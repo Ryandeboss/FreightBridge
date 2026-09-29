@@ -455,7 +455,11 @@ export function HealthyMapping204Page() {
                 <CheckCircle2 size={16} />Complete Part 2
               </button>
             ) : (
-              <div className="healthy-next"><CheckCircle2 size={18} /><span><strong>Part 2 complete.</strong><small>Saved run {saved.runId}; load {saved.loadId} preserved for Part 3.</small></span></div>
+              <div className="healthy-next">
+                <CheckCircle2 size={18} />
+                <span><strong>Part 2 complete.</strong><small>Saved run {saved.runId}; load {saved.loadId} preserved for Part 3.</small></span>
+                <Link className="primary-button" to="/learn/healthy/acknowledgments">Continue to Part 3<ArrowRight size={16} /></Link>
+              </div>
             )}
           </article>
         </>

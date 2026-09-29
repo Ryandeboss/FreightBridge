@@ -559,6 +559,184 @@ const part2CompletedLabRun = {
   ],
 };
 
+
+const m32PendingSteps = [
+  midwestReceivePendingStep,
+  {
+    ...midwestReceivePendingStep,
+    id: 'step-dispatch-997',
+    stepKey: 'DISPATCH_997_SFTP',
+    sequence: 5,
+    displayName: 'Dispatch Midwest 997',
+    sender: 'Midwest Carrier',
+    receiver: 'FreightBridge',
+    documentType: '997',
+  },
+  {
+    ...midwestReceivePendingStep,
+    id: 'step-receive-997',
+    stepKey: 'FREIGHTBRIDGE_RECEIVE_997',
+    sequence: 6,
+    displayName: 'FreightBridge receives 997',
+    sender: 'Midwest Carrier',
+    receiver: 'FreightBridge',
+    documentType: '997',
+  },
+  {
+    ...midwestReceivePendingStep,
+    id: 'step-create-decision',
+    stepKey: 'CREATE_TENDER_DECISION',
+    sequence: 7,
+    displayName: 'Create accepted tender decision',
+    sender: 'Analyst',
+    receiver: 'Midwest Carrier',
+    transport: 'REST',
+    messageFormat: 'JSON',
+    documentType: '990',
+  },
+  {
+    ...midwestReceivePendingStep,
+    id: 'step-dispatch-990',
+    stepKey: 'DISPATCH_990_SFTP',
+    sequence: 8,
+    displayName: 'Dispatch Midwest 990',
+    sender: 'Midwest Carrier',
+    receiver: 'FreightBridge',
+    documentType: '990',
+  },
+  {
+    ...midwestReceivePendingStep,
+    id: 'step-receive-990',
+    stepKey: 'FREIGHTBRIDGE_RECEIVE_990',
+    sequence: 9,
+    displayName: 'FreightBridge receives 990',
+    sender: 'Midwest Carrier',
+    receiver: 'FreightBridge',
+    documentType: '990',
+  },
+  {
+    ...midwestReceivePendingStep,
+    id: 'step-create-214-picked-up',
+    stepKey: 'CREATE_214_PICKED_UP',
+    sequence: 10,
+    displayName: 'Create PICKED_UP 214 event',
+    sender: 'Analyst',
+    receiver: 'Midwest Carrier',
+    transport: 'REST',
+    messageFormat: 'JSON',
+    documentType: '214',
+  },
+];
+
+const m32Responses: Record<string, Record<string, unknown>> = {
+  MIDWEST_RECEIVE_204: {
+    status: 'POLLED',
+    transport: 'SFTP',
+    targetFileName: 'MW204_000000901.edi',
+    functionalAcknowledgmentDocumentId: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
+    functionalAcknowledgmentStatus: 'ACCEPTED',
+    targetProcessed: {
+      fileName: 'MW204_000000901.edi',
+      sourcePath: '/inbound/MW204_000000901.edi',
+      status: 'ARCHIVED',
+      destinationPath: '/archive/MW204_000000901.edi',
+      functionalAcknowledgmentDocumentId: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
+      functionalAcknowledgmentStatus: 'ACCEPTED',
+    },
+  },
+  DISPATCH_997_SFTP: {
+    status: 'DELIVERED_TO_SFTP',
+    transport: 'SFTP',
+    customerShipmentNumber: 'LAB900',
+    outboundDocumentId: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa',
+    documentType: '997',
+    remotePath: '/outbound/MWCX_APEX_997_000000902.edi',
+    fileName: 'MWCX_APEX_997_000000902.edi',
+  },
+  FREIGHTBRIDGE_RECEIVE_997: {
+    status: 'POLLED',
+    transport: 'SFTP',
+    targetFileName: 'MWCX_APEX_997_000000902.edi',
+    targetProcessed: {
+      fileName: 'MWCX_APEX_997_000000902.edi',
+      sourcePath: '/outbound/MWCX_APEX_997_000000902.edi',
+      status: 'ARCHIVED',
+      destinationPath: '/archive/MWCX_APEX_997_000000902.edi',
+      transactionId: 'bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb',
+    },
+  },
+  CREATE_TENDER_DECISION: {
+    customerShipmentNumber: 'LAB900',
+    decision: 'ACCEPTED',
+    carrierLoadNumber: 'MW-LAB900',
+    reasonCode: null,
+    message: null,
+    decidedAt: '2026-09-24T15:20:00Z',
+    outboundDocumentId: 'cccccccc-3333-4333-8333-cccccccccccc',
+  },
+  DISPATCH_990_SFTP: {
+    status: 'DELIVERED_TO_SFTP',
+    transport: 'SFTP',
+    customerShipmentNumber: 'LAB900',
+    documentType: '990',
+    remotePath: '/outbound/MWCX_APEX_990_000000903.edi',
+    fileName: 'MWCX_APEX_990_000000903.edi',
+  },
+  FREIGHTBRIDGE_RECEIVE_990: {
+    status: 'POLLED',
+    transport: 'SFTP',
+    targetFileName: 'MWCX_APEX_990_000000903.edi',
+    targetProcessed: {
+      fileName: 'MWCX_APEX_990_000000903.edi',
+      sourcePath: '/outbound/MWCX_APEX_990_000000903.edi',
+      status: 'ARCHIVED',
+      destinationPath: '/archive/MWCX_APEX_990_000000903.edi',
+      transactionId: 'dddddddd-4444-4444-8444-dddddddddddd',
+    },
+  },
+};
+
+function makeM32LabRun(succeededKeys: string[]) {
+  const technicalAckReceived = succeededKeys.includes('FREIGHTBRIDGE_RECEIVE_997');
+  const tenderReceived = succeededKeys.includes('FREIGHTBRIDGE_RECEIVE_990');
+  return {
+    ...part2CompletedLabRun,
+    status: 'RUNNING',
+    resultSummary: {
+      ...part2CompletedLabRun.resultSummary,
+      technicalAcknowledgment: technicalAckReceived ? 'ACCEPTED' : 'NOT_RECEIVED',
+      ...(technicalAckReceived ? {
+        technicalAcknowledgmentDetail: {
+          ak5: 'A',
+          ak9: 'A',
+          acknowledgedGroupControlNumber: '901',
+          acknowledgedTransactionControlNumber: '0001',
+        },
+      } : {}),
+      tenderStatus: tenderReceived ? 'ACCEPTED' : 'PENDING',
+      canonicalShipment: {
+        ...canonicalShipment,
+        tenderStatus: tenderReceived ? 'ACCEPTED' : 'PENDING',
+      },
+    },
+    steps: [
+      createApexStep,
+      dispatchApexStep,
+      dispatch204SucceededStep,
+      ...m32PendingSteps.map((step) => succeededKeys.includes(step.stepKey)
+        ? {
+            ...step,
+            status: 'SUCCEEDED',
+            attemptCount: 1,
+            responseSummary: m32Responses[step.stepKey] ?? {},
+          }
+        : step),
+    ],
+  };
+}
+
+const part2ReadyForM32LabRun = makeM32LabRun([]);
+
 const completedFailureLabRun = {
   ...labRun,
   id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -1535,6 +1713,30 @@ function installFetchMock(options: {
       });
     }
 
+
+    const m32StepKeys = [
+      'MIDWEST_RECEIVE_204',
+      'DISPATCH_997_SFTP',
+      'FREIGHTBRIDGE_RECEIVE_997',
+      'CREATE_TENDER_DECISION',
+      'DISPATCH_990_SFTP',
+      'FREIGHTBRIDGE_RECEIVE_990',
+    ];
+
+    for (let index = 0; index < m32StepKeys.length; index += 1) {
+      const stepKey = m32StepKeys[index];
+      if (path === `/api/lab/runs/${labRun.id}/steps/${stepKey}/execute`) {
+        const succeededKeys = m32StepKeys.slice(0, index + 1);
+        const nextRun = makeM32LabRun(succeededKeys);
+        currentLabRun = nextRun;
+        return jsonResponse({
+          run: nextRun,
+          step: nextRun.steps.find((step) => step.stepKey === stepKey) ?? null,
+          alreadyCompleted: false,
+        });
+      }
+    }
+
     return jsonResponse({ message: `Unhandled ${path}` }, 404);
   });
 
@@ -1839,7 +2041,7 @@ test('resumes the saved healthy run, dispatches only the Midwest 204, and saves 
   expect(calledPaths).not.toContain('/214');
 });
 
-test('Training Desk points to Healthy Part 2 after Part 1 and to missions after Part 2', async () => {
+test('Training Desk points to Healthy Part 2 after Part 1 and Healthy Part 3 after Part 2', async () => {
   installFetchMock();
   window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
   window.localStorage.setItem('freightbridge.firstDayOrientationComplete', 'true');
@@ -1867,8 +2069,141 @@ test('Training Desk points to Healthy Part 2 after Part 1 and to missions after 
   }));
   rerender(<App />);
 
+  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Flow Part 3/i);
+  expect(screen.getByRole('link', { name: /Continue Healthy Walkthrough/i })).toHaveAttribute('href', '#/learn/healthy/acknowledgments');
+});
+
+
+test('requires Healthy Part 2 before opening the 997 and 990 response workbench', async () => {
+  installFetchMock();
+  window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+  window.localStorage.setItem('freightbridge.firstDayOrientationComplete', 'true');
+  window.localStorage.setItem('freightbridge.healthyWalkthrough', JSON.stringify({
+    runId: labRun.id,
+    loadId: labRun.businessIdentifier,
+    part1Complete: true,
+    completedAt: '2026-09-24T15:03:00Z',
+  }));
+  window.location.hash = '#/learn/healthy/acknowledgments';
+  render(<App />);
+
+  expect(await screen.findByTestId('healthy-response-recovery')).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: /Part 2 needs to be completed first/i })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: /Return to Part 2/i })).toHaveAttribute('href', '#/learn/healthy/mapping-204');
+});
+
+test('continues the exact saved run through 997 then 990 and stops before 214', async () => {
+  const fetchMock = installFetchMock({ initialLabRun: part2ReadyForM32LabRun });
+  window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+  window.localStorage.setItem('freightbridge.firstDayOrientationComplete', 'true');
+  window.localStorage.setItem('freightbridge.healthyWalkthrough', JSON.stringify({
+    runId: labRun.id,
+    loadId: labRun.businessIdentifier,
+    part1Complete: true,
+    completedAt: '2026-09-24T15:03:00Z',
+    part2Complete: true,
+    part2CompletedAt: '2026-09-24T15:10:00Z',
+  }));
+  window.location.hash = '#/learn/healthy/acknowledgments';
+  render(<App />);
+
+  expect(await screen.findByTestId('healthy-responses-page')).toBeInTheDocument();
+  expect(screen.getByTestId('healthy-response-assignment')).toHaveTextContent(/LAB900/i);
+  expect(screen.getByTestId('997-990-comparison')).toHaveTextContent(/Technical/i);
+  expect(screen.getByTestId('997-990-comparison')).toHaveTextContent(/Business tender response/i);
+
+  const createCalls = fetchMock.mock.calls.filter(([input, init]) => String(input).endsWith('/api/lab/runs') && init?.method === 'POST');
+  expect(createCalls).toHaveLength(0);
+
+  const expectedActions = [
+    /Have Midwest Process 204/i,
+    /Send 997 to FreightBridge/i,
+    /Receive 997 in FreightBridge/i,
+    /Record Midwest Acceptance/i,
+    /Send 990 to FreightBridge/i,
+    /Receive 990 in FreightBridge/i,
+  ];
+
+  for (const action of expectedActions) {
+    const button = await screen.findByRole('button', { name: action });
+    await waitFor(() => expect(button).toBeEnabled());
+    await userEvent.click(button);
+  }
+
+  expect(await screen.findByTestId('healthy-997-evidence')).toHaveTextContent(/ACCEPTED/i);
+  expect(screen.getByTestId('healthy-997-evidence')).toHaveTextContent(/AK5/i);
+  expect(screen.getByTestId('healthy-997-evidence')).toHaveTextContent(/901/i);
+  expect(screen.getByTestId('healthy-997-evidence')).toHaveTextContent(/0001/i);
+  expect(screen.getByTestId('healthy-990-evidence')).toHaveTextContent(/ACCEPTED/i);
+  expect(screen.getByTestId('healthy-990-evidence')).toHaveTextContent(/Apex-facing outcome/i);
+
+  const completeButton = screen.getByRole('button', { name: /Complete Part 3/i });
+  expect(completeButton).toBeDisabled();
+
+  const checksPanel = screen.getByTestId('healthy-response-checks');
+  await userEvent.click(within(checksPanel).getByRole('button', { name: /^Midwest technically acknowledged the 204$/i }));
+  await userEvent.click(within(checksPanel).getByRole('button', { name: /^Yes$/i }));
+  await userEvent.click(within(checksPanel).getByRole('button', { name: /^990$/i }));
+
+  expect(completeButton).toBeEnabled();
+  await userEvent.click(completeButton);
+
+  const saved = JSON.parse(String(window.localStorage.getItem('freightbridge.healthyWalkthrough'))) as Record<string, unknown>;
+  expect(saved.runId).toBe(labRun.id);
+  expect(saved.loadId).toBe(labRun.businessIdentifier);
+  expect(saved.part1Complete).toBe(true);
+  expect(saved.part2Complete).toBe(true);
+  expect(saved.part3Complete).toBe(true);
+  expect(typeof saved.part3CompletedAt).toBe('string');
+
+  const calledPaths = fetchMock.mock.calls.map(([input]) => new URL(String(input)).pathname);
+  expect(calledPaths).toEqual(expect.arrayContaining([
+    `/api/lab/runs/${labRun.id}/steps/MIDWEST_RECEIVE_204/execute`,
+    `/api/lab/runs/${labRun.id}/steps/DISPATCH_997_SFTP/execute`,
+    `/api/lab/runs/${labRun.id}/steps/FREIGHTBRIDGE_RECEIVE_997/execute`,
+    `/api/lab/runs/${labRun.id}/steps/CREATE_TENDER_DECISION/execute`,
+    `/api/lab/runs/${labRun.id}/steps/DISPATCH_990_SFTP/execute`,
+    `/api/lab/runs/${labRun.id}/steps/FREIGHTBRIDGE_RECEIVE_990/execute`,
+  ]));
+  expect(calledPaths.join('\n')).not.toContain('CREATE_214_');
+  expect(calledPaths.join('\n')).not.toContain('DISPATCH_214_');
+  expect(calledPaths.join('\n')).not.toContain('FREIGHTBRIDGE_RECEIVE_214_');
+});
+
+test('Training Desk promotes Healthy Part 3 after Part 2 and returns focus to missions after Part 3', async () => {
+  installFetchMock();
+  window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+  window.localStorage.setItem('freightbridge.firstDayOrientationComplete', 'true');
+  window.localStorage.setItem('freightbridge.healthyWalkthrough', JSON.stringify({
+    runId: labRun.id,
+    loadId: labRun.businessIdentifier,
+    part1Complete: true,
+    completedAt: '2026-09-24T15:03:00Z',
+    part2Complete: true,
+    part2CompletedAt: '2026-09-24T15:10:00Z',
+  }));
+  window.location.hash = '#/learn';
+  const { rerender } = render(<App />);
+
+  expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
+  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Flow Part 3/i);
+  expect(screen.getByRole('link', { name: /Continue Healthy Walkthrough/i })).toHaveAttribute('href', '#/learn/healthy/acknowledgments');
+  expect(screen.getByTestId('healthy-home-card')).toHaveTextContent(/Part 3/i);
+
+  window.localStorage.setItem('freightbridge.healthyWalkthrough', JSON.stringify({
+    runId: labRun.id,
+    loadId: labRun.businessIdentifier,
+    part1Complete: true,
+    completedAt: '2026-09-24T15:03:00Z',
+    part2Complete: true,
+    part2CompletedAt: '2026-09-24T15:10:00Z',
+    part3Complete: true,
+    part3CompletedAt: '2026-09-24T15:30:00Z',
+  }));
+  rerender(<App />);
+
   expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Mission 1 - Your First Shift/i);
-  expect(screen.getByRole('link', { name: /Review Healthy Walkthrough/i })).toHaveAttribute('href', '#/learn/healthy/mapping-204');
+  expect(screen.getByRole('link', { name: /Review Healthy Walkthrough/i })).toHaveAttribute('href', '#/learn/healthy/acknowledgments');
 });
 
   test('keeps future incident missions locked until prerequisites are complete', async () => {
