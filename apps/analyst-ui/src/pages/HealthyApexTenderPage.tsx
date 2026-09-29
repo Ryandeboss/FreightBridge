@@ -212,7 +212,7 @@ export function HealthyApexTenderPage() {
         </article>
       )}
 
-      {canComplete && <article className={`panel healthy-finish ${complete ? 'complete' : ''}`} data-testid="healthy-part1-completion"><div><p className="eyebrow">Last healthy checkpoint</p><h2>Canonical shipment created</h2><p>Part 1 stops here. Midwest has not received a 204. Part 2 will continue this exact Lab run into mapping and X12 generation.</p></div>{!complete ? <button className="primary-button" type="button" onClick={finish}><CheckCircle2 size={16} />Complete Part 1</button> : <div className="healthy-next"><CheckCircle2 size={18} /><span><strong>Part 1 complete.</strong><small>Saved under {HEALTHY_WALKTHROUGH_STORAGE_KEY}. Part 2 can resume run {run?.id ?? 'Pending'}.</small></span></div>}</article>}
+      {canComplete && <article className={`panel healthy-finish ${complete ? 'complete' : ''}`} data-testid="healthy-part1-completion"><div><p className="eyebrow">Last healthy checkpoint</p><h2>Canonical shipment created</h2><p>Part 1 stops here. Midwest has not received a 204. Part 2 will continue this exact Lab run into mapping and X12 generation.</p></div>{!complete ? <button className="primary-button" type="button" onClick={finish}><CheckCircle2 size={16} />Complete Part 1</button> : <div className="healthy-next"><CheckCircle2 size={18} /><span><strong>Part 1 complete.</strong><small>Saved under {HEALTHY_WALKTHROUGH_STORAGE_KEY}. Part 2 can resume run {run?.id ?? 'Pending'}.</small><Link to="/learn/healthy/mapping-204">Continue to Part 2</Link></span></div>}</article>}
     </section>
   );
 }

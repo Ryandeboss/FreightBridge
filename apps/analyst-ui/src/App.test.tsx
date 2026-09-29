@@ -298,6 +298,29 @@ const labRun = {
   ],
 };
 
+const midwest204X12 = [
+  'ISA*00*          *00*          *ZZ*FREIGHTBRIDGE   *ZZ*MWCX           *260924*1500*U*00401*000000901*0*T*:~',
+  'GS*SM*FREIGHTBRIDGE*MWCX*20260924*1500*901*X*004010~',
+  'ST*204*0001~',
+  'B2**MWCX**LAB900**PP~',
+  'L11*BOLLAB900*BM~',
+  'L11*POLAB900*PO~',
+  'G62*37*20260925*I*1500~',
+  'G62*38*20260926*K*1500~',
+  'S5*1*LD~',
+  'N1*SH*ABC Factory~',
+  'N3*200 Industrial Rd~',
+  'N4*Aurora*IL*60505~',
+  'S5*2*UL~',
+  'N1*CN*XYZ Warehouse~',
+  'N3*900 Commerce St~',
+  'N4*Detroit*MI*48201~',
+  'L3*42000*G***22~',
+  'SE*15*0001~',
+  'GE*1*901~',
+  'IEA*1*000000901~',
+].join('');
+
 const completedLabRun = {
   ...labRun,
   status: 'SUCCEEDED',
@@ -369,7 +392,7 @@ const completedLabRun = {
             payloadSha256: 'sha256-204',
             fileName: 'MW204_000000901.edi',
             remotePath: '/inbound/MW204_000000901.edi',
-            x12: 'ISA*00*          *00*          *ZZ*FREIGHTBRIDGE   *ZZ*MWCX           *260924*1500*U*00401*000000901*0*T*:~GS*SM*FREIGHTBRIDGE*MWCX*20260924*1500*901*X*004010~ST*204*0001~SE*3*0001~GE*1*901~IEA*1*000000901~',
+            x12: midwest204X12,
           },
         }
       : {
@@ -389,6 +412,151 @@ const completedLabRun = {
           },
         },
   })),
+};
+
+const canonicalShipment = {
+  shipmentNumber: 'LAB900',
+  equipmentType: 'DRY_VAN_53',
+  weightLbs: 42000,
+  pieces: 22,
+  commodityDescription: 'Industrial Components',
+  references: [
+    { referenceType: 'BOL', referenceValue: 'BOLLAB900' },
+    { referenceType: 'PO', referenceValue: 'POLAB900' },
+  ],
+  pickup: {
+    facilityName: 'ABC Factory',
+    address1: '200 Industrial Rd',
+    city: 'Aurora',
+    state: 'IL',
+    postalCode: '60505',
+    scheduledDateTime: '2026-09-25T15:00:00Z',
+  },
+  delivery: {
+    facilityName: 'XYZ Warehouse',
+    address1: '900 Commerce St',
+    city: 'Detroit',
+    state: 'MI',
+    postalCode: '48201',
+    scheduledDateTime: '2026-09-26T15:00:00Z',
+  },
+};
+
+const createApexStep = {
+  ...labRun.steps[0],
+  status: 'SUCCEEDED',
+  attemptCount: 1,
+  responseSummary: {
+    apexLoadTenderJson: {
+      loadId: 'LAB900',
+      bolNumber: 'BOLLAB900',
+      purchaseOrderNumber: 'POLAB900',
+      equipmentType: 'VAN_53',
+      weightLbs: 42000,
+      pieces: 22,
+      commodityDescription: 'Industrial Components',
+      pickup: labRun.inputSnapshot.pickup,
+      delivery: labRun.inputSnapshot.delivery,
+    },
+  },
+};
+
+const dispatchApexStep = {
+  ...labRun.steps[0],
+  id: 'step-apex-dispatch',
+  stepKey: 'DISPATCH_APEX_TENDER',
+  sequence: 2,
+  displayName: 'Dispatch Apex tender',
+  sender: 'Apex Logistics',
+  receiver: 'FreightBridge',
+  transport: 'REST',
+  messageFormat: 'JSON',
+  documentType: 'APEX_LOAD_TENDER',
+  status: 'SUCCEEDED',
+  attemptCount: 1,
+  requestSummary: { loadId: 'LAB900', idempotencyKey: 'lab-test-apex-tender' },
+  responseSummary: { status: 'ACCEPTED_FOR_PROCESSING' },
+};
+
+const dispatch204PendingStep = {
+  ...labRun.steps[1],
+  sequence: 3,
+  status: 'PENDING',
+  attemptCount: 0,
+  responseSummary: {},
+  relatedTransactionIds: [],
+};
+
+const midwestReceivePendingStep = {
+  ...labRun.steps[1],
+  id: 'step-midwest-receive',
+  stepKey: 'MIDWEST_RECEIVE_204',
+  sequence: 4,
+  displayName: 'Midwest receives 204',
+  sender: 'Midwest SFTP',
+  receiver: 'Midwest Carrier',
+  transport: 'SFTP',
+  messageFormat: 'X12',
+  documentType: '204',
+  status: 'PENDING',
+  attemptCount: 0,
+  responseSummary: {},
+  relatedTransactionIds: [],
+};
+
+const part1CompletedLabRun = {
+  ...labRun,
+  status: 'RUNNING',
+  resultSummary: {
+    ...labRun.resultSummary,
+    canonicalShipment,
+  },
+  steps: [
+    createApexStep,
+    dispatchApexStep,
+    dispatch204PendingStep,
+    midwestReceivePendingStep,
+  ],
+};
+
+const dispatch204SucceededStep = {
+  ...dispatch204PendingStep,
+  status: 'SUCCEEDED',
+  attemptCount: 1,
+  relatedTransactionIds: [transactionId],
+  responseSummary: {
+    status: 'DISPATCHED',
+    shipmentNumber: 'LAB900',
+    fileName: 'MW204_000000901.edi',
+    remotePath: '/inbound/MW204_000000901.edi',
+    canonicalShipment,
+    x12Preview: {
+      interchangeControlNumber: '000000901',
+      groupControlNumber: '901',
+      transactionControlNumber: '0001',
+      mappingKey: 'CANONICAL_TO_MWCX_204',
+      mappingProfileId: mapping.id,
+      mappingProfileVersion: 1,
+      payloadSha256: 'sha256-204',
+      fileName: 'MW204_000000901.edi',
+      remotePath: '/inbound/MW204_000000901.edi',
+      x12: midwest204X12,
+    },
+  },
+};
+
+const part2CompletedLabRun = {
+  ...part1CompletedLabRun,
+  resultSummary: {
+    ...part1CompletedLabRun.resultSummary,
+    x12Preview: dispatch204SucceededStep.responseSummary.x12Preview,
+  },
+  steps: [
+    createApexStep,
+    dispatchApexStep,
+    dispatch204SucceededStep,
+    midwestReceivePendingStep,
+  ],
 };
 
 const completedFailureLabRun = {
@@ -1354,6 +1522,19 @@ function installFetchMock(options: {
       });
     }
 
+    if (path === `/api/lab/runs/${labRun.id}/steps/DISPATCH_204_SFTP/execute`) {
+      currentLabRun = {
+        ...part2CompletedLabRun,
+        businessIdentifier: String(currentLabRun.businessIdentifier ?? labRun.businessIdentifier),
+      };
+
+      return jsonResponse({
+        run: currentLabRun,
+        step: dispatch204SucceededStep,
+        alreadyCompleted: false,
+      });
+    }
+
     return jsonResponse({ message: `Unhandled ${path}` }, 404);
   });
 
@@ -1584,6 +1765,110 @@ test('guides a real Apex tender through inbound processing and saves the run for
   expect(saved.runId).toBe(labRun.id);
   expect(saved.loadId).toBe(labRun.businessIdentifier);
   expect(screen.getByTestId('healthy-part1-completion')).toHaveTextContent(/Part 2 can resume/i);
+});
+
+test('requires the saved Part 1 healthy run before opening the 204 mapping workbench', async () => {
+  installFetchMock();
+  window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+  window.localStorage.setItem('freightbridge.firstDayOrientationComplete', 'true');
+  window.location.hash = '#/learn/healthy/mapping-204';
+  render(<App />);
+
+  expect(await screen.findByTestId('healthy-mapping-recovery')).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: /Part 1 needs to be completed first/i })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: /Return to Part 1/i })).toHaveAttribute('href', '#/learn/healthy/apex-tender');
+});
+
+test('resumes the saved healthy run, dispatches only the Midwest 204, and saves Part 2 progress', async () => {
+  const fetchMock = installFetchMock({ initialLabRun: part1CompletedLabRun });
+  window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+  window.localStorage.setItem('freightbridge.firstDayOrientationComplete', 'true');
+  window.localStorage.setItem('freightbridge.healthyWalkthrough', JSON.stringify({
+    runId: labRun.id,
+    loadId: labRun.businessIdentifier,
+    part1Complete: true,
+    completedAt: '2026-09-24T15:03:00Z',
+  }));
+  window.location.hash = '#/learn/healthy/mapping-204';
+  render(<App />);
+
+  expect(await screen.findByTestId('healthy-mapping-204-page')).toBeInTheDocument();
+  expect(screen.getByTestId('healthy-mapping-assignment')).toHaveTextContent(/LAB900/i);
+  expect(screen.getByTestId('healthy-mapping-pipeline')).toHaveTextContent(/Midwest processed file/i);
+  expect(screen.getByTestId('healthy-mapping-pipeline')).toHaveTextContent(/Canonical Shipment/i);
+  expect(screen.getByTestId('mapping-workbench')).toHaveTextContent(/B2-04/i);
+  expect(screen.getByTestId('mapping-workbench')).toHaveTextContent(/L11-01/i);
+
+  const createCallsBeforeDispatch = fetchMock.mock.calls.filter(([input, init]) => String(input).endsWith('/api/lab/runs') && init?.method === 'POST');
+  expect(createCallsBeforeDispatch).toHaveLength(0);
+
+  await userEvent.click(screen.getByRole('button', { name: /Generate & Send Midwest 204/i }));
+
+  expect(await screen.findByTestId('x12-204-explorer')).toBeInTheDocument();
+  expect(screen.getByTestId('x12-business-summary')).toHaveTextContent(/No Midwest processing, 997, or 990/i);
+  expect(screen.getByTestId('mapping-profile-evidence')).toHaveTextContent(/CANONICAL_TO_MWCX_204/i);
+  expect(screen.getByTestId('mapping-profile-evidence')).toHaveTextContent(/000000901/i);
+  expect(screen.getByTestId('mapping-profile-evidence')).toHaveTextContent(/MW204_000000901.edi/i);
+  expect(screen.getByTestId('mapping-profile-evidence')).toHaveTextContent(/sha256-204/i);
+
+  await userEvent.click(screen.getByRole('button', { name: /Raw X12/i }));
+  expect(screen.getByTestId('raw-x12-204')).toHaveTextContent('B2**MWCX**LAB900**PP');
+
+  const completeButton = screen.getByRole('button', { name: /Complete Part 2/i });
+  expect(completeButton).toBeDisabled();
+  const checksPanel = screen.getByTestId('healthy-mapping-checks');
+  await userEvent.click(within(checksPanel).getByRole('button', { name: /^FreightBridge$/i }));
+  await userEvent.click(within(checksPanel).getByRole('button', { name: /^It gives FreightBridge a neutral business model/i }));
+  await userEvent.click(within(checksPanel).getByRole('button', { name: /^No$/i }));
+  expect(completeButton).toBeEnabled();
+  await userEvent.click(completeButton);
+
+  const saved = JSON.parse(String(window.localStorage.getItem('freightbridge.healthyWalkthrough'))) as Record<string, unknown>;
+  expect(saved.runId).toBe(labRun.id);
+  expect(saved.loadId).toBe(labRun.businessIdentifier);
+  expect(saved.part1Complete).toBe(true);
+  expect(saved.part2Complete).toBe(true);
+  expect(typeof saved.part2CompletedAt).toBe('string');
+  expect(screen.getByTestId('healthy-part2-completion')).toHaveTextContent(/Part 2 complete/i);
+
+  const calledPaths = fetchMock.mock.calls.map(([input]) => new URL(String(input)).pathname).join('\n');
+  expect(calledPaths).toContain(`/api/lab/runs/${labRun.id}/steps/DISPATCH_204_SFTP/execute`);
+  expect(calledPaths).not.toContain('MIDWEST_RECEIVE_204');
+  expect(calledPaths).not.toContain('/997');
+  expect(calledPaths).not.toContain('/990');
+  expect(calledPaths).not.toContain('/214');
+});
+
+test('Training Desk points to Healthy Part 2 after Part 1 and to missions after Part 2', async () => {
+  installFetchMock();
+  window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+  window.localStorage.setItem('freightbridge.firstDayOrientationComplete', 'true');
+  window.localStorage.setItem('freightbridge.healthyWalkthrough', JSON.stringify({
+    runId: labRun.id,
+    loadId: labRun.businessIdentifier,
+    part1Complete: true,
+    completedAt: '2026-09-24T15:03:00Z',
+  }));
+  window.location.hash = '#/learn';
+  const { rerender } = render(<App />);
+
+  expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
+  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Flow Part 2/i);
+  expect(screen.getByRole('link', { name: /Continue Healthy Walkthrough/i })).toHaveAttribute('href', '#/learn/healthy/mapping-204');
+  expect(screen.getByTestId('healthy-home-card')).toHaveTextContent(/Part 2 - Midwest 204 mapping workbench/i);
+
+  window.localStorage.setItem('freightbridge.healthyWalkthrough', JSON.stringify({
+    runId: labRun.id,
+    loadId: labRun.businessIdentifier,
+    part1Complete: true,
+    completedAt: '2026-09-24T15:03:00Z',
+    part2Complete: true,
+    part2CompletedAt: '2026-09-24T15:10:00Z',
+  }));
+  rerender(<App />);
+
+  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Mission 1 - Your First Shift/i);
+  expect(screen.getByRole('link', { name: /Review Healthy Walkthrough/i })).toHaveAttribute('href', '#/learn/healthy/mapping-204');
 });
 
   test('keeps future incident missions locked until prerequisites are complete', async () => {
