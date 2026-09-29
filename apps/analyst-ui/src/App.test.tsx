@@ -1473,6 +1473,15 @@ function installFetchMock(options: {
         retryAttempts: [],
         logs: [
           {
+            id: 'log-0',
+            transactionId,
+            stage: 'ROUTING',
+            status: 'SUCCEEDED',
+            message: 'Midwest SFTP route selected.',
+            metadata: {},
+            createdAt: '2026-09-23T15:01:00Z',
+          },
+          {
             id: 'log-1',
             transactionId,
             stage: 'DELIVERY',
@@ -2501,6 +2510,82 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
   expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Mission 1 - Your First Shift/i);
   expect(screen.getByRole('link', { name: /Review Healthy Walkthrough/i })).toHaveAttribute('href', '#/learn/healthy/shipment-status');
 });
+
+
+
+  test('keeps compact analyst tools inside the Ops Desk and preserves full-console escalation', async () => {
+    installFetchMock();
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn/tools/transactions';
+    render(<App />);
+
+    expect(await screen.findByTestId('analyst-tools-page')).toBeInTheDocument();
+    expect(screen.getByTestId('ops-desk-shell')).toBeInTheDocument();
+    expect(screen.getByTestId('ops-coach')).toHaveTextContent(/Mike/i);
+    expect(screen.getByRole('heading', { name: /^Transactions$/i })).toBeInTheDocument();
+    expect(screen.getByText(/When analysts use this/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Open This Tool in Full Console/i })).toHaveAttribute('href', '#/transactions');
+    expect(screen.getByTestId('ops-coach').querySelector('.ops-coach-console-link')).toHaveTextContent('Open Full Console');
+  });
+
+  test('finds a load and uses the processing log to identify the last successful checkpoint', async () => {
+    installFetchMock();
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn/tools/transactions';
+    render(<App />);
+
+    expect(await screen.findByTestId('analyst-tools-page')).toBeInTheDocument();
+    const input = screen.getByLabelText(/Business identifier/i);
+    await userEvent.clear(input);
+    await userEvent.type(input, 'LOAD900');
+    await userEvent.click(screen.getByRole('button', { name: /^Search$/i }));
+
+    const resultLink = await screen.findByRole('link', { name: /204 · MIDWEST/i });
+    await userEvent.click(resultLink);
+    expect(await screen.findByTestId('compact-transaction-detail')).toHaveTextContent(/DELIVERY/i);
+    expect(screen.getByText(/What was the last successful step/i)).toBeInTheDocument();
+
+    const context = await screen.findByTestId('analyst-context-strip');
+    await userEvent.click(within(context).getByRole('link', { name: /Processing Log/i }));
+    const log = await screen.findByTestId('compact-processing-log');
+    expect(log).toHaveTextContent(/ROUTING \/ SUCCEEDED/i);
+    expect(log).toHaveTextContent(/DELIVERY \/ FAILED/i);
+  });
+
+  test('hides raw analyst evidence until View Raw is requested', async () => {
+    installFetchMock();
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn/tools/payload?transactionId=' + transactionId;
+    render(<App />);
+
+    const viewer = await screen.findByTestId('compact-payload-viewer');
+    expect(viewer).toHaveTextContent(/Payload Viewer/i);
+    expect(viewer).toHaveTextContent(/payload metadata and storage evidence/i);
+    expect(screen.queryByTestId('compact-raw-evidence')).not.toBeInTheDocument();
+
+    await userEvent.click(within(viewer).getByRole('button', { name: /^View Raw$/i }));
+    expect(screen.getByTestId('compact-raw-evidence')).toHaveTextContent(/"payloadHash": "sha256:payload"/i);
+  });
+
+  test('opens mapping, partner, and error evidence read-only inside Training Mode', async () => {
+    installFetchMock();
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn/tools/mappings?mappingId=' + mapping.id;
+    render(<App />);
+
+    expect(await screen.findByTestId('compact-mapping-viewer')).toHaveTextContent(/CANONICAL_TO_MWCX_204/i);
+    expect(screen.queryByRole('button', { name: /^Save$/i })).not.toBeInTheDocument();
+
+    window.location.hash = '#/learn/tools/partners?partnerCode=MWCX';
+    expect(await screen.findByTestId('compact-partner-profile')).toHaveTextContent(/X12_SFTP/i);
+    expect(screen.queryByRole('button', { name: /^Save$/i })).not.toBeInTheDocument();
+
+    window.location.hash = '#/learn/tools/errors?errorId=' + errorId;
+    const errorPanel = await screen.findByTestId('compact-error-detail');
+    expect(errorPanel).toHaveTextContent(/MIDWEST_DELIVERY_FAILED/i);
+    expect(errorPanel).toHaveTextContent(/Retryable/i);
+    expect(screen.queryByRole('button', { name: /Resolve/i })).not.toBeInTheDocument();
+  });
 
 
   test('keeps future incident missions locked until prerequisites are complete', async () => {
