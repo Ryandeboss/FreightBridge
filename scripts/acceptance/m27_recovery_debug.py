@@ -2,11 +2,16 @@
 
 import os
 import sys
+from pathlib import Path
+
+if __package__ in (None, ""):
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from scripts.acceptance.common import (
     AcceptanceFailure,
     SafeHttpClient,
     generate_load_id,
+    safe_body,
 )
 
 
@@ -97,12 +102,17 @@ def main() -> int:
         print("Calling real server-backed recovery...")
         print("")
 
-        recovered = client.post_empty(
-            f"/api/lab/runs/{run_id}/recover",
-            token=token,
-            expected=(200,),
-            step="Recover Mission 7 diagnostic run",
-        )
+        try:
+            recovered = client.post_empty(
+                f"/api/lab/runs/{run_id}/recover",
+                token=token,
+                expected=(200,),
+                step="Recover Mission 7 diagnostic run",
+            )
+        except AcceptanceFailure as exc:
+            print("[FAIL] Recovery endpoint rejected the corrected 214.")
+            print(exc.format())
+            return 1
 
         summary = recovered.get("resultSummary")
         recovery = (
@@ -111,8 +121,30 @@ def main() -> int:
             else None
         )
 
+        print(f"run_status={recovered.get('status')}")
+
         print("[PASS] Mission 7 recovery endpoint returned 200")
-        print(f"recovery={recovery}")
+        print(f"safe_recovery_evidence={safe_body(recovery)}")
+
+        if not isinstance(recovery, dict):
+            raise AcceptanceFailure(
+                "Recover Mission 7 diagnostic run",
+                "Recovery response did not include resultSummary.recovery.",
+                response_body={"resultSummary": summary},
+            )
+        if recovery.get("status") != "SUCCEEDED":
+            raise AcceptanceFailure(
+                "Recover Mission 7 diagnostic run",
+                "Recovery evidence did not report success.",
+                response_body={"recovery": recovery},
+            )
+        if recovery.get("apexFacingEvidence") is not True:
+            raise AcceptanceFailure(
+                "Recover Mission 7 diagnostic run",
+                "Recovery did not produce Apex-facing shipment-status evidence.",
+                response_body={"recovery": recovery},
+            )
+
         return 0
 
     except AcceptanceFailure as exc:
