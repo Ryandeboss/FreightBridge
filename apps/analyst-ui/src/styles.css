@@ -2191,3 +2191,29 @@ input:disabled {
 @media (min-width: 900px) {
   .ack-compare { grid-template-columns: 1fr 1fr; }
 }
+
+/* Milestone 33: Healthy 214 shipment-status walkthrough */
+.status-pipeline { margin-bottom: 16px; }
+.status-current { display: grid; gap: 10px; align-content: start; }
+.status-current h2 { margin: 0; }
+.status-map { display: grid; gap: 14px; }
+.status-mapping-grid { display: grid; gap: 10px; }
+.status-mapping-grid article { padding: 14px; border: 1px solid var(--border); border-radius: 14px; }
+.status-mapping-grid h3 { margin: 8px 0 4px; }
+.status-mapping-grid p { margin: 0 0 8px; }
+.status-mapping-grid small { display: flex; gap: 6px; align-items: center; color: var(--muted); }
+.status-timeline { display: grid; gap: 16px; }
+.status-event-list { display: grid; gap: 12px; }
+.status-event-card { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 14px; }
+.status-event-card.complete { opacity: .94; }
+.status-event-heading { display: flex; justify-content: space-between; gap: 12px; }
+.status-event-heading h3 { margin: 7px 0 4px; }
+.status-event-heading p { margin: 0; }
+.status-hop-row { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.status-hop-row span { display: inline-flex; gap: 5px; align-items: center; color: var(--muted); }
+.status-hop-row span.complete { color: inherit; font-weight: 700; }
+.event-time-lesson { display: grid; gap: 8px; }
+.status-step-evidence { margin-top: 10px; }
+@media (min-width: 900px) {
+  .status-mapping-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}

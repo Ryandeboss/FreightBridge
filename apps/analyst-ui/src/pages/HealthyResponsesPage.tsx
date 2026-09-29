@@ -356,7 +356,11 @@ export function HealthyResponsesPage() {
                 <CheckCircle2 size={16} />Complete Part 3
               </button>
             ) : (
-              <div className="healthy-next"><CheckCircle2 size={18} /><span><strong>Part 3 complete.</strong><small>Saved run {saved.runId}; load {saved.loadId} is ready for the later 214 status walkthrough.</small></span></div>
+              <div className="healthy-next">
+                <CheckCircle2 size={18} />
+                <span><strong>Part 3 complete.</strong><small>Saved run {saved.runId}; load {saved.loadId} is ready for the 214 status walkthrough.</small></span>
+                <Link className="primary-button" to="/learn/healthy/shipment-status">Continue to Part 4<ArrowRight size={16} /></Link>
+              </div>
             )}
           </article>
         </>
