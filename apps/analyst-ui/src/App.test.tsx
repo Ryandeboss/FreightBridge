@@ -737,6 +737,149 @@ function makeM32LabRun(succeededKeys: string[]) {
 
 const part2ReadyForM32LabRun = makeM32LabRun([]);
 
+
+const m33Statuses = [
+  { status: 'PICKED_UP', at7Code: 'AF', city: 'Aurora', state: 'IL', occurredAt: '2026-09-25T15:00:00Z', description: 'Shipment departed pickup facility.' },
+  { status: 'IN_TRANSIT', at7Code: 'X6', city: 'South Bend', state: 'IN', occurredAt: '2026-09-25T23:00:00Z', description: 'Shipment is in transit.' },
+  { status: 'ARRIVED', at7Code: 'X1', city: 'Detroit', state: 'MI', occurredAt: '2026-09-26T07:00:00Z', description: 'Shipment arrived at delivery location.' },
+  { status: 'DELIVERED', at7Code: 'D1', city: 'Detroit', state: 'MI', occurredAt: '2026-09-26T15:00:00Z', description: 'Shipment delivery completed.' },
+] as const;
+
+const m33StepKeys = m33Statuses.flatMap((item) => [
+  'CREATE_214_' + item.status,
+  'DISPATCH_214_' + item.status,
+  'FREIGHTBRIDGE_RECEIVE_214_' + item.status,
+]);
+
+function makeM33LabRun(succeededKeys: string[]) {
+  const base = makeM32LabRun([
+    'MIDWEST_RECEIVE_204',
+    'DISPATCH_997_SFTP',
+    'FREIGHTBRIDGE_RECEIVE_997',
+    'CREATE_TENDER_DECISION',
+    'DISPATCH_990_SFTP',
+    'FREIGHTBRIDGE_RECEIVE_990',
+  ]);
+  const before214 = base.steps.filter((step) => !step.stepKey.startsWith('CREATE_214_'));
+  const receivedStatuses = m33Statuses.filter((item) => succeededKeys.includes('FREIGHTBRIDGE_RECEIVE_214_' + item.status));
+  const current = receivedStatuses.at(-1)?.status ?? 'PLANNED';
+
+  const statusSteps = m33Statuses.flatMap((item, index) => {
+    const sequence = 10 + (index * 3);
+    const control = String(910 + index);
+    const fileName = 'MWCX_APEX_214_000000' + control + '.edi';
+    const createKey = 'CREATE_214_' + item.status;
+    const dispatchKey = 'DISPATCH_214_' + item.status;
+    const receiveKey = 'FREIGHTBRIDGE_RECEIVE_214_' + item.status;
+    const eventId = 'eeeeeeee-' + String(index + 1).padStart(4, '0') + '-4eee-8eee-eeeeeeeeeeee';
+    const createResponse = {
+      eventId,
+      customerShipmentNumber: 'LAB900',
+      status: item.status,
+      at7Code: item.at7Code,
+      statusDescription: item.description,
+      occurredAt: item.occurredAt,
+      city: item.city,
+      state: item.state,
+      outboundDocumentId: 'ffffffff-' + String(index + 1).padStart(4, '0') + '-4fff-8fff-ffffffffffff',
+    };
+    const dispatchResponse = {
+      status: 'DELIVERED_TO_SFTP',
+      transport: 'SFTP',
+      customerShipmentNumber: 'LAB900',
+      eventId,
+      documentType: '214',
+      remotePath: '/outbound/' + fileName,
+      fileName,
+    };
+    const receiveResponse = {
+      status: 'POLLED',
+      transport: 'SFTP',
+      targetFileName: fileName,
+      targetProcessed: {
+        fileName,
+        sourcePath: '/outbound/' + fileName,
+        status: 'ARCHIVED',
+        destinationPath: '/archive/' + fileName,
+        transactionId: '99999999-' + String(index + 1).padStart(4, '0') + '-4999-8999-999999999999',
+      },
+    };
+
+    return [
+      {
+        ...midwestReceivePendingStep,
+        id: 'step-create-214-' + item.status.toLowerCase(),
+        stepKey: createKey,
+        sequence,
+        displayName: 'Create ' + item.status + ' 214 event',
+        sender: 'Analyst',
+        receiver: 'Midwest Carrier',
+        transport: 'REST',
+        messageFormat: 'JSON',
+        documentType: '214',
+        status: succeededKeys.includes(createKey) ? 'SUCCEEDED' : 'PENDING',
+        attemptCount: succeededKeys.includes(createKey) ? 1 : 0,
+        responseSummary: succeededKeys.includes(createKey) ? createResponse : {},
+      },
+      {
+        ...midwestReceivePendingStep,
+        id: 'step-dispatch-214-' + item.status.toLowerCase(),
+        stepKey: dispatchKey,
+        sequence: sequence + 1,
+        displayName: 'Dispatch ' + item.status + ' 214',
+        sender: 'Midwest Carrier',
+        receiver: 'FreightBridge',
+        transport: 'SFTP',
+        messageFormat: 'X12',
+        documentType: '214',
+        status: succeededKeys.includes(dispatchKey) ? 'SUCCEEDED' : 'PENDING',
+        attemptCount: succeededKeys.includes(dispatchKey) ? 1 : 0,
+        responseSummary: succeededKeys.includes(dispatchKey) ? dispatchResponse : {},
+      },
+      {
+        ...midwestReceivePendingStep,
+        id: 'step-receive-214-' + item.status.toLowerCase(),
+        stepKey: receiveKey,
+        sequence: sequence + 2,
+        displayName: 'FreightBridge receives ' + item.status + ' 214',
+        sender: 'Midwest Carrier',
+        receiver: 'FreightBridge',
+        transport: 'SFTP',
+        messageFormat: 'X12',
+        documentType: '214',
+        status: succeededKeys.includes(receiveKey) ? 'SUCCEEDED' : 'PENDING',
+        attemptCount: succeededKeys.includes(receiveKey) ? 1 : 0,
+        responseSummary: succeededKeys.includes(receiveKey) ? receiveResponse : {},
+      },
+    ];
+  });
+
+  return {
+    ...base,
+    status: succeededKeys.length === m33StepKeys.length ? 'SUCCEEDED' : 'RUNNING',
+    resultSummary: {
+      ...base.resultSummary,
+      shipmentStatus: current,
+      shipmentEvents: receivedStatuses.map((item, index) => ({
+        status: item.status,
+        occurredAt: item.occurredAt,
+        receivedAt: '2026-09-26T' + String(16 + index).padStart(2, '0') + ':00:00Z',
+        city: item.city,
+        state: item.state,
+        statusDescription: item.description,
+      })),
+      canonicalShipment: {
+        ...canonicalShipment,
+        tenderStatus: 'ACCEPTED',
+        currentStatus: current,
+      },
+    },
+    steps: [...before214, ...statusSteps],
+  };
+}
+
+const part3ReadyForM33LabRun = makeM33LabRun([]);
+
 const completedFailureLabRun = {
   ...labRun,
   id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -1737,6 +1880,20 @@ function installFetchMock(options: {
       }
     }
 
+
+    for (let index = 0; index < m33StepKeys.length; index += 1) {
+      const stepKey = m33StepKeys[index];
+      if (path === '/api/lab/runs/' + labRun.id + '/steps/' + stepKey + '/execute') {
+        const nextRun = makeM33LabRun(m33StepKeys.slice(0, index + 1));
+        currentLabRun = nextRun;
+        return jsonResponse({
+          run: nextRun,
+          step: nextRun.steps.find((step) => step.stepKey === stepKey) ?? null,
+          alreadyCompleted: false,
+        });
+      }
+    }
+
     return jsonResponse({ message: `Unhandled ${path}` }, 404);
   });
 
@@ -2170,7 +2327,7 @@ test('continues the exact saved run through 997 then 990 and stops before 214', 
   expect(calledPaths.join('\n')).not.toContain('FREIGHTBRIDGE_RECEIVE_214_');
 });
 
-test('Training Desk promotes Healthy Part 3 after Part 2 and returns focus to missions after Part 3', async () => {
+test('Training Desk promotes Healthy Part 3 after Part 2 and Healthy Part 4 after Part 3', async () => {
   installFetchMock();
   window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
   window.localStorage.setItem('freightbridge.firstDayOrientationComplete', 'true');
@@ -2202,9 +2359,149 @@ test('Training Desk promotes Healthy Part 3 after Part 2 and returns focus to mi
   }));
   rerender(<App />);
 
-  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Mission 1 - Your First Shift/i);
-  expect(screen.getByRole('link', { name: /Review Healthy Walkthrough/i })).toHaveAttribute('href', '#/learn/healthy/acknowledgments');
+  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Flow Part 4/i);
+  expect(screen.getByRole('link', { name: /Continue Healthy Walkthrough/i })).toHaveAttribute('href', '#/learn/healthy/shipment-status');
 });
+
+
+test('requires Healthy Part 3 before opening the 214 shipment-status walkthrough', async () => {
+  installFetchMock();
+  window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+  window.localStorage.setItem('freightbridge.firstDayOrientationComplete', 'true');
+  window.localStorage.setItem('freightbridge.healthyWalkthrough', JSON.stringify({
+    runId: labRun.id,
+    loadId: labRun.businessIdentifier,
+    part1Complete: true,
+    completedAt: '2026-09-24T15:03:00Z',
+    part2Complete: true,
+    part2CompletedAt: '2026-09-24T15:10:00Z',
+  }));
+  window.location.hash = '#/learn/healthy/shipment-status';
+  render(<App />);
+
+  expect(await screen.findByTestId('healthy-status-recovery')).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: /Part 3 needs to be completed first/i })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: /Return to Part 3/i })).toHaveAttribute('href', '#/learn/healthy/acknowledgments');
+});
+
+test('continues the exact saved run through all four 214 statuses and saves Part 4', async () => {
+  const fetchMock = installFetchMock({ initialLabRun: part3ReadyForM33LabRun });
+  window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+  window.localStorage.setItem('freightbridge.firstDayOrientationComplete', 'true');
+  window.localStorage.setItem('freightbridge.healthyWalkthrough', JSON.stringify({
+    runId: labRun.id,
+    loadId: labRun.businessIdentifier,
+    part1Complete: true,
+    completedAt: '2026-09-24T15:03:00Z',
+    part2Complete: true,
+    part2CompletedAt: '2026-09-24T15:10:00Z',
+    part3Complete: true,
+    part3CompletedAt: '2026-09-24T15:30:00Z',
+  }));
+  window.location.hash = '#/learn/healthy/shipment-status';
+  render(<App />);
+
+  expect(await screen.findByTestId('healthy-shipment-status-page')).toBeInTheDocument();
+  expect(screen.getByTestId('healthy-status-assignment')).toHaveTextContent(/LAB900/i);
+  expect(screen.getByTestId('healthy-214-mapping')).toHaveTextContent(/AF/i);
+  expect(screen.getByTestId('healthy-214-mapping')).toHaveTextContent(/X6/i);
+  expect(screen.getByTestId('healthy-214-mapping')).toHaveTextContent(/X1/i);
+  expect(screen.getByTestId('healthy-214-mapping')).toHaveTextContent(/D1/i);
+
+  const createCalls = fetchMock.mock.calls.filter(([input, init]) => String(input).endsWith('/api/lab/runs') && init?.method === 'POST');
+  expect(createCalls).toHaveLength(0);
+
+  const actions = [
+    /Create Picked up Event/i,
+    /Send Picked up 214/i,
+    /Receive Picked up 214/i,
+    /Create In transit Event/i,
+    /Send In transit 214/i,
+    /Receive In transit 214/i,
+    /Create Arrived Event/i,
+    /Send Arrived 214/i,
+    /Receive Arrived 214/i,
+    /Create Delivered Event/i,
+    /Send Delivered 214/i,
+    /Receive Delivered 214/i,
+  ];
+
+  for (const action of actions) {
+    const button = await screen.findByRole('button', { name: action });
+    await waitFor(() => expect(button).toBeEnabled());
+    await userEvent.click(button);
+  }
+
+  expect(screen.getByTestId('healthy-current-shipment-status')).toHaveTextContent(/DELIVERED/i);
+  expect(screen.getByTestId('healthy-status-PICKED_UP')).toHaveTextContent(/PICKED_UP/i);
+  expect(screen.getByTestId('healthy-status-IN_TRANSIT')).toHaveTextContent(/IN_TRANSIT/i);
+  expect(screen.getByTestId('healthy-status-ARRIVED')).toHaveTextContent(/ARRIVED/i);
+  expect(screen.getByTestId('healthy-status-DELIVERED')).toHaveTextContent(/DELIVERED/i);
+  expect(screen.getByTestId('healthy-event-time-lesson')).toHaveTextContent(/Occurred time is not received time/i);
+
+  const completeButton = screen.getByRole('button', { name: /Complete Part 4/i });
+  expect(completeButton).toBeDisabled();
+  const checks = screen.getByTestId('healthy-status-checks');
+  await userEvent.click(within(checks).getByRole('button', { name: /^Shipment status events$/i }));
+  await userEvent.click(within(checks).getByRole('button', { name: /^D1$/i }));
+  await userEvent.click(within(checks).getByRole('button', { name: /^So late or out-of-order messages/i }));
+  expect(completeButton).toBeEnabled();
+  await userEvent.click(completeButton);
+
+  const saved = JSON.parse(String(window.localStorage.getItem('freightbridge.healthyWalkthrough'))) as Record<string, unknown>;
+  expect(saved.runId).toBe(labRun.id);
+  expect(saved.loadId).toBe(labRun.businessIdentifier);
+  expect(saved.part3Complete).toBe(true);
+  expect(saved.part4Complete).toBe(true);
+  expect(typeof saved.part4CompletedAt).toBe('string');
+
+  const calledPaths = fetchMock.mock.calls.map(([input]) => new URL(String(input)).pathname);
+  for (const stepKey of m33StepKeys) {
+    expect(calledPaths).toContain('/api/lab/runs/' + labRun.id + '/steps/' + stepKey + '/execute');
+  }
+  expect(calledPaths.filter((path) => path.endsWith('/api/lab/runs'))).toHaveLength(0);
+});
+
+test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part 4', async () => {
+  installFetchMock();
+  window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+  window.localStorage.setItem('freightbridge.firstDayOrientationComplete', 'true');
+  window.localStorage.setItem('freightbridge.healthyWalkthrough', JSON.stringify({
+    runId: labRun.id,
+    loadId: labRun.businessIdentifier,
+    part1Complete: true,
+    completedAt: '2026-09-24T15:03:00Z',
+    part2Complete: true,
+    part2CompletedAt: '2026-09-24T15:10:00Z',
+    part3Complete: true,
+    part3CompletedAt: '2026-09-24T15:30:00Z',
+  }));
+  window.location.hash = '#/learn';
+  const { rerender } = render(<App />);
+
+  expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
+  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Flow Part 4/i);
+  expect(screen.getByRole('link', { name: /Continue Healthy Walkthrough/i })).toHaveAttribute('href', '#/learn/healthy/shipment-status');
+  expect(screen.getByTestId('healthy-home-card')).toHaveTextContent(/Part 4/i);
+
+  window.localStorage.setItem('freightbridge.healthyWalkthrough', JSON.stringify({
+    runId: labRun.id,
+    loadId: labRun.businessIdentifier,
+    part1Complete: true,
+    completedAt: '2026-09-24T15:03:00Z',
+    part2Complete: true,
+    part2CompletedAt: '2026-09-24T15:10:00Z',
+    part3Complete: true,
+    part3CompletedAt: '2026-09-24T15:30:00Z',
+    part4Complete: true,
+    part4CompletedAt: '2026-09-24T16:00:00Z',
+  }));
+  rerender(<App />);
+
+  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Mission 1 - Your First Shift/i);
+  expect(screen.getByRole('link', { name: /Review Healthy Walkthrough/i })).toHaveAttribute('href', '#/learn/healthy/shipment-status');
+});
+
 
   test('keeps future incident missions locked until prerequisites are complete', async () => {
     installFetchMock();

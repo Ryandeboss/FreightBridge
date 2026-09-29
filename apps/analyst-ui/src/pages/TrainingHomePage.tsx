@@ -23,6 +23,7 @@ import {
   isHealthy997990Complete,
   isHealthyApexTenderComplete,
   isHealthyMapping204Complete,
+  isHealthyShipmentStatusComplete,
 } from '../training/healthyWalkthrough';
 import { isFirstDayOrientationComplete } from '../training/orientation';
 import { hasCompletedMission, loadTrainingProgress } from '../training/progress';
@@ -34,17 +35,20 @@ export function TrainingHomePage() {
   const healthyPart1Complete = isHealthyApexTenderComplete();
   const healthyPart2Complete = isHealthyMapping204Complete();
   const healthyPart3Complete = isHealthy997990Complete();
+  const healthyPart4Complete = isHealthyShipmentStatusComplete();
   const healthyPath = healthyWalkthroughNextPath();
   const healthyTitle = !healthyPart1Complete
     ? 'Healthy Flow Part 1'
     : !healthyPart2Complete
       ? 'Healthy Flow Part 2'
-      : healthyPart3Complete
-        ? 'Review Healthy Response Workbench'
-        : 'Healthy Flow Part 3';
+      : !healthyPart3Complete
+        ? 'Healthy Flow Part 3'
+        : healthyPart4Complete
+          ? 'Review Healthy Shipment Status'
+          : 'Healthy Flow Part 4';
   const healthyAction = !healthyPart1Complete
     ? 'Start Healthy Walkthrough'
-    : healthyPart3Complete
+    : healthyPart4Complete
       ? 'Review Healthy Walkthrough'
       : 'Continue Healthy Walkthrough';
   const currentMission = trainingMissions.find(
@@ -87,12 +91,12 @@ export function TrainingHomePage() {
               {orientationComplete ? 'Review First-Day Orientation' : 'Start First-Day Orientation'}
             </Link>
             {orientationComplete && (
-              <Link className={healthyPart3Complete ? 'secondary-button' : 'primary-button'} to={healthyPath}>
+              <Link className={healthyPart4Complete ? 'secondary-button' : 'primary-button'} to={healthyPath}>
                 <Workflow size={16} />
                 {healthyAction}
               </Link>
             )}
-            <Link className={orientationComplete && healthyPart3Complete ? 'primary-button' : 'secondary-button'} to={`/learn/mission/${currentMission.slug}`}>
+            <Link className={orientationComplete && healthyPart4Complete ? 'primary-button' : 'secondary-button'} to={`/learn/mission/${currentMission.slug}`}>
               {currentMissionComplete ? 'Review Current Mission' : 'Start Current Mission'}<ArrowRight size={16} />
             </Link>
             <Link className="secondary-button" to="/dashboard">Advanced Console</Link>
@@ -125,18 +129,20 @@ export function TrainingHomePage() {
                 </span>
               </div>
             </>
-          ) : !healthyPart3Complete ? (
+          ) : !healthyPart4Complete ? (
             <>
               <Link className="ops-inbox-item active" to={healthyPath}>
                 <span className="ops-inbox-icon"><Workflow size={18} /></span>
                 <span>
                   <small>{healthyPart1Complete ? 'Guided Healthy Flow' : 'Next'}</small>
                   <strong>{healthyTitle}</strong>
-                  <span>{healthyPart2Complete
-                    ? 'Process the same saved 204 through Midwest, verify the 997 technical acknowledgment, then receive the 990 business tender decision.'
-                    : healthyPart1Complete
-                      ? 'Translate the same saved shipment into Midwest X12 204 before any Midwest processing happens.'
-                      : 'Start with Apex REST/JSON becoming a FreightBridge canonical shipment.'}</span>
+                  <span>{healthyPart3Complete
+                    ? 'Follow the accepted shipment through Midwest 214 pickup, transit, arrival, delivery, and Apex-facing status updates.'
+                    : healthyPart2Complete
+                      ? 'Process the same saved 204 through Midwest, verify the 997 technical acknowledgment, then receive the 990 business tender decision.'
+                      : healthyPart1Complete
+                        ? 'Translate the same saved shipment into Midwest X12 204 before any Midwest processing happens.'
+                        : 'Start with Apex REST/JSON becoming a FreightBridge canonical shipment.'}</span>
                 </span>
                 <ArrowRight size={16} />
               </Link>
@@ -199,22 +205,28 @@ export function TrainingHomePage() {
               ? 'Part 1 - Apex tender into FreightBridge'
               : !healthyPart2Complete
                 ? 'Part 2 - Midwest 204 mapping workbench'
-                : 'Part 3 - 997 acknowledgment and 990 tender response'}</h2>
+                : !healthyPart3Complete
+                  ? 'Part 3 - 997 acknowledgment and 990 tender response'
+                  : 'Part 4 - 214 shipment status and Apex updates'}</h2>
             <p>{!healthyPart1Complete
               ? 'Watch a real simulated REST/JSON tender pass authentication, parsing, validation, and canonical shipment creation.'
               : !healthyPart2Complete
                 ? 'Resume the same saved Lab run, translate its canonical shipment into a Midwest X12 204, and stop at inbound SFTP delivery.'
-                : 'Continue the same saved run through Midwest 204 processing, the 997 technical acknowledgment, and the 990 business tender decision.'}</p>
+                : !healthyPart3Complete
+                  ? 'Continue the same saved run through Midwest 204 processing, the 997 technical acknowledgment, and the 990 business tender decision.'
+                  : 'Continue the accepted load through Midwest 214 status messages, FreightBridge normalization, and Apex-facing shipment updates.'}</p>
           </div>
-          <Link className={healthyPart3Complete ? 'secondary-button' : 'primary-button'} to={healthyPath}>
+          <Link className={healthyPart4Complete ? 'secondary-button' : 'primary-button'} to={healthyPath}>
             <Workflow size={16} />
             {!healthyPart1Complete
               ? 'Start Part 1'
               : !healthyPart2Complete
                 ? 'Start Part 2'
-                : healthyPart3Complete
-                  ? 'Review Part 3'
-                  : 'Start Part 3'}
+                : !healthyPart3Complete
+                  ? 'Start Part 3'
+                  : healthyPart4Complete
+                    ? 'Review Part 4'
+                    : 'Start Part 4'}
           </Link>
         </article>
       )}

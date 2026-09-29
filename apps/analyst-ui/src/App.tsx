@@ -11,6 +11,7 @@ import { FirstDayOrientationPage } from './pages/FirstDayOrientationPage';
 import { HealthyApexTenderPage } from './pages/HealthyApexTenderPage';
 import { HealthyMapping204Page } from './pages/HealthyMapping204Page';
 import { HealthyResponsesPage } from './pages/HealthyResponsesPage';
+import { HealthyShipmentStatusPage } from './pages/HealthyShipmentStatusPage';
 import { IntegrationLabPage } from './pages/IntegrationLabPage';
 import { IncidentMissionPage } from './pages/IncidentMissionPage';
 import { LearnTheFlowMissionPage } from './pages/LearnTheFlowMissionPage';
@@ -37,6 +38,7 @@ function AppRoutes() {
           <Route path="/learn/healthy/apex-tender" element={<HealthyApexTenderPage />} />
           <Route path="/learn/healthy/mapping-204" element={<HealthyMapping204Page />} />
           <Route path="/learn/healthy/acknowledgments" element={<HealthyResponsesPage />} />
+          <Route path="/learn/healthy/shipment-status" element={<HealthyShipmentStatusPage />} />
           <Route path="/learn/mission/learn-the-flow" element={<LearnTheFlowMissionPage />} />
           <Route path="/learn/mission/:missionSlug" element={<IncidentMissionPage />} />
         </Route>
