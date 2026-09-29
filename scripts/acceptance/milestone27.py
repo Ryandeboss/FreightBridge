@@ -221,10 +221,81 @@ def run_intermediate_mission(
     page.get_by_test_id(f'evidence-source-{source_id}').locator('summary').click()
   choose_radio(page, 'What is the most accurate FreightBridge diagnosis', diagnosis)
   choose_radio(page, 'What should you do next', plan)
-  page.get_by_test_id('remediation-action').get_by_role('button', name=re.compile(re.escape(recovery), re.IGNORECASE)).click()
+  recovery_button = page.get_by_test_id('remediation-action').get_by_role(
+    'button',
+    name=re.compile(re.escape(recovery), re.IGNORECASE),
+  )
+
+  with page.expect_response(
+    lambda response: (
+      response.request.method == 'POST'
+      and '/api/lab/runs/' in response.url
+      and response.url.endswith('/recover')
+    ),
+    timeout=120000,
+  ) as recovery_info:
+    recovery_button.click()
+
+  recovery_response = recovery_info.value
+
+  try:
+    recovery_payload = recovery_response.json()
+  except Exception:
+    recovery_payload = {'status': 'NON_JSON_RESPONSE'}
+
+  if recovery_response.status >= 400:
+    raise AcceptanceFailure(
+      f'{slug} recovery API',
+      'Server-backed recovery request failed.',
+      status_code=recovery_response.status,
+      response_body=recovery_payload,
+    )
+
   verification = page.get_by_test_id('verification-panel')
-  expect(verification).to_contain_text('SUCCEEDED', timeout=120000)
-  expect(page.get_by_test_id('recovery-correlation')).to_contain_text('same incident load', timeout=15000)
+
+  expect(verification).to_contain_text(
+    re.compile(r'SUCCEEDED|FAILED'),
+    timeout=120000,
+  )
+
+  if 'FAILED' in verification.inner_text():
+    alert = page.get_by_role('alert')
+    alert_text = (
+      alert.inner_text()
+      if alert.count()
+      else 'No UI error alert was rendered.'
+    )
+
+    result_summary = (
+      recovery_payload.get('resultSummary')
+      if isinstance(recovery_payload, dict)
+      else None
+    )
+
+    recovery_proof = (
+      result_summary.get('recovery')
+      if isinstance(result_summary, dict)
+      else None
+    )
+
+    raise AcceptanceFailure(
+      f'{slug} recovery verification',
+      f'UI marked recovery FAILED. {alert_text}',
+      response_body={'recovery': recovery_proof},
+    )
+
+  expect(verification).to_contain_text(
+    'SUCCEEDED',
+    timeout=15000,
+  )
+
+  expect(
+    page.get_by_test_id('recovery-correlation')
+  ).to_contain_text(
+    'same incident load',
+    timeout=15000,
+  )
+
   for expected_recovery_text in recovery_expectations:
     expect(verification).to_contain_text(expected_recovery_text, timeout=15000)
   page.get_by_label(re.compile('Write Mike', re.IGNORECASE)).fill(
