@@ -3,6 +3,7 @@ import { OperationsSessionProvider, useOperationsSession } from './auth/Operatio
 import { AppShell } from './components/AppShell';
 import { TrainingShell } from './components/training/TrainingShell';
 import { AccessPage } from './pages/AccessPage';
+import { AnalystToolsPage } from './pages/AnalystToolsPage';
 import { BusinessTraceDetailPage, TraceSearchPage } from './pages/BusinessTracePage';
 import { DashboardPage } from './pages/DashboardPage';
 import { FailureDetailPage } from './pages/FailureDetailPage';
@@ -41,6 +42,7 @@ function AppRoutes() {
           <Route path="/learn/healthy/shipment-status" element={<HealthyShipmentStatusPage />} />
           <Route path="/learn/mission/learn-the-flow" element={<LearnTheFlowMissionPage />} />
           <Route path="/learn/mission/:missionSlug" element={<IncidentMissionPage />} />
+          <Route path="/learn/tools/:tool" element={<AnalystToolsPage />} />
         </Route>
         <Route element={<AppShell />}>
           <Route path="/dashboard" element={<DashboardPage />} />
