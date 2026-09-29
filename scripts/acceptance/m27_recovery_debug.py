@@ -26,6 +26,7 @@ def main() -> int:
     client = SafeHttpClient(
         name="FreightBridge",
         base_url=base_url,
+        timeout_seconds=120.0,
         verbose=True,
     )
 
