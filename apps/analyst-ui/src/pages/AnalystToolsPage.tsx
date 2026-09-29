@@ -331,7 +331,7 @@ function TransactionsTool({
             {result.transactions.map((transaction) => (
               <Link
                 key={transaction.id}
-                to={toolLink('transactions', { businessId: businessId || transaction.businessIdentifier ?? '', transactionId: transaction.id })}
+                to={toolLink('transactions', { businessId: businessId || transaction.businessIdentifier || '', transactionId: transaction.id })}
               >
                 <span><strong>{transaction.documentType} · {transaction.partnerCode}</strong><small>{transaction.businessIdentifier ?? compactId(transaction.id)} · {transaction.transport}</small></span>
                 <StatusBadge value={transaction.processingStatus} />
