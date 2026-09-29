@@ -2171,3 +2171,23 @@ input:disabled {
   .healthy-pipeline { grid-template-columns: 1fr; }
 }
 /* === End Milestone 31 === */
+
+/* Milestone 32: Healthy 997 / 990 response workbench */
+.response-pipeline { margin-bottom: 16px; }
+.ack-compare { display: grid; gap: 12px; }
+.ack-compare > div { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; align-items: center; padding: 12px; border: 1px solid var(--border); border-radius: 12px; }
+.ack-compare small { grid-column: 2; color: var(--muted); }
+.response-timeline { display: grid; gap: 16px; }
+.response-step-list { display: grid; gap: 10px; }
+.response-step { display: grid; grid-template-columns: 34px 1fr; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 14px; }
+.response-step.current { border-color: var(--accent); }
+.response-step.complete { opacity: .92; }
+.response-step h3 { margin: 2px 0 6px; }
+.response-step p { margin: 0 0 10px; }
+.response-step-evidence { margin-top: 10px; }
+.response-step-evidence summary { cursor: pointer; font-weight: 700; }
+.response-step-evidence .healthy-fields { margin-top: 10px; }
+.response-evidence { display: grid; gap: 12px; }
+@media (min-width: 900px) {
+  .ack-compare { grid-template-columns: 1fr 1fr; }
+}
