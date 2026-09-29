@@ -113,6 +113,9 @@ def main() -> int:
         except AcceptanceFailure as exc:
             print("[FAIL] Recovery endpoint rejected the corrected 214.")
             print(exc.format())
+            print("")
+            print("Safe FreightBridge evidence after recovery failure:")
+            print(safe_body(load_recovery_evidence(client, token, load_id)))
             return 1
 
         summary = recovered.get("resultSummary")
@@ -154,6 +157,68 @@ def main() -> int:
         return 1
     finally:
         client.close()
+
+
+def load_recovery_evidence(
+    client: SafeHttpClient,
+    token: str,
+    load_id: str,
+) -> dict[str, object]:
+    evidence: dict[str, object] = {"loadId": load_id}
+    try:
+        trace = client.get(
+            f"/api/operations/business/{load_id}/trace",
+            token=token,
+            step="Fetch Mission 7 recovery trace",
+        )
+        transactions = [
+            {
+                "id": item.get("id"),
+                "documentType": item.get("documentType"),
+                "direction": item.get("direction"),
+                "transport": item.get("transport"),
+                "messageFormat": item.get("messageFormat"),
+                "processingStatus": item.get("processingStatus"),
+                "processingStage": item.get("processingStage"),
+                "parentTransactionId": item.get("parentTransactionId"),
+                "replayOfTransactionId": item.get("replayOfTransactionId"),
+            }
+            for item in trace.get("transactions", [])
+            if isinstance(item, dict)
+        ]
+        evidence["trace"] = {
+            "transactionCount": trace.get("transactionCount"),
+            "failedTransactionCount": trace.get("failedTransactionCount"),
+            "unresolvedErrorCount": trace.get("unresolvedErrorCount"),
+            "transactions": transactions,
+        }
+    except AcceptanceFailure as exc:
+        evidence["traceLookupError"] = exc.format()
+
+    try:
+        errors = client.get(
+            f"/api/operations/errors?businessIdentifier={load_id}&resolved=false&limit=20",
+            token=token,
+            step="Fetch Mission 7 recovery errors",
+        )
+        evidence["errors"] = [
+            {
+                "id": item.get("id"),
+                "transactionId": item.get("transactionId"),
+                "documentType": item.get("documentType"),
+                "category": item.get("category"),
+                "errorCode": item.get("errorCode"),
+                "stage": item.get("stage"),
+                "retryable": item.get("retryable"),
+                "safeMessage": item.get("safeMessage"),
+            }
+            for item in errors.get("errors", [])
+            if isinstance(item, dict)
+        ]
+    except AcceptanceFailure as exc:
+        evidence["errorLookupError"] = exc.format()
+
+    return evidence
 
 
 if __name__ == "__main__":
