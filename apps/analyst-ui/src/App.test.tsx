@@ -1299,6 +1299,61 @@ function installFetchMock(options: {
       return jsonResponse({ run: currentLabRun, step: (currentLabRun.steps as unknown[])[0], alreadyCompleted: false });
     }
 
+    if (path === `/api/lab/runs/${labRun.id}/steps/DISPATCH_APEX_TENDER/execute`) {
+      const canonicalShipment = (completedLabRun.resultSummary as Record<string, unknown>).canonicalShipment;
+      const dispatchTenderStep = {
+        ...labRun.steps[0],
+        id: 'step-apex-dispatch',
+        stepKey: 'DISPATCH_APEX_TENDER',
+        sequence: 2,
+        displayName: 'Dispatch Apex tender',
+        sender: 'Apex Logistics',
+        receiver: 'FreightBridge',
+        transport: 'REST',
+        messageFormat: 'JSON',
+        documentType: 'APEX_LOAD_TENDER',
+        status: 'SUCCEEDED',
+        attemptCount: 1,
+        requestSummary: {
+          loadId: labRun.businessIdentifier,
+          idempotencyKey: 'lab-test-apex-tender',
+        },
+        responseSummary: {
+          status: 'ACCEPTED_FOR_PROCESSING',
+        },
+      };
+      const pending204Step = {
+        ...labRun.steps[1],
+        sequence: 3,
+        status: 'PENDING',
+        attemptCount: 0,
+      };
+
+      currentLabRun = {
+        ...labRun,
+        status: 'RUNNING',
+        resultSummary: {
+          ...labRun.resultSummary,
+          canonicalShipment,
+        },
+        steps: [
+          {
+            ...labRun.steps[0],
+            status: 'SUCCEEDED',
+            attemptCount: 1,
+          },
+          dispatchTenderStep,
+          pending204Step,
+        ],
+      };
+
+      return jsonResponse({
+        run: currentLabRun,
+        step: dispatchTenderStep,
+        alreadyCompleted: false,
+      });
+    }
+
     return jsonResponse({ message: `Unhandled ${path}` }, 404);
   });
 
@@ -1449,7 +1504,7 @@ describe('Analyst Console', () => {
   });
 
 
-test('runs the first-day orientation inside the Ops Desk and hands off to Mission 1', async () => {
+test('runs the first-day orientation inside the Ops Desk and hands off to the healthy walkthrough', async () => {
   installFetchMock();
   window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
   window.location.hash = '#/learn/orientation';
@@ -1489,10 +1544,46 @@ test('runs the first-day orientation inside the Ops Desk and hands off to Missio
   await userEvent.click(screen.getByRole('button', { name: /Next orientation step/i }));
   expect(screen.getByTestId('orientation-ready')).toHaveTextContent(/last healthy checkpoint/i);
 
-  await userEvent.click(screen.getByRole('button', { name: /Finish Orientation & Start Mission 1/i }));
+  await userEvent.click(screen.getByRole('button', { name: /Finish Orientation & Start Healthy Walkthrough/i }));
   expect(window.localStorage.getItem('freightbridge.firstDayOrientationComplete')).toBe('true');
-  await waitFor(() => expect(window.location.hash).toBe('#/learn/mission/learn-the-flow'));
-  expect(await screen.findByTestId('learn-the-flow-mission-page')).toBeInTheDocument();
+  await waitFor(() => expect(window.location.hash).toBe('#/learn/healthy/apex-tender'));
+  expect(await screen.findByTestId('healthy-apex-tender-page')).toBeInTheDocument();
+});
+
+
+test('guides a real Apex tender through inbound processing and saves the run for Part 2', async () => {
+  installFetchMock();
+  window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+  window.localStorage.setItem('freightbridge.firstDayOrientationComplete', 'true');
+  window.location.hash = '#/learn/healthy/apex-tender';
+  render(<App />);
+
+  expect(await screen.findByTestId('healthy-apex-tender-page')).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: /A new Apex tender arrives/i })).toBeInTheDocument();
+  expect(screen.getByTestId('healthy-assignment')).toHaveTextContent(/Midwest has not received anything/i);
+
+  await userEvent.click(screen.getByRole('button', { name: /Start Healthy Walkthrough/i }));
+  const prepareTenderButton = screen.getByRole('button', { name: /Prepare Apex Tender/i });
+  await waitFor(() => expect(prepareTenderButton).toBeEnabled());
+  await userEvent.click(prepareTenderButton);
+  expect(await screen.findByText(/Apex has a valid load ready to send/i)).toBeInTheDocument();
+
+  const sendTenderButton = screen.getByRole('button', { name: /Send Tender to FreightBridge/i });
+  await waitFor(() => expect(sendTenderButton).toBeEnabled());
+  await userEvent.click(sendTenderButton);
+  expect(await screen.findByText(/accepted the Apex tender for processing/i)).toBeInTheDocument();
+  expect(screen.getByTestId('healthy-check-authenticated')).toHaveTextContent(/Authentication passed/i);
+  expect(screen.getByTestId('healthy-check-parsed')).toHaveTextContent(/JSON parsed/i);
+  expect(screen.getByTestId('healthy-check-validated')).toHaveTextContent(/Contract validation passed/i);
+  expect(screen.getByTestId('healthy-check-canonical')).toHaveTextContent(/Canonical shipment created/i);
+  expect(screen.getByTestId('healthy-canonical-panel')).toHaveTextContent(/shipmentNumber/i);
+
+  await userEvent.click(screen.getByRole('button', { name: /Complete Part 1/i }));
+  const saved = JSON.parse(String(window.localStorage.getItem('freightbridge.healthyWalkthrough'))) as Record<string, unknown>;
+  expect(saved.part1Complete).toBe(true);
+  expect(saved.runId).toBe(labRun.id);
+  expect(saved.loadId).toBe(labRun.businessIdentifier);
+  expect(screen.getByTestId('healthy-part1-completion')).toHaveTextContent(/Part 2 can resume/i);
 });
 
   test('keeps future incident missions locked until prerequisites are complete', async () => {

@@ -9,6 +9,7 @@ import {
   Search,
   ShieldCheck,
   SlidersHorizontal,
+  Workflow,
 } from 'lucide-react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useOperationsSession } from '../../auth/OperationsSession';
@@ -48,6 +49,9 @@ export function TrainingShell() {
             </NavLink>
             <NavLink className={navClass} to="/learn/orientation">
               <Compass size={17} /><span>Orientation</span>
+            </NavLink>
+            <NavLink className={navClass} to="/learn/healthy/apex-tender">
+              <Workflow size={17} /><span>Healthy Flow</span>
             </NavLink>
             <Link className="ops-nav-link" to="/learn">
               <GraduationCap size={17} /><span>Training Desk</span>

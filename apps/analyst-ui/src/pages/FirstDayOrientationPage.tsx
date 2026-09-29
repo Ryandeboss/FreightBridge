@@ -63,7 +63,7 @@ export function FirstDayOrientationPage() {
 
   function finishOrientation() {
     markFirstDayOrientationComplete();
-    navigate('/learn/mission/learn-the-flow');
+    navigate('/learn/healthy/apex-tender');
   }
 
   return (
@@ -123,7 +123,7 @@ export function FirstDayOrientationPage() {
         ) : (
           <button className="primary-button" type="button" onClick={finishOrientation}>
             <CheckCircle2 size={16} />
-            Finish Orientation &amp; Start Mission 1
+            Finish Orientation &amp; Start Healthy Walkthrough
           </button>
         )}
       </footer>
