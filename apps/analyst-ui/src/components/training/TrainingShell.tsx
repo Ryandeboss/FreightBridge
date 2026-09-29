@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useOperationsSession } from '../../auth/OperationsSession';
+import { healthyWalkthroughNextPath } from '../../training/healthyWalkthrough';
 import { TRAINING_ROLE } from '../../training/missions';
 
 function navClass({ isActive }: { isActive: boolean }) {
@@ -21,6 +22,7 @@ function navClass({ isActive }: { isActive: boolean }) {
 
 export function TrainingShell() {
   const { lock } = useOperationsSession();
+  const healthyPath = healthyWalkthroughNextPath();
 
   return (
     <div className="ops-desk-shell" data-testid="ops-desk-shell">
@@ -50,7 +52,7 @@ export function TrainingShell() {
             <NavLink className={navClass} to="/learn/orientation">
               <Compass size={17} /><span>Orientation</span>
             </NavLink>
-            <NavLink className={navClass} to="/learn/healthy/apex-tender">
+            <NavLink className={navClass} to={healthyPath}>
               <Workflow size={17} /><span>Healthy Flow</span>
             </NavLink>
             <Link className="ops-nav-link" to="/learn">

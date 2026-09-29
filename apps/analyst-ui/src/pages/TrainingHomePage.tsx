@@ -18,7 +18,11 @@ import {
   trainingEntities,
   trainingMissions,
 } from '../training/missions';
-import { isHealthyApexTenderComplete } from '../training/healthyWalkthrough';
+import {
+  healthyWalkthroughNextPath,
+  isHealthyApexTenderComplete,
+  isHealthyMapping204Complete,
+} from '../training/healthyWalkthrough';
 import { isFirstDayOrientationComplete } from '../training/orientation';
 import { hasCompletedMission, loadTrainingProgress } from '../training/progress';
 
@@ -27,6 +31,18 @@ export function TrainingHomePage() {
   const completedCount = progress.completedMissions.length;
   const orientationComplete = isFirstDayOrientationComplete();
   const healthyPart1Complete = isHealthyApexTenderComplete();
+  const healthyPart2Complete = isHealthyMapping204Complete();
+  const healthyPath = healthyWalkthroughNextPath();
+  const healthyTitle = !healthyPart1Complete
+    ? 'Healthy Flow Part 1'
+    : healthyPart2Complete
+      ? 'Review Healthy Mapping Workbench'
+      : 'Healthy Flow Part 2';
+  const healthyAction = !healthyPart1Complete
+    ? 'Start Healthy Walkthrough'
+    : healthyPart2Complete
+      ? 'Review Healthy Walkthrough'
+      : 'Continue Healthy Walkthrough';
   const currentMission = trainingMissions.find(
     (mission) => mission.implemented && isMissionUnlocked(mission.id, progress) && !hasCompletedMission(progress, mission.id),
   )
@@ -67,12 +83,12 @@ export function TrainingHomePage() {
               {orientationComplete ? 'Review First-Day Orientation' : 'Start First-Day Orientation'}
             </Link>
             {orientationComplete && (
-              <Link className={healthyPart1Complete ? 'secondary-button' : 'primary-button'} to="/learn/healthy/apex-tender">
+              <Link className={healthyPart2Complete ? 'secondary-button' : 'primary-button'} to={healthyPath}>
                 <Workflow size={16} />
-                {healthyPart1Complete ? 'Review Healthy Walkthrough' : 'Start Healthy Walkthrough'}
+                {healthyAction}
               </Link>
             )}
-            <Link className={orientationComplete ? 'primary-button' : 'secondary-button'} to={`/learn/mission/${currentMission.slug}`}>
+            <Link className={orientationComplete && healthyPart2Complete ? 'primary-button' : 'secondary-button'} to={`/learn/mission/${currentMission.slug}`}>
               {currentMissionComplete ? 'Review Current Mission' : 'Start Current Mission'}<ArrowRight size={16} />
             </Link>
             <Link className="secondary-button" to="/dashboard">Advanced Console</Link>
@@ -104,6 +120,22 @@ export function TrainingHomePage() {
                   <span>Your first shipment walkthrough is ready after the orientation briefing.</span>
                 </span>
               </div>
+            </>
+          ) : !healthyPart2Complete ? (
+            <>
+              <Link className="ops-inbox-item active" to={healthyPath}>
+                <span className="ops-inbox-icon"><Workflow size={18} /></span>
+                <span>
+                  <small>{healthyPart1Complete ? 'Guided Healthy Flow' : 'Next'}</small>
+                  <strong>{healthyTitle}</strong>
+                  <span>{healthyPart1Complete ? 'Translate the same saved shipment into Midwest X12 204 before any Midwest processing happens.' : 'Start with Apex REST/JSON becoming a FreightBridge canonical shipment.'}</span>
+                </span>
+                <ArrowRight size={16} />
+              </Link>
+              <Link className="ops-inbox-item muted" to="/learn/orientation">
+                <span className="ops-inbox-icon"><CheckCircle2 size={18} /></span>
+                <span><small>Completed Briefing</small><strong>First-Day Orientation</strong><span>Review the partner and protocol primer whenever you need it.</span></span>
+              </Link>
             </>
           ) : (
             <>
@@ -155,12 +187,14 @@ export function TrainingHomePage() {
         <article className="panel healthy-home-card" data-testid="healthy-home-card">
           <div>
             <p className="eyebrow">Guided healthy flow</p>
-            <h2>Part 1 · Apex tender into FreightBridge</h2>
-            <p>Watch a real simulated REST/JSON tender pass authentication, parsing, validation, and canonical shipment creation.</p>
+            <h2>{healthyPart1Complete ? 'Part 2 - Midwest 204 mapping workbench' : 'Part 1 - Apex tender into FreightBridge'}</h2>
+            <p>{healthyPart1Complete
+              ? 'Resume the same saved Lab run, translate its canonical shipment into a Midwest X12 204, and stop at inbound SFTP delivery.'
+              : 'Watch a real simulated REST/JSON tender pass authentication, parsing, validation, and canonical shipment creation.'}</p>
           </div>
-          <Link className={healthyPart1Complete ? 'secondary-button' : 'primary-button'} to="/learn/healthy/apex-tender">
+          <Link className={healthyPart2Complete ? 'secondary-button' : 'primary-button'} to={healthyPath}>
             <Workflow size={16} />
-            {healthyPart1Complete ? 'Review Part 1' : 'Start Part 1'}
+            {!healthyPart1Complete ? 'Start Part 1' : healthyPart2Complete ? 'Review Part 2' : 'Start Part 2'}
           </Link>
         </article>
       )}
