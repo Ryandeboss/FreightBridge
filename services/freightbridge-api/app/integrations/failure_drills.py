@@ -1,17 +1,21 @@
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
+import hashlib
 import json
 from uuid import UUID
 
 from app.core.config import get_settings
+from app.domain import Transport
 from app.infrastructure.configuration_repository import IntegrationConfigurationRepository
 from app.infrastructure.database import connect
 from app.infrastructure.operations_repository import OperationsRepository
 from app.integrations.apex.service import ApexLoadTenderIngestionService
 from app.integrations.common.correlation import resolve_correlation_id
 from app.integrations.common.errors import IntegrationAPIError
+from app.integrations.midwest.inbound_214_service import Midwest214IngestionService
 from app.integrations.midwest.sftp_client import (
   MidwestSftpClient,
+  MidwestSftpError,
   MidwestSftpConfig,
   MidwestSftpHostKeyError,
 )
@@ -383,40 +387,46 @@ class ControlledFailureDrillService:
       load_id=load_id,
       run_id=UUID(str(run['id'])),
     )
-    with self.sftp_client_factory() as client:
-      remote_path = client.upload_bytes_atomic(OUTBOUND_DIR, filename, payload)
-    with connect() as audit_connection:
-      with connect() as business_connection:
-        poll = MidwestSftpOutboundPollService(
-          audit_connection=audit_connection,
-          business_connection=business_connection,
-          configuration_repository=IntegrationConfigurationRepository(audit_connection),
-        ).poll(correlation_id=resolve_correlation_id(f"lab-{run['id']}-{scenario_key}-recovery"))
-    body = poll.response_body()
-    target = next(
-      (
-        item
-        for item in body.get('processed', [])
-        if isinstance(item, dict) and item.get('fileName') == filename
-      ),
-      None,
-    )
-    if target is None:
+    correlation_id = resolve_correlation_id(f"lab-{run['id']}-{scenario_key}-recovery")
+    try:
+      with self.sftp_client_factory() as client:
+        remote_path = client.upload_bytes_atomic(OUTBOUND_DIR, filename, payload)
+        downloaded = client.download_bytes(remote_path)
+        try:
+          with connect() as audit_connection:
+            with connect() as business_connection:
+              result = Midwest214IngestionService(
+                audit_connection=audit_connection,
+                business_connection=business_connection,
+                configuration_repository=IntegrationConfigurationRepository(audit_connection),
+              ).ingest(
+                raw_body=downloaded,
+                correlation_id=f'{correlation_id}:{filename}',
+                transport=Transport.SFTP,
+                raw_payload_location=remote_path,
+              )
+        except IntegrationAPIError as exc:
+          self._archive_recovery_file(client, remote_path, filename, downloaded, directory=ERROR_DIR)
+          raise LabDrillMismatch(
+            'LAB_RECOVERY_NOT_VERIFIED',
+            f'Corrected 214 recovery failed with {exc.code}.',
+          ) from exc
+        destination_path = self._archive_recovery_file(
+          client,
+          remote_path,
+          filename,
+          downloaded,
+          directory=ARCHIVE_DIR,
+        )
+    except LabDrillMismatch:
+      raise
+    except MidwestSftpError as exc:
       raise LabDrillMismatch(
         'LAB_RECOVERY_NOT_VERIFIED',
-        f'Recovery poll did not process corrected file {filename}.',
-      )
-    if target.get('status') != 'ARCHIVED':
-      raise LabDrillMismatch(
-        'LAB_RECOVERY_NOT_VERIFIED',
-        f'Corrected 214 was not archived successfully: {target.get("status")}.',
-      )
-    transaction_id = target.get('transactionId')
-    if not transaction_id:
-      raise LabDrillMismatch(
-        'LAB_RECOVERY_NOT_VERIFIED',
-        'Corrected 214 did not expose a FreightBridge transaction ID.',
-      )
+        'Corrected 214 recovery SFTP operation failed.',
+      ) from exc
+
+    transaction_id = str(result.transaction_id)
     transaction = self._transaction_snapshot(str(transaction_id))
     if transaction.get('processingStatus') != 'SUCCEEDED':
       raise LabDrillMismatch(
@@ -434,6 +444,7 @@ class ControlledFailureDrillService:
       'loadId': load_id,
       'fileName': filename,
       'remotePath': remote_path,
+      'archivePath': destination_path,
       'correctedX12': metadata['x12Preview'],
       'correctedSt02': metadata['st02'],
       'correctedSe02': metadata['se02'],
@@ -446,10 +457,23 @@ class ControlledFailureDrillService:
       'parseStatus': 'SUCCEEDED',
       'mappingStatus': 'SUCCEEDED',
       'transactionId': str(transaction_id),
+      'apexDeliveryStatus': result.apex_delivery_status,
+      'normalizedShipmentStatus': result.current_status,
       'transactionStage': transaction.get('processingStage'),
       'transactionStatus': transaction.get('processingStatus'),
-      'targetStatus': target.get('status'),
+      'targetStatus': 'ARCHIVED',
     }
+
+  def _archive_recovery_file(self, client, remote_path: str, file_name: str, payload: bytes, *, directory: str) -> str:
+    destination = f'{directory}/{file_name}'
+    if hasattr(client, 'rename_to_unique_archive'):
+      return client.rename_to_unique_archive(remote_path, destination, payload)
+    resolved = destination
+    if client.exists(resolved):
+      stem, extension = resolved.rsplit('.', 1)
+      resolved = f'{stem}__replay_{hashlib.sha256(payload).hexdigest()[:10]}.{extension}'
+    client.rename(remote_path, resolved)
+    return resolved
 
   def _document_count(self, business_identifier: str, document_type: str) -> int:
     try:

@@ -643,5 +643,5 @@ jobs:
           if [ "${{ inputs.verbose }}" = "true" ]; then
             args+=(--verbose)
           fi
-          python scripts/acceptance/m27_recovery_debug.py
+          python scripts/acceptance/milestone27.py "${args[@]}"
 
