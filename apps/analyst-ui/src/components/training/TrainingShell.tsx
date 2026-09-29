@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   BookOpen,
   Compass,
   GraduationCap,
@@ -62,10 +63,11 @@ export function TrainingShell() {
 
           <div>
             <p className="ops-rail-label">Analyst tools</p>
-            <Link className="ops-nav-link" to="/transactions"><Search size={17} /><span>Transactions</span></Link>
-            <Link className="ops-nav-link" to="/trace"><Network size={17} /><span>Business Trace</span></Link>
-            <Link className="ops-nav-link" to="/mappings"><SlidersHorizontal size={17} /><span>Mappings</span></Link>
-            <Link className="ops-nav-link" to="/partners"><Map size={17} /><span>Partners</span></Link>
+            <NavLink className={navClass} to="/learn/tools/transactions"><Search size={17} /><span>Transactions</span></NavLink>
+            <NavLink className={navClass} to="/learn/tools/trace"><Network size={17} /><span>Business Trace</span></NavLink>
+            <NavLink className={navClass} to="/learn/tools/errors"><AlertTriangle size={17} /><span>Errors</span></NavLink>
+            <NavLink className={navClass} to="/learn/tools/mappings"><SlidersHorizontal size={17} /><span>Mappings</span></NavLink>
+            <NavLink className={navClass} to="/learn/tools/partners"><Map size={17} /><span>Partners</span></NavLink>
           </div>
 
           <div className="ops-rail-footer">
