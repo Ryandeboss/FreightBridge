@@ -6,6 +6,7 @@ import {
   Network,
   Route,
   Search,
+  Workflow,
   Wrench,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -17,6 +18,7 @@ import {
   trainingEntities,
   trainingMissions,
 } from '../training/missions';
+import { isHealthyApexTenderComplete } from '../training/healthyWalkthrough';
 import { isFirstDayOrientationComplete } from '../training/orientation';
 import { hasCompletedMission, loadTrainingProgress } from '../training/progress';
 
@@ -24,6 +26,7 @@ export function TrainingHomePage() {
   const progress = loadTrainingProgress();
   const completedCount = progress.completedMissions.length;
   const orientationComplete = isFirstDayOrientationComplete();
+  const healthyPart1Complete = isHealthyApexTenderComplete();
   const currentMission = trainingMissions.find(
     (mission) => mission.implemented && isMissionUnlocked(mission.id, progress) && !hasCompletedMission(progress, mission.id),
   )
@@ -63,6 +66,12 @@ export function TrainingHomePage() {
               <Compass size={16} />
               {orientationComplete ? 'Review First-Day Orientation' : 'Start First-Day Orientation'}
             </Link>
+            {orientationComplete && (
+              <Link className={healthyPart1Complete ? 'secondary-button' : 'primary-button'} to="/learn/healthy/apex-tender">
+                <Workflow size={16} />
+                {healthyPart1Complete ? 'Review Healthy Walkthrough' : 'Start Healthy Walkthrough'}
+              </Link>
+            )}
             <Link className={orientationComplete ? 'primary-button' : 'secondary-button'} to={`/learn/mission/${currentMission.slug}`}>
               {currentMissionComplete ? 'Review Current Mission' : 'Start Current Mission'}<ArrowRight size={16} />
             </Link>
@@ -141,6 +150,20 @@ export function TrainingHomePage() {
           </div>
         </article>
       </div>
+
+      {orientationComplete && (
+        <article className="panel healthy-home-card" data-testid="healthy-home-card">
+          <div>
+            <p className="eyebrow">Guided healthy flow</p>
+            <h2>Part 1 · Apex tender into FreightBridge</h2>
+            <p>Watch a real simulated REST/JSON tender pass authentication, parsing, validation, and canonical shipment creation.</p>
+          </div>
+          <Link className={healthyPart1Complete ? 'secondary-button' : 'primary-button'} to="/learn/healthy/apex-tender">
+            <Workflow size={16} />
+            {healthyPart1Complete ? 'Review Part 1' : 'Start Part 1'}
+          </Link>
+        </article>
+      )}
 
       <section className="ops-partner-section" aria-labelledby="ops-partner-heading">
         <div className="ops-section-heading">
