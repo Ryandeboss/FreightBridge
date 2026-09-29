@@ -2,6 +2,7 @@ import {
   ArrowRight,
   CheckCircle2,
   CircleDot,
+  Compass,
   Network,
   Route,
   Search,
@@ -16,11 +17,13 @@ import {
   trainingEntities,
   trainingMissions,
 } from '../training/missions';
+import { isFirstDayOrientationComplete } from '../training/orientation';
 import { hasCompletedMission, loadTrainingProgress } from '../training/progress';
 
 export function TrainingHomePage() {
   const progress = loadTrainingProgress();
   const completedCount = progress.completedMissions.length;
+  const orientationComplete = isFirstDayOrientationComplete();
   const currentMission = trainingMissions.find(
     (mission) => mission.implemented && isMissionUnlocked(mission.id, progress) && !hasCompletedMission(progress, mission.id),
   )
@@ -56,7 +59,11 @@ export function TrainingHomePage() {
           </div>
 
           <div className="ops-primary-actions">
-            <Link className="primary-button" to={`/learn/mission/${currentMission.slug}`}>
+            <Link className={orientationComplete ? 'secondary-button' : 'primary-button'} to="/learn/orientation">
+              <Compass size={16} />
+              {orientationComplete ? 'Review First-Day Orientation' : 'Start First-Day Orientation'}
+            </Link>
+            <Link className={orientationComplete ? 'primary-button' : 'secondary-button'} to={`/learn/mission/${currentMission.slug}`}>
               {currentMissionComplete ? 'Review Current Mission' : 'Start Current Mission'}<ArrowRight size={16} />
             </Link>
             <Link className="secondary-button" to="/dashboard">Advanced Console</Link>
@@ -69,16 +76,39 @@ export function TrainingHomePage() {
             <span className="ops-count-badge">1</span>
           </div>
 
-          <Link className="ops-inbox-item active" to={`/learn/mission/${currentMission.slug}`}>
-            <span className="ops-inbox-icon"><Route size={18} /></span>
-            <span><small>{currentMission.difficulty}</small><strong>{currentMission.title}</strong><span>{currentMission.summary}</span></span>
-            <ArrowRight size={16} />
-          </Link>
-
-          <div className="ops-inbox-item muted">
-            <span className="ops-inbox-icon"><CheckCircle2 size={18} /></span>
-            <span><small>System</small><strong>No other training incidents assigned</strong><span>Finish the current work before the next incident appears.</span></span>
-          </div>
+          {!orientationComplete ? (
+            <>
+              <Link className="ops-inbox-item active" to="/learn/orientation">
+                <span className="ops-inbox-icon"><Compass size={18} /></span>
+                <span>
+                  <small>Mike · New Employee Briefing</small>
+                  <strong>First-Day Orientation</strong>
+                  <span>Meet the trading partners, learn the message path, and understand what FreightBridge support can actually observe.</span>
+                </span>
+                <ArrowRight size={16} />
+              </Link>
+              <div className="ops-inbox-item muted">
+                <span className="ops-inbox-icon"><Route size={18} /></span>
+                <span>
+                  <small>Next</small>
+                  <strong>{currentMission.title}</strong>
+                  <span>Your first shipment walkthrough is ready after the orientation briefing.</span>
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <Link className="ops-inbox-item active" to={`/learn/mission/${currentMission.slug}`}>
+                <span className="ops-inbox-icon"><Route size={18} /></span>
+                <span><small>{currentMission.difficulty}</small><strong>{currentMission.title}</strong><span>{currentMission.summary}</span></span>
+                <ArrowRight size={16} />
+              </Link>
+              <Link className="ops-inbox-item muted" to="/learn/orientation">
+                <span className="ops-inbox-icon"><CheckCircle2 size={18} /></span>
+                <span><small>Completed Briefing</small><strong>First-Day Orientation</strong><span>Review the partner and protocol primer whenever you need it.</span></span>
+              </Link>
+            </>
+          )}
         </article>
       </div>
 

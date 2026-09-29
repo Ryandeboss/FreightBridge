@@ -1448,6 +1448,53 @@ describe('Analyst Console', () => {
     expect(screen.getAllByRole('link', { name: /Back to Training/i }).length).toBeGreaterThan(0);
   });
 
+
+test('runs the first-day orientation inside the Ops Desk and hands off to Mission 1', async () => {
+  installFetchMock();
+  window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+  window.location.hash = '#/learn/orientation';
+  render(<App />);
+
+  expect(await screen.findByTestId('first-day-orientation-page')).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: /First-Day Orientation/i })).toBeInTheDocument();
+  expect(screen.getByTestId('ops-desk-shell')).toBeInTheDocument();
+  expect(screen.getByTestId('ops-coach')).toHaveTextContent(/Mike/i);
+  expect(
+      within(screen.getByTestId('first-day-orientation-page'))
+        .getByText(/Integration Support Analyst/i),
+    ).toBeInTheDocument();
+  expect(screen.getByText(/Apex has freight/i)).toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole('button', { name: /Next orientation step/i }));
+  expect(screen.getByTestId('orientation-company-apex')).toBeInTheDocument();
+  expect(screen.getByTestId('orientation-company-freightbridge')).toBeInTheDocument();
+  expect(screen.getByTestId('orientation-company-midwest')).toBeInTheDocument();
+
+  await userEvent.click(screen.getByTestId('orientation-company-midwest'));
+  expect(screen.getByTestId('orientation-company-detail')).toHaveTextContent(/X12 004010/i);
+  expect(screen.getByTestId('orientation-company-detail')).toHaveTextContent(/SFTP/i);
+
+  await userEvent.click(screen.getByRole('button', { name: /Next orientation step/i }));
+  expect(screen.getByTestId('orientation-protocols')).toHaveTextContent(/REST API/i);
+  expect(screen.getByTestId('orientation-protocols')).toHaveTextContent(/JSON/i);
+  expect(screen.getByTestId('orientation-protocols')).toHaveTextContent(/X12 204/i);
+  expect(screen.getByTestId('orientation-protocols')).toHaveTextContent(/997/i);
+  expect(screen.getByTestId('orientation-protocols')).toHaveTextContent(/990/i);
+  expect(screen.getByTestId('orientation-protocols')).toHaveTextContent(/214/i);
+
+  await userEvent.click(screen.getByRole('button', { name: /Next orientation step/i }));
+  expect(screen.getByTestId('orientation-evidence-boundary')).toHaveTextContent(/FreightBridge can verify/i);
+  expect(screen.getByTestId('orientation-evidence-boundary')).toHaveTextContent(/cannot see/i);
+
+  await userEvent.click(screen.getByRole('button', { name: /Next orientation step/i }));
+  expect(screen.getByTestId('orientation-ready')).toHaveTextContent(/last healthy checkpoint/i);
+
+  await userEvent.click(screen.getByRole('button', { name: /Finish Orientation & Start Mission 1/i }));
+  expect(window.localStorage.getItem('freightbridge.firstDayOrientationComplete')).toBe('true');
+  await waitFor(() => expect(window.location.hash).toBe('#/learn/mission/learn-the-flow'));
+  expect(await screen.findByTestId('learn-the-flow-mission-page')).toBeInTheDocument();
+});
+
   test('keeps future incident missions locked until prerequisites are complete', async () => {
     installFetchMock();
     window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);

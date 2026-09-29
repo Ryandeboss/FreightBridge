@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  Compass,
   GraduationCap,
   Inbox,
   Lock,
@@ -44,6 +45,9 @@ export function TrainingShell() {
             <p className="ops-rail-label">Workspace</p>
             <NavLink className={navClass} end to="/learn">
               <Inbox size={17} /><span>Inbox</span><span className="ops-nav-count">1</span>
+            </NavLink>
+            <NavLink className={navClass} to="/learn/orientation">
+              <Compass size={17} /><span>Orientation</span>
             </NavLink>
             <Link className="ops-nav-link" to="/learn">
               <GraduationCap size={17} /><span>Training Desk</span>

@@ -7,6 +7,7 @@ import { BusinessTraceDetailPage, TraceSearchPage } from './pages/BusinessTraceP
 import { DashboardPage } from './pages/DashboardPage';
 import { FailureDetailPage } from './pages/FailureDetailPage';
 import { FailuresPage } from './pages/FailuresPage';
+import { FirstDayOrientationPage } from './pages/FirstDayOrientationPage';
 import { IntegrationLabPage } from './pages/IntegrationLabPage';
 import { IncidentMissionPage } from './pages/IncidentMissionPage';
 import { LearnTheFlowMissionPage } from './pages/LearnTheFlowMissionPage';
@@ -29,6 +30,7 @@ function AppRoutes() {
         <Route element={<TrainingShell />}>
           <Route index element={<Navigate to="/learn" replace />} />
           <Route path="/learn" element={<TrainingHomePage />} />
+          <Route path="/learn/orientation" element={<FirstDayOrientationPage />} />
           <Route path="/learn/mission/learn-the-flow" element={<LearnTheFlowMissionPage />} />
           <Route path="/learn/mission/:missionSlug" element={<IncidentMissionPage />} />
         </Route>
