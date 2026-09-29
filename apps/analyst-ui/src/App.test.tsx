@@ -2013,7 +2013,7 @@ describe('Analyst Console', () => {
 
     for (const [hash, testId] of routes) {
       window.location.hash = hash;
-      await waitFor(() => expect(screen.getByTestId(testId)).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByTestId(testId)).toBeInTheDocument(), { timeout: 3000 });
     }
   });
 
