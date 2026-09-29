@@ -1,4 +1,4 @@
-name: Deployed Acceptance
+﻿name: Deployed Acceptance
 
 on:
   workflow_dispatch:
@@ -643,4 +643,5 @@ jobs:
           if [ "${{ inputs.verbose }}" = "true" ]; then
             args+=(--verbose)
           fi
-          python scripts/acceptance/milestone27.py "${args[@]}"
+          python scripts/acceptance/m27_recovery_debug.py
+
