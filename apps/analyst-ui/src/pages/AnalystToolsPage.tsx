@@ -210,7 +210,7 @@ export function AnalystToolsPage() {
           <p>{definition.when}</p>
         </div>
         <Link className="secondary-button" to={advancedConsolePath(activeTool, transactionId, mappingId, partnerCode, errorId)}>
-          Open Full Console
+          Open This Tool in Full Console
         </Link>
       </header>
 
