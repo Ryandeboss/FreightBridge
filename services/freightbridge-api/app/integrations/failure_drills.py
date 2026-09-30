@@ -245,8 +245,8 @@ class ControlledX12FaultFactory:
     load_id: str,
     run_id: UUID,
   ) -> tuple[str, bytes, dict[str, object]]:
-    if scenario_key not in ('X12_214_CONTROL_MISMATCH', 'X12_214_UNSUPPORTED_STATUS'):
-      raise ValueError(f'Unsupported Milestone 27 recovery scenario: {scenario_key}')
+    if scenario_key not in ('X12_214_CONTROL_MISMATCH', 'X12_214_UNSUPPORTED_STATUS', 'X12_214_WRONG_VERSION'):
+      raise ValueError(f'Unsupported controlled recovery scenario: {scenario_key}')
     short = run_id.hex[:8].upper()
     numeric = (int(run_id.hex[:8], 16) + 37) % 999999999 or 1
     interchange = f'{numeric:09d}'
@@ -269,6 +269,8 @@ class ControlledX12FaultFactory:
       'st02': transaction,
       'se02': transaction,
       'statusCode': 'AF',
+      'isa12': '00401',
+      'gs08': '004010',
       'correctedFrom': scenario_key,
       'x12Preview': x12,
     }
@@ -328,7 +330,7 @@ class ControlledFailureDrillService:
     scenario_key = str(run['scenario_key'])
     if scenario_key == 'APEX_DUPLICATE_SHIPMENT':
       return self._recover_duplicate_shipment(run)
-    if scenario_key in ('X12_214_CONTROL_MISMATCH', 'X12_214_UNSUPPORTED_STATUS'):
+    if scenario_key in ('X12_214_CONTROL_MISMATCH', 'X12_214_UNSUPPORTED_STATUS', 'X12_214_WRONG_VERSION'):
       return self._recover_x12_214(run)
     raise LabDrillMismatch(
       'LAB_RECOVERY_NOT_SUPPORTED',
@@ -438,6 +440,8 @@ class ControlledFailureDrillService:
       'recoveryKind': (
         'CORRECTED_214_CONTROLS'
         if scenario_key == 'X12_214_CONTROL_MISMATCH'
+        else 'CORRECTED_214_VERSION'
+        if scenario_key == 'X12_214_WRONG_VERSION'
         else 'CORRECTED_214_STATUS'
       ),
       'sameBusinessIdentifier': transaction.get('businessIdentifier') == load_id,
@@ -454,6 +458,9 @@ class ControlledFailureDrillService:
         else 'MISMATCH'
       ),
       'correctedAt7': metadata['statusCode'],
+      'correctedIsa12': metadata['isa12'],
+      'correctedGs08': metadata['gs08'],
+      'profileCompatibility': 'SUPPORTED',
       'parseStatus': 'SUCCEEDED',
       'mappingStatus': 'SUCCEEDED',
       'transactionId': str(transaction_id),
