@@ -1135,7 +1135,9 @@ const completedHostKeyMismatchLabRun = makeCompletedFailureLabRun({
     productionConfigurationChanged: false,
   },
   documentTypeOverride: null,
+  stepDocumentTypeOverride: 'TRANSPORT_PROBE',
   transportOverride: 'SFTP',
+  messageFormatOverride: 'NONE',
   preTransaction: true,
 });
 
@@ -1165,7 +1167,9 @@ function makeCompletedFailureLabRun({
   injectedFault,
   payloadPreview,
   documentTypeOverride,
+  stepDocumentTypeOverride,
   transportOverride,
+  messageFormatOverride,
   preTransaction = false,
 }: {
   id: string;
@@ -1182,7 +1186,9 @@ function makeCompletedFailureLabRun({
   injectedFault: string;
   payloadPreview: Record<string, unknown>;
   documentTypeOverride?: string | null;
+  stepDocumentTypeOverride?: string;
   transportOverride?: string;
+  messageFormatOverride?: string;
   preTransaction?: boolean;
 }) {
   const documentType = documentTypeOverride !== undefined
@@ -1239,6 +1245,9 @@ function makeCompletedFailureLabRun({
         runId: id,
         stepKey,
         displayName,
+        transport,
+        messageFormat: messageFormatOverride ?? (scenarioKey.startsWith('X12_') ? 'X12' : 'JSON'),
+        documentType: stepDocumentTypeOverride ?? documentType ?? 'TRANSPORT_PROBE',
         relatedTransactionIds: preTransaction ? [] : completedFailureLabRun.steps[0].relatedTransactionIds,
         responseSummary: {
           drillOutcome: 'EXPECTED_FAILURE_OBSERVED',
