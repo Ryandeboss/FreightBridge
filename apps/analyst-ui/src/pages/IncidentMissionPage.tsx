@@ -4,6 +4,7 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { ApexBadAuthWorkstation } from './ApexBadAuthWorkstationPage';
 import { GuidedIncidentWorkstation } from './GuidedIncidentWorkstationPage';
+import { AdvancedIncidentWorkstation } from './AdvancedIncidentWorkstationPage';
 import { createLabRun, recoverLabRun, runNextLabStep, type LabRun } from '../api/lab';
 import { useOperationsSession } from '../auth/OperationsSession';
 import {
@@ -58,6 +59,10 @@ export function IncidentMissionPage() {
 
   if (mission.missionNumber >= 3 && mission.missionNumber <= 7) {
     return <GuidedIncidentWorkstation mission={mission} />;
+  }
+
+  if (mission.missionNumber >= 8 && mission.missionNumber <= 9) {
+    return <AdvancedIncidentWorkstation mission={mission} />;
   }
 
   return <IncidentMission mission={mission} />;
