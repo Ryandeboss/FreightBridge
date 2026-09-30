@@ -2383,50 +2383,49 @@ describe('Analyst Console', () => {
   });
 
 
-test('runs the first-day orientation inside the Ops Desk and hands off to the healthy walkthrough', async () => {
+test('runs the standalone story orientation and hands off to the healthy walkthrough', async () => {
   installFetchMock();
   window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
   window.location.hash = '#/learn/orientation';
   render(<App />);
 
   expect(await screen.findByTestId('first-day-orientation-page')).toBeInTheDocument();
-  expect(screen.getByRole('heading', { name: /First-Day Orientation/i })).toBeInTheDocument();
-  expect(screen.getByTestId('ops-desk-shell')).toBeInTheDocument();
-  expect(screen.getByTestId('ops-coach')).toHaveTextContent(/Mike/i);
-  expect(
-      within(screen.getByTestId('first-day-orientation-page'))
-        .getByText(/Integration Support Analyst/i),
-    ).toBeInTheDocument();
-  expect(screen.getByText(/Apex has freight/i)).toBeInTheDocument();
+  expect(screen.queryByTestId('ops-desk-shell')).not.toBeInTheDocument();
+  expect(screen.getByTestId('orientation-companies')).toHaveTextContent(/Three companies make one shipment journey possible/i);
+  expect(screen.getByTestId('orientation-companies')).toHaveTextContent(/Apex Logistics/i);
+  expect(screen.getByTestId('orientation-companies')).toHaveTextContent(/FreightBridge/i);
+  expect(screen.getByTestId('orientation-companies')).toHaveTextContent(/Midwest Carrier/i);
 
-  await userEvent.click(screen.getByRole('button', { name: /Next orientation step/i }));
-  expect(screen.getByTestId('orientation-company-apex')).toBeInTheDocument();
-  expect(screen.getByTestId('orientation-company-freightbridge')).toBeInTheDocument();
-  expect(screen.getByTestId('orientation-company-midwest')).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
+  expect(screen.getByTestId('orientation-tender-begins')).toHaveTextContent(/Apex asks for a carrier/i);
+  expect(screen.getByTestId('orientation-tender-begins')).toHaveTextContent(/Aurora, IL/i);
 
-  await userEvent.click(screen.getByTestId('orientation-company-midwest'));
-  expect(screen.getByTestId('orientation-company-detail')).toHaveTextContent(/X12 004010/i);
-  expect(screen.getByTestId('orientation-company-detail')).toHaveTextContent(/SFTP/i);
+  await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
+  expect(screen.getByTestId('orientation-tender-decision')).toHaveTextContent(/204/i);
+  expect(screen.getByTestId('orientation-tender-decision')).toHaveTextContent(/997 does not mean the carrier accepted the load/i);
+  expect(screen.getByTestId('orientation-tender-decision')).toHaveTextContent(/990 is the business tender decision/i);
 
-  await userEvent.click(screen.getByRole('button', { name: /Next orientation step/i }));
-  expect(screen.getByTestId('orientation-protocols')).toHaveTextContent(/REST API/i);
-  expect(screen.getByTestId('orientation-protocols')).toHaveTextContent(/JSON/i);
-  expect(screen.getByTestId('orientation-protocols')).toHaveTextContent(/X12 204/i);
-  expect(screen.getByTestId('orientation-protocols')).toHaveTextContent(/997/i);
-  expect(screen.getByTestId('orientation-protocols')).toHaveTextContent(/990/i);
-  expect(screen.getByTestId('orientation-protocols')).toHaveTextContent(/214/i);
+  await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
+  expect(screen.getByTestId('orientation-shipment-moves')).toHaveTextContent(/214 shipment-status messages/i);
+  expect(screen.getByTestId('orientation-shipment-moves')).toHaveTextContent(/PICKED_UP/i);
+  expect(screen.getByTestId('orientation-shipment-moves')).toHaveTextContent(/DELIVERED/i);
 
-  await userEvent.click(screen.getByRole('button', { name: /Next orientation step/i }));
-  expect(screen.getByTestId('orientation-evidence-boundary')).toHaveTextContent(/FreightBridge can verify/i);
-  expect(screen.getByTestId('orientation-evidence-boundary')).toHaveTextContent(/cannot see/i);
+  await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
+  expect(screen.getByTestId('orientation-translation')).toHaveTextContent(/REST\/JSON/i);
+  expect(screen.getByTestId('orientation-translation')).toHaveTextContent(/X12 EDI/i);
+  expect(screen.getByTestId('orientation-translation')).toHaveTextContent(/N4\*DETROIT\*MI\*48201~/i);
 
-  await userEvent.click(screen.getByRole('button', { name: /Next orientation step/i }));
-  expect(screen.getByTestId('orientation-ready')).toHaveTextContent(/last healthy checkpoint/i);
+  await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
+  expect(screen.getByTestId('orientation-your-job')).toHaveTextContent(/Integration Support Analyst/i);
+  expect(screen.getByTestId('orientation-your-job')).toHaveTextContent(/Network/i);
+  expect(screen.getByTestId('orientation-your-job')).toHaveTextContent(/Messages/i);
+  expect(screen.getByTestId('orientation-your-job')).toHaveTextContent(/Mapping/i);
 
-  await userEvent.click(screen.getByRole('button', { name: /Finish Orientation & Start Healthy Walkthrough/i }));
+  await userEvent.click(screen.getByRole('button', { name: /Start the healthy shipment/i }));
   expect(window.localStorage.getItem('freightbridge.firstDayOrientationComplete')).toBe('true');
   await waitFor(() => expect(window.location.hash).toBe('#/learn/healthy/apex-tender'));
   expect(await screen.findByTestId('healthy-apex-tender-page')).toBeInTheDocument();
+  expect(screen.getByTestId('ops-desk-shell')).toBeInTheDocument();
 });
 
 

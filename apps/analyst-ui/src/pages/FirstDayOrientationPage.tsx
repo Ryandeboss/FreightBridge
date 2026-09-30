@@ -1,12 +1,15 @@
 import {
   ArrowLeft,
   ArrowRight,
-  BriefcaseBusiness,
+  Building2,
   CheckCircle2,
-  Code,
+  Code2,
   FileText,
+  Map,
+  MessageSquareText,
   Network,
-  Server,
+  PackageCheck,
+  Route,
   ShieldCheck,
   Truck,
 } from 'lucide-react';
@@ -15,51 +18,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { TRAINING_ROLE } from '../training/missions';
 import { markFirstDayOrientationComplete } from '../training/orientation';
 
-const STEP_COUNT = 5;
-type CompanyKey = 'apex' | 'freightbridge' | 'midwest';
-
-const companyDetails: Record<CompanyKey, {
-  name: string;
-  role: string;
-  businessMeaning: string;
-  technology: string;
-  analystBoundary: string;
-}> = {
-  apex: {
-    name: 'Apex Logistics',
-    role: 'Broker / 3PL · External Trading Partner',
-    businessMeaning: 'Apex has freight that needs to be moved. It asks FreightBridge to get that shipment into the carrier workflow.',
-    technology: 'REST API + JSON',
-    analystBoundary: 'You can verify what Apex sent to FreightBridge and what FreightBridge returned. You cannot see Apex private application logs or databases.',
-  },
-  freightbridge: {
-    name: 'FreightBridge',
-    role: 'Your Workplace · Integration Platform',
-    businessMeaning: 'FreightBridge translates between partner systems, preserves business identifiers, records evidence, and keeps the shipment conversation moving.',
-    technology: 'REST/JSON ↔ canonical shipment ↔ X12/SFTP',
-    analystBoundary: 'This is the system you support. Its transactions, mappings, errors, processing logs, and safe transport evidence are your primary source of truth.',
-  },
-  midwest: {
-    name: 'Midwest Carrier',
-    role: 'Motor Carrier · External Trading Partner',
-    businessMeaning: 'Midwest decides whether to accept the tender and then physically moves the freight while sending shipment updates.',
-    technology: 'X12 004010 + SFTP',
-    analystBoundary: 'You can verify the X12 and SFTP evidence FreightBridge exchanged with Midwest. You cannot see Midwest private EDI translator logs or internal dispatch systems.',
-  },
-};
+const STEP_COUNT = 6;
 
 export function FirstDayOrientationPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
-  const [selectedCompany, setSelectedCompany] = useState<CompanyKey>('freightbridge');
-
-  function nextStep() {
-    setStep((current) => Math.min(current + 1, STEP_COUNT - 1));
-  }
-
-  function previousStep() {
-    setStep((current) => Math.max(current - 1, 0));
-  }
 
   function finishOrientation() {
     markFirstDayOrientationComplete();
@@ -67,23 +30,21 @@ export function FirstDayOrientationPage() {
   }
 
   return (
-    <section className="orientation-page" data-testid="first-day-orientation-page">
-      <header className="orientation-header">
-        <div>
-          <p className="eyebrow">Mike · New Employee Briefing</p>
-          <h1>First-Day Orientation</h1>
-          <p>
-            Learn the business flow first. Technical details will make more sense once you know
-            who is talking, why the message exists, and what FreightBridge is responsible for.
-          </p>
+    <main className="story-orientation-page" data-testid="first-day-orientation-page">
+      <header className="story-orientation-topbar">
+        <Link className="story-orientation-exit" to="/learn/desk">
+          <ArrowLeft size={16} />
+          Exit orientation
+        </Link>
+        <div className="story-orientation-brand">
+          <span><ShieldCheck size={17} /></span>
+          <strong>FreightBridge</strong>
+          <small>First-Day Orientation</small>
         </div>
-        <div className="orientation-role-card">
-          <span>Your role</span>
-          <strong>{TRAINING_ROLE}</strong>
-        </div>
+        <span className="story-orientation-counter">{step + 1} / {STEP_COUNT}</span>
       </header>
 
-      <div className="orientation-progress" aria-label={`Orientation step ${step + 1} of ${STEP_COUNT}`}>
+      <div className="story-orientation-progress" aria-label={`Orientation scene ${step + 1} of ${STEP_COUNT}`}>
         {Array.from({ length: STEP_COUNT }, (_, index) => (
           <span
             key={index}
@@ -93,264 +54,290 @@ export function FirstDayOrientationPage() {
         ))}
       </div>
 
-      <div className="orientation-workarea">
-        {step === 0 && <WelcomeStep />}
-        {step === 1 && <PartnersStep selectedCompany={selectedCompany} onSelectCompany={setSelectedCompany} />}
-        {step === 2 && <ProtocolStep />}
-        {step === 3 && <EvidenceBoundaryStep />}
-        {step === 4 && <ReadyStep />}
-      </div>
+      <section className="story-orientation-stage">
+        {step === 0 && <CompaniesScene />}
+        {step === 1 && <TenderBeginsScene />}
+        {step === 2 && <TenderDecisionScene />}
+        {step === 3 && <ShipmentMovesScene />}
+        {step === 4 && <TranslationScene />}
+        {step === 5 && <YourJobScene />}
+      </section>
 
-      <footer className="orientation-actions">
-        <div>
-          {step > 0 ? (
-            <button className="secondary-button" type="button" onClick={previousStep}>
-              <ArrowLeft size={16} />
-              Previous
-            </button>
-          ) : (
-            <Link className="secondary-button" to="/learn/desk">Back to Ops Desk</Link>
-          )}
-        </div>
-
-        <span>Step {step + 1} of {STEP_COUNT}</span>
+      <footer className="story-orientation-actions">
+        <button
+          className="story-button story-button-secondary"
+          type="button"
+          onClick={() => setStep((current) => Math.max(0, current - 1))}
+          disabled={step === 0}
+        >
+          <ArrowLeft size={17} />
+          Back
+        </button>
 
         {step < STEP_COUNT - 1 ? (
-          <button className="primary-button" type="button" onClick={nextStep}>
-            Next orientation step
-            <ArrowRight size={16} />
+          <button
+            className="story-button story-button-primary"
+            type="button"
+            onClick={() => setStep((current) => Math.min(STEP_COUNT - 1, current + 1))}
+          >
+            Continue
+            <ArrowRight size={17} />
           </button>
         ) : (
-          <button className="primary-button" type="button" onClick={finishOrientation}>
-            <CheckCircle2 size={16} />
-            Finish Orientation &amp; Start Healthy Walkthrough
+          <button className="story-button story-button-primary" type="button" onClick={finishOrientation}>
+            Start the healthy shipment
+            <ArrowRight size={17} />
           </button>
         )}
       </footer>
+    </main>
+  );
+}
+
+function SceneIntro({ kicker, title, body }: { kicker: string; title: string; body: string }) {
+  return (
+    <div className="story-scene-intro">
+      <p>{kicker}</p>
+      <h1>{title}</h1>
+      <span>{body}</span>
+    </div>
+  );
+}
+
+function CompaniesScene() {
+  return (
+    <article className="story-scene" data-testid="orientation-companies">
+      <SceneIntro
+        kicker="Meet the network"
+        title="Three companies make one shipment journey possible."
+        body="Apex has freight to move. Midwest moves it. FreightBridge connects their systems."
+      />
+
+      <div className="story-company-flow" aria-label="Apex Logistics to FreightBridge to Midwest Carrier">
+        <CompanyCard icon={<Building2 size={30} />} name="Apex Logistics" role="Broker / 3PL" detail="Creates freight requests." />
+        <FlowArrow label="request" />
+        <CompanyCard icon={<Network size={30} />} name="FreightBridge" role="Integration Hub" detail="Translates and routes messages." emphasis />
+        <FlowArrow label="connects" />
+        <CompanyCard icon={<Truck size={30} />} name="Midwest Carrier" role="Motor Carrier" detail="Accepts freight and moves it." />
+      </div>
+    </article>
+  );
+}
+
+function TenderBeginsScene() {
+  return (
+    <article className="story-scene" data-testid="orientation-tender-begins">
+      <SceneIntro
+        kicker="A shipment begins"
+        title="Apex asks for a carrier."
+        body="Apex creates a load tender and sends the shipment details to FreightBridge."
+      />
+
+      <div className="story-tender-scene">
+        <div className="story-load-card">
+          <span className="story-icon"><PackageCheck size={28} /></span>
+          <small>New load</small>
+          <strong>Aurora, IL → Detroit, MI</strong>
+          <span>42,000 lb</span>
+        </div>
+        <div className="story-motion-line">
+          <span />
+          <ArrowRight size={24} />
+          <small>freight request</small>
+        </div>
+        <div className="story-destination-card">
+          <span className="story-icon"><ShieldCheck size={28} /></span>
+          <strong>FreightBridge receives it</strong>
+          <span>The shipment conversation has started.</span>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function TenderDecisionScene() {
+  return (
+    <article className="story-scene" data-testid="orientation-tender-decision">
+      <SceneIntro
+        kicker="Tendering the load"
+        title="FreightBridge sends the carrier a 204."
+        body="The carrier first acknowledges the EDI document, then separately makes the business decision."
+      />
+
+      <div className="story-message-sequence">
+        <MessageRow direction="right" code="204" title="Load Tender" detail="FreightBridge → Midwest · Will you haul this load?" />
+        <MessageRow direction="left" code="997" title="Technical acknowledgment" detail="Midwest → FreightBridge · I received and processed the EDI document." muted />
+        <MessageRow direction="left" code="990" title="Tender Response" detail="Midwest → FreightBridge · Accept or reject the load." />
+      </div>
+
+      <div className="story-truth-callout">
+        <CheckCircle2 size={20} />
+        <p><strong>997 does not mean the carrier accepted the load.</strong> The 990 is the business tender decision.</p>
+      </div>
+    </article>
+  );
+}
+
+function ShipmentMovesScene() {
+  const statuses = ['PICKED_UP', 'IN_TRANSIT', 'ARRIVED', 'DELIVERED'];
+  return (
+    <article className="story-scene" data-testid="orientation-shipment-moves">
+      <SceneIntro
+        kicker="The freight is moving"
+        title="Now the carrier keeps everyone updated."
+        body="Midwest sends 214 shipment-status messages as the load progresses."
+      />
+
+      <div className="story-shipment-route">
+        <div className="story-route-line" aria-hidden="true" />
+        {statuses.map((status, index) => (
+          <div className="story-route-stop" key={status}>
+            <span>{index === statuses.length - 1 ? <PackageCheck size={20} /> : <Truck size={20} />}</span>
+            <strong>{status}</strong>
+          </div>
+        ))}
+      </div>
+
+      <p className="story-center-note">FreightBridge translates each update and keeps the shipment state moving forward.</p>
+    </article>
+  );
+}
+
+function TranslationScene() {
+  return (
+    <article className="story-scene" data-testid="orientation-translation">
+      <SceneIntro
+        kicker="Why FreightBridge exists"
+        title="The partners do not speak the same technical language."
+        body="Apex uses modern REST/JSON. Midwest uses X12 EDI. FreightBridge preserves the business meaning while translating between them."
+      />
+
+      <div className="story-translation-grid">
+        <section>
+          <div className="story-format-label"><Code2 size={18} /><span>Apex · JSON</span></div>
+          <pre>{`{
+  "destination": "Detroit",
+  "weight": 42000
+}`}</pre>
+        </section>
+
+        <div className="story-translation-core">
+          <span><Network size={28} /></span>
+          <strong>FreightBridge</strong>
+          <small>normalize → map → translate</small>
+        </div>
+
+        <section>
+          <div className="story-format-label"><FileText size={18} /><span>Midwest · X12</span></div>
+          <pre>{`N1*CN*XYZ WAREHOUSE~
+N4*DETROIT*MI*48201~`}</pre>
+        </section>
+      </div>
+
+      <p className="story-center-note">You do not need to decode the syntax yet. The next lesson will teach the technical artifacts.</p>
+    </article>
+  );
+}
+
+function YourJobScene() {
+  return (
+    <article className="story-scene" data-testid="orientation-your-job">
+      <SceneIntro
+        kicker="Your role"
+        title={TRAINING_ROLE}
+        body="Your job is to understand the conversation between systems and help restore it when something breaks."
+      />
+
+      <div className="story-job-concepts">
+        <ConceptCard icon={<Route size={24} />} title="Network" body="Did the message reach the next system?" />
+        <ConceptCard icon={<MessageSquareText size={24} />} title="Messages" body="What did the systems actually send and receive?" />
+        <ConceptCard icon={<Map size={24} />} title="Mapping" body="Was the business meaning translated correctly?" />
+      </div>
+
+      <div className="story-job-loop" aria-label="Integration support workflow">
+        <span>Find where the conversation stopped</span>
+        <ArrowRight size={17} />
+        <span>Correct the relevant rule or configuration</span>
+        <ArrowRight size={17} />
+        <span>Run it again and verify recovery</span>
+        <ArrowRight size={17} />
+        <span>Explain the result clearly</span>
+      </div>
+
+      <div className="story-ready-message">
+        <ShieldCheck size={22} />
+        <div>
+          <strong>That is enough for day one.</strong>
+          <span>Next, you will watch one healthy shipment complete the journey before you troubleshoot anything.</span>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function CompanyCard({
+  icon,
+  name,
+  role,
+  detail,
+  emphasis = false,
+}: {
+  icon: React.ReactNode;
+  name: string;
+  role: string;
+  detail: string;
+  emphasis?: boolean;
+}) {
+  return (
+    <section className={`story-company-card ${emphasis ? 'emphasis' : ''}`}>
+      <span className="story-icon">{icon}</span>
+      <small>{role}</small>
+      <strong>{name}</strong>
+      <p>{detail}</p>
     </section>
   );
 }
 
-function WelcomeStep() {
+function FlowArrow({ label }: { label: string }) {
   return (
-    <article className="orientation-step orientation-welcome" data-testid="orientation-welcome">
-      <div className="orientation-mike">
-        <div className="ops-manager-avatar">M</div>
-        <div>
-          <p className="eyebrow">Mike · Integration Manager</p>
-          <h2>Welcome to the integration team.</h2>
-          <p>
-            Apex has freight. Midwest can move it. The problem is that their systems do not speak
-            the same language. FreightBridge sits in the middle so the business process can keep moving.
-          </p>
-        </div>
-      </div>
-
-      <div className="orientation-business-flow" aria-label="Basic FreightBridge business flow">
-        <div>
-          <BriefcaseBusiness size={22} />
-          <strong>Apex Logistics</strong>
-          <span>Has freight to move</span>
-        </div>
-        <ArrowRight size={22} aria-hidden="true" />
-        <div className="freightbridge">
-          <ShieldCheck size={22} />
-          <strong>FreightBridge</strong>
-          <span>Translates + tracks</span>
-        </div>
-        <ArrowRight size={22} aria-hidden="true" />
-        <div>
-          <Truck size={22} />
-          <strong>Midwest Carrier</strong>
-          <span>Hauls the freight</span>
-        </div>
-      </div>
-
-      <div className="orientation-callout">
-        <strong>Your job is not “fix EDI.”</strong>
-        <p>
-          Your job is to find where the business conversation stopped, prove it with FreightBridge
-          evidence, take a safe action, and verify the flow recovered.
-        </p>
-      </div>
-    </article>
+    <div className="story-flow-arrow" aria-hidden="true">
+      <ArrowRight size={22} />
+      <small>{label}</small>
+    </div>
   );
 }
 
-function PartnersStep({
-  selectedCompany,
-  onSelectCompany,
+function MessageRow({
+  direction,
+  code,
+  title,
+  detail,
+  muted = false,
 }: {
-  selectedCompany: CompanyKey;
-  onSelectCompany: (company: CompanyKey) => void;
+  direction: 'left' | 'right';
+  code: string;
+  title: string;
+  detail: string;
+  muted?: boolean;
 }) {
-  const detail = companyDetails[selectedCompany];
-
   return (
-    <article className="orientation-step" data-testid="orientation-partners">
-      <div className="orientation-step-heading">
-        <p className="eyebrow">Who you work with</p>
-        <h2>Three companies, three different viewpoints</h2>
-        <p>Select each company to see what matters to an Integration Support Analyst.</p>
+    <div className={`story-message-row ${direction} ${muted ? 'muted' : ''}`}>
+      <span className="story-message-code">{code}</span>
+      <div>
+        <strong>{title}</strong>
+        <small>{detail}</small>
       </div>
-
-      <div className="orientation-company-grid">
-        <button className={selectedCompany === 'apex' ? 'selected' : ''} type="button" onClick={() => onSelectCompany('apex')} data-testid="orientation-company-apex">
-          <BriefcaseBusiness size={22} /><strong>Apex Logistics</strong><span>Broker / 3PL</span>
-        </button>
-        <button className={selectedCompany === 'freightbridge' ? 'selected' : ''} type="button" onClick={() => onSelectCompany('freightbridge')} data-testid="orientation-company-freightbridge">
-          <ShieldCheck size={22} /><strong>FreightBridge</strong><span>Your workplace</span>
-        </button>
-        <button className={selectedCompany === 'midwest' ? 'selected' : ''} type="button" onClick={() => onSelectCompany('midwest')} data-testid="orientation-company-midwest">
-          <Truck size={22} /><strong>Midwest Carrier</strong><span>Motor carrier</span>
-        </button>
-      </div>
-
-      <div className="orientation-company-detail" data-testid="orientation-company-detail">
-        <div>
-          <p className="eyebrow">{detail.role}</p>
-          <h3>{detail.name}</h3>
-          <p>{detail.businessMeaning}</p>
-        </div>
-        <dl>
-          <div><dt>How FreightBridge communicates</dt><dd>{detail.technology}</dd></div>
-          <div><dt>Support boundary</dt><dd>{detail.analystBoundary}</dd></div>
-        </dl>
-      </div>
-    </article>
+      <ArrowRight className="story-message-arrow" size={20} aria-hidden="true" />
+    </div>
   );
 }
 
-function ProtocolStep() {
+function ConceptCard({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
   return (
-    <article className="orientation-step" data-testid="orientation-protocols">
-      <div className="orientation-step-heading">
-        <p className="eyebrow">How the systems talk</p>
-        <h2>Format and transport are different things</h2>
-        <p>Think of the message format as what is written in the package, and the transport as how the package travels.</p>
-      </div>
-
-      <div className="orientation-protocol-flow">
-        <section>
-          <div className="orientation-protocol-icon"><Code size={20} /></div>
-          <p className="eyebrow">Apex → FreightBridge</p>
-          <h3>REST API + JSON</h3>
-          <p><strong>REST API</strong> is the web interface Apex calls. <strong>JSON</strong> is the structured data inside the request.</p>
-          <small>Business meaning: “Here is a load I need moved.”</small>
-        </section>
-
-        <div className="orientation-transform"><ArrowRight size={20} /><span>normalize + map</span></div>
-
-        <section className="freightbridge">
-          <div className="orientation-protocol-icon"><Network size={20} /></div>
-          <p className="eyebrow">Inside FreightBridge</p>
-          <h3>Canonical Shipment</h3>
-          <p>FreightBridge converts partner-specific fields into one internal shipment model before translating again.</p>
-          <small>Business meaning: preserve the shipment while changing the technical language.</small>
-        </section>
-
-        <div className="orientation-transform"><ArrowRight size={20} /><span>translate + send</span></div>
-
-        <section>
-          <div className="orientation-protocol-icon"><FileText size={20} /></div>
-          <p className="eyebrow">FreightBridge → Midwest</p>
-          <h3>X12 204 + SFTP</h3>
-          <p><strong>X12 204</strong> is the EDI load tender. <strong>SFTP</strong> is the secure file transport used to deliver it.</p>
-          <small>Business meaning: “Will you haul this load?”</small>
-        </section>
-      </div>
-
-      <div className="orientation-response-strip">
-        <div><strong>997</strong><span>Technical / functional acknowledgment</span><small>“I received and structurally processed the EDI.”</small></div>
-        <div><strong>990</strong><span>Business tender response</span><small>“I accept or reject the load.”</small></div>
-        <div><strong>214</strong><span>Shipment status</span><small>“The freight is picked up, moving, arrived, or delivered.”</small></div>
-      </div>
-
-      <div className="orientation-callout compact">
-        <Server size={18} />
-        <p>
-          A successful SFTP transfer does not prove the carrier accepted the load. Transport success,
-          EDI acknowledgment, and business outcome are separate checkpoints.
-        </p>
-      </div>
-    </article>
-  );
-}
-
-function EvidenceBoundaryStep() {
-  return (
-    <article className="orientation-step" data-testid="orientation-evidence-boundary">
-      <div className="orientation-step-heading">
-        <p className="eyebrow">Your evidence boundary</p>
-        <h2>Partner reports are claims. FreightBridge evidence is what you verify.</h2>
-        <p>Support analysts do not magically see inside partner systems. You investigate the evidence available at the FreightBridge integration boundary.</p>
-      </div>
-
-      <div className="orientation-boundary-grid">
-        <section className="can-see">
-          <h3>FreightBridge can verify</h3>
-          <ul>
-            <li>Inbound API requests FreightBridge received</li>
-            <li>Safe JSON fields and business identifiers</li>
-            <li>Authentication, parsing, validation, and mapping results</li>
-            <li>X12 generated or received by FreightBridge</li>
-            <li>SFTP delivery and archive evidence FreightBridge observed</li>
-            <li>997, 990, and 214 messages FreightBridge received</li>
-            <li>Transactions, processing logs, mappings, and integration errors</li>
-          </ul>
-        </section>
-
-        <section className="cannot-see">
-          <h3>FreightBridge cannot see</h3>
-          <ul>
-            <li>Apex private databases or application logs</li>
-            <li>Midwest private EDI translator internals</li>
-            <li>Carrier dispatch screens unless Midwest reports what they show</li>
-            <li>Secrets, passwords, private keys, or hidden partner credentials</li>
-          </ul>
-        </section>
-      </div>
-
-      <div className="orientation-evidence-example">
-        <p className="eyebrow">Example</p>
-        <strong>Midwest says, “We sent the status.”</strong>
-        <p>
-          Do not immediately conclude FreightBridge lost it. First ask: Did FreightBridge receive a
-          file? Could it parse the X12? Did the status map? Was an Apex callback created? Where is the
-          last healthy checkpoint?
-        </p>
-      </div>
-    </article>
-  );
-}
-
-function ReadyStep() {
-  return (
-    <article className="orientation-step" data-testid="orientation-ready">
-      <div className="orientation-step-heading">
-        <p className="eyebrow">Before your first load</p>
-        <h2>Use the same troubleshooting habit every time</h2>
-        <p>Mission 1 will show you a healthy shipment so you know what “normal” looks like.</p>
-      </div>
-
-      <ol className="orientation-analyst-loop">
-        <li><strong>1</strong><span><b>Understand the complaint.</b> What does the partner say happened?</span></li>
-        <li><strong>2</strong><span><b>Confirm receipt.</b> What did FreightBridge actually observe?</span></li>
-        <li><strong>3</strong><span><b>Find the last healthy checkpoint.</b> Where did the evidence still look correct?</span></li>
-        <li><strong>4</strong><span><b>Identify the expected next step.</b> What should have happened after that?</span></li>
-        <li><strong>5</strong><span><b>Classify the layer.</b> Transport, format, mapping, validation, business rule, or partner response?</span></li>
-        <li><strong>6</strong><span><b>Take a safe action.</b> Fix or replay without creating duplicate business effects.</span></li>
-        <li><strong>7</strong><span><b>Verify recovery.</b> Prove the same business flow reached a healthy outcome.</span></li>
-        <li><strong>8</strong><span><b>Report clearly.</b> State what failed, what changed, and what proves recovery.</span></li>
-      </ol>
-
-      <div className="orientation-callout">
-        <CheckCircle2 size={20} />
-        <div>
-          <strong>You are ready for Mission 1.</strong>
-          <p>You will follow one real simulated shipment from Apex through FreightBridge to Midwest, then watch acknowledgments and shipment status come back.</p>
-        </div>
-      </div>
-    </article>
+    <section className="story-concept-card">
+      <span>{icon}</span>
+      <strong>{title}</strong>
+      <p>{body}</p>
+    </section>
   );
 }
