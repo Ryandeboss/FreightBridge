@@ -1090,7 +1090,29 @@ const completedUnsupportedStatusLabRun = makeCompletedFailureLabRun({
   payloadPreview: {
     x12: 'ST*214*5678~B10*MWCZZ*LABZZ900*MWCX~AT7*ZZ****20260924*1500*UT~SE*7*5678~',
     at701: 'ZZ',
-    supportedStatusCodes: ['AF', 'IT', 'AR', 'D1'],
+    supportedStatusCodes: ['AF', 'X6', 'X1', 'D1'],
+  },
+});
+
+const completedWrongVersionLabRun = makeCompletedFailureLabRun({
+  id: 'abababab-abab-4bab-8bab-abababababab',
+  scenarioKey: 'X12_214_WRONG_VERSION',
+  businessIdentifier: 'LABVER900',
+  stepKey: 'INJECT_X12_214_WRONG_VERSION',
+  displayName: 'Inject wrong 214 version',
+  name: '214 Wrong Version',
+  errorCode: 'UNSUPPORTED_X12_VERSION',
+  category: 'MAPPING_ERROR',
+  stage: 'MAPPING',
+  safeMessage: 'Unsupported Midwest ISA version.',
+  guidance: 'Confirm the partner is sending the X12 version supported by the active 214 mapping profile.',
+  injectedFault: 'ISA12 set to 00501 and GS08 set to 005010.',
+  payloadPreview: {
+    x12: 'ISA*00*          *00*          *ZZ*MWCX           *ZZ*FREIGHTBRIDGE  *260924*1500*U*00501*000000999*0*T*:~GS*QM*MWCX*FREIGHTBRIDGE*20260924*1500*999*X*005010~ST*214*9876~B10*MWCVER*LABVER900*MWCX~AT7*AF****20260924*1500*UT~MS1*Aurora*IL~SE*7*9876~GE*1*999~IEA*1*000000999~',
+    isa12: '00501',
+    gs08: '005010',
+    supportedIsa12: '00401',
+    supportedGs08: '004010',
   },
 });
 
@@ -1101,6 +1123,7 @@ const failureRunsByScenario: Record<string, ReturnType<typeof makeCompletedFailu
   APEX_DUPLICATE_SHIPMENT: completedDuplicateShipmentLabRun,
   X12_214_CONTROL_MISMATCH: completedControlMismatchLabRun,
   X12_214_UNSUPPORTED_STATUS: completedUnsupportedStatusLabRun,
+  X12_214_WRONG_VERSION: completedWrongVersionLabRun,
 };
 
 function makeCompletedFailureLabRun({
@@ -1704,6 +1727,24 @@ function installFetchMock(options: {
           normalizedShipmentStatus: 'PICKED_UP',
           apexFacingEvidence: true,
           correctedX12: 'ST*214*5678~AT7*AF****20260924*1500*UT~SE*7*5678~',
+        };
+      } else if (scenarioKey === 'X12_214_WRONG_VERSION') {
+        recovery = {
+          status: 'SUCCEEDED',
+          recoveryKind: 'CORRECTED_214_VERSION',
+          sameBusinessIdentifier: true,
+          correctedSt02: '9876',
+          correctedSe02: '9876',
+          controlCorrelation: 'MATCHED',
+          correctedAt7: 'AF',
+          correctedIsa12: '00401',
+          correctedGs08: '004010',
+          profileCompatibility: 'SUPPORTED',
+          parseStatus: 'SUCCEEDED',
+          mappingStatus: 'SUCCEEDED',
+          normalizedShipmentStatus: 'PICKED_UP',
+          apexFacingEvidence: true,
+          correctedX12: 'ISA*00*          *00*          *ZZ*MWCX           *ZZ*FREIGHTBRIDGE  *260924*1510*U*00401*000000998*0*T*:~GS*QM*MWCX*FREIGHTBRIDGE*20260924*1510*998*X*004010~ST*214*9876~AT7*AF****20260924*1510*UT~SE*7*9876~GE*1*998~IEA*1*000000998~',
         };
       } else {
         return jsonResponse(
@@ -2982,7 +3023,66 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('STATUS_CALLBACK_MISSING');
 
     await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
-    expect(await screen.findByTestId('mission-8-card')).toHaveTextContent(/Locked/i);
+    expect(await screen.findByTestId('mission-8-card')).toHaveTextContent(/Open Mission/i);
+  }, 10000);
+
+  test('Mission 8 separates valid X12 structure from Midwest profile version compatibility', async () => {
+    installFetchMock();
+    window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      completedMissions: ['LEARN_THE_FLOW', 'APEX_BAD_AUTH', 'APEX_INVALID_JSON', 'APEX_INVALID_CONTRACT', 'DUPLICATE_SHIPMENT', 'X12_ENVELOPE_MISMATCH', 'STATUS_CALLBACK_MISSING'],
+    }));
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn/mission/wrong-x12-version';
+    render(<App />);
+
+    expect(await screen.findByTestId('incident-mission-page')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Start Incident/i }));
+    expect(await screen.findByTestId('incident-workspace')).toHaveAttribute('data-scenario-key', 'X12_214_WRONG_VERSION');
+
+    const profilePanel = screen.getByTestId('profile-version-compatibility');
+    expect(profilePanel).toHaveTextContent(/ISA12 00501/i);
+    expect(profilePanel).toHaveTextContent(/GS08 005010/i);
+    expect(profilePanel).toHaveTextContent(/ISA12 00401/i);
+    expect(profilePanel).toHaveTextContent(/GS08 004010/i);
+    expect(profilePanel).toHaveTextContent(/UNSUPPORTED_X12_VERSION/i);
+
+    const toolbox = screen.getByTestId('incident-analyst-toolbox');
+    expect(within(toolbox).getByRole('link', { name: /Mapping Viewer/i })).toHaveAttribute('href', '#/learn/tools/mappings');
+
+    await userEvent.click(within(screen.getByTestId('evidence-source-raw-version')).getAllByText(/^Inspect/i)[0]);
+    await userEvent.click(within(screen.getByTestId('evidence-source-profile')).getAllByText(/^Inspect/i)[0]);
+    await userEvent.click(within(screen.getByTestId('evidence-source-mapping')).getAllByText(/^Inspect/i)[0]);
+    expect(screen.getByTestId('evidence-source-raw-version')).toHaveTextContent(/00501/i);
+    expect(screen.getByTestId('evidence-source-profile')).toHaveTextContent(/004010/i);
+    expect(screen.getByTestId('evidence-source-mapping')).toHaveTextContent(/MAPPING_ERROR/i);
+
+    await chooseIncidentOption(/Where did FreightBridge evidence last look healthy/i, /passed X12 structure\/control validation/i);
+    await chooseIncidentOption(/What is the most accurate FreightBridge diagnosis/i, /ISA12 00501 \/ GS08 005010/i);
+    await chooseIncidentOption(/What should you do next/i, /supported 00401 \/ 004010/i);
+    await userEvent.click(screen.getByRole('button', { name: /Retry with supported Midwest X12 version/i }));
+
+    const verification = await screen.findByTestId('verification-panel');
+    expect(verification).toHaveTextContent(/CORRECTED_214_VERSION/i);
+    expect(verification).toHaveTextContent(/Corrected ISA12/i);
+    expect(verification).toHaveTextContent(/00401/i);
+    expect(verification).toHaveTextContent(/Corrected GS08/i);
+    expect(verification).toHaveTextContent(/004010/i);
+    expect(verification).toHaveTextContent(/Profile Compatibility/i);
+    expect(verification).toHaveTextContent(/SUPPORTED/i);
+    expect(verification).toHaveTextContent(/Apex-Facing Evidence/i);
+    expect(verification).toHaveTextContent(/PRESENT/i);
+
+    await userEvent.type(
+      screen.getByLabelText(/Write Mike/i),
+      'Mike, the 214 was structurally valid but used ISA12 00501 and GS08 005010 instead of the supported Midwest profile; the corrected same-load version retry restored Apex-facing evidence.',
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
+    expect(await screen.findByTestId('incident-debrief')).toHaveTextContent(/profile compatibility/i);
+    expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('WRONG_X12_VERSION');
+
+    await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
+    expect(await screen.findByTestId('mission-9-card')).toHaveTextContent(/Locked/i);
   }, 10000);
 
   test('searches transactions and opens detail with retry action', async () => {

@@ -2296,3 +2296,14 @@ input:disabled {
 .incident-tool-links small{color:#6c7b83;line-height:1.35}
 @media(max-width:760px){.failure-boundary-grid,.incident-tool-links{grid-template-columns:1fr}.failure-boundary-verdict{grid-template-columns:1fr}}
 
+/* Milestone 36: X12 version/profile compatibility training */
+.profile-version-panel{display:grid;gap:1rem}
+.profile-version-grid{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:.75rem;align-items:center}
+.profile-version-grid>article{display:grid;gap:.3rem;padding:.85rem;border:1px solid #dce4e8;border-radius:10px;background:#fff8f1}
+.profile-version-grid>article.supported{border-color:#b9d9cf;background:#f2faf6}
+.profile-version-grid>article span{color:#6b7b84;font-size:.7rem;font-weight:900;letter-spacing:.04em;text-transform:uppercase}
+.profile-version-grid>article strong{font-size:1rem}
+.profile-version-grid>article small{color:#65757e;line-height:1.4}
+.profile-version-compare{font-size:1.5rem;font-weight:900;color:#9c5844;text-align:center}
+@media(max-width:760px){.profile-version-grid{grid-template-columns:1fr}.profile-version-compare{transform:rotate(90deg)}}
+

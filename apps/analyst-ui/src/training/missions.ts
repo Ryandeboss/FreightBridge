@@ -21,6 +21,7 @@ export const APEX_INVALID_CONTRACT_MISSION_ID = 'APEX_INVALID_CONTRACT';
 export const DUPLICATE_SHIPMENT_MISSION_ID = 'DUPLICATE_SHIPMENT';
 export const X12_ENVELOPE_MISMATCH_MISSION_ID = 'X12_ENVELOPE_MISMATCH';
 export const STATUS_CALLBACK_MISSING_MISSION_ID = 'STATUS_CALLBACK_MISSING';
+export const WRONG_X12_VERSION_MISSION_ID = 'WRONG_X12_VERSION';
 export const PLANNED_MISSION_COUNT = 10;
 
 export const trainingMissions: TrainingMission[] = [
@@ -88,13 +89,13 @@ export const trainingMissions: TrainingMission[] = [
     unlocksAfter: X12_ENVELOPE_MISMATCH_MISSION_ID,
   },
   {
-    id: 'WRONG_X12_VERSION',
+    id: WRONG_X12_VERSION_MISSION_ID,
     slug: 'wrong-x12-version',
     title: 'Mission 8 - This Partner Is Sending the Wrong X12 Version',
     difficulty: 'ADVANCED',
-    summary: 'Locked roadmap placeholder for unsupported X12 version evidence.',
-    implemented: false,
-    unlocksAfter: 'STATUS_CALLBACK_MISSING',
+    summary: 'Distinguish valid X12 structure from a 214 that conflicts with Midwest\'s active X12 version/profile.',
+    implemented: true,
+    unlocksAfter: STATUS_CALLBACK_MISSING_MISSION_ID,
   },
   {
     id: 'SFTP_STOPS_WORKING',
@@ -1167,6 +1168,159 @@ export const incidentMissions: IncidentMissionDefinition[] = [
       { id: 'source', label: 'Hint 1 - Inspect the AT7 segment', body: 'The broad evidence source is the raw 214 status segment.' },
       { id: 'fields', label: 'Hint 2 - Compare against mapping', body: 'Find the AT7-01 value, then compare it with the active supported Midwest status codes.' },
       { id: 'concept', label: 'Hint 3 - Technical concept', body: 'Valid X12 syntax does not guarantee that every partner status code maps to a canonical FreightBridge status.' },
+    ],
+  },
+  {
+    id: WRONG_X12_VERSION_MISSION_ID,
+    slug: 'wrong-x12-version',
+    missionNumber: 8,
+    title: 'Mission 8 - This Partner Is Sending the Wrong X12 Version',
+    shortTitle: 'Unsupported Midwest X12 profile version',
+    scenarioKey: 'X12_214_WRONG_VERSION',
+    symptom: 'Midwest says the 214 is valid X12, but FreightBridge rejects it before creating an Apex-facing status update.',
+    briefing: {
+      kind: 'manager',
+      from: 'Mike',
+      role: 'Integration Manager',
+      body:
+        'This 214 is structurally readable and its shipment status is valid. Do not stop at “the X12 looks good.” Compare the version identifiers in the message with the active Midwest profile and prove where compatibility breaks.',
+    },
+    partnerMessage: {
+      kind: 'partner',
+      from: 'Midwest EDI Support',
+      role: 'External Partner Message',
+      body:
+        'Our system generated a valid 214 and placed it in the expected SFTP location. Please confirm why FreightBridge is rejecting the file.',
+    },
+    evidencePoints: [
+      {
+        id: 'arrival',
+        checkpoint: '214 file reached FreightBridge',
+        status: 'SUCCEEDED',
+        source: 'FreightBridge SFTP Intake',
+        observed: 'FreightBridge received the Midwest 214 file.',
+        meaning: 'Transport is healthy; the failure occurs after file arrival.',
+      },
+      {
+        id: 'structure',
+        checkpoint: 'X12 structure and controls',
+        status: 'SUCCEEDED',
+        source: 'FreightBridge X12 Parser',
+        observed: 'The 214 is structurally parseable and its transaction-set controls are internally consistent.',
+        meaning: 'This is not Mission 6: ST02/SE02 control validation succeeded.',
+      },
+      {
+        id: 'profile',
+        checkpoint: 'Midwest X12 version/profile compatibility',
+        status: 'FAILED',
+        source: 'Midwest 214 Mapping Profile',
+        observed: 'The message advertises ISA12 00501 and GS08 005010, but the active Midwest profile supports 00401 / 004010.',
+        meaning: 'Valid X12 syntax does not make a message compatible with the partner profile FreightBridge is configured to process.',
+      },
+      {
+        id: 'status-mapping',
+        checkpoint: '214 status mapping',
+        status: 'NOT_REACHED',
+        source: 'Midwest 214 Mapper',
+        observed: 'The AT7 status does not become a canonical shipment event because profile compatibility fails first.',
+        meaning: 'Do not diagnose the AT7 code when the version/profile gate already rejected the message.',
+      },
+      {
+        id: 'apex-update',
+        checkpoint: 'Apex-facing shipment update',
+        status: 'NOT_REACHED',
+        source: 'FreightBridge Outbound Partner Update',
+        observed: 'No normalized status update is produced from the rejected version.',
+        meaning: 'Apex sees no update because FreightBridge safely stopped incompatible partner data.',
+      },
+    ],
+    evidenceSources: [
+      {
+        id: 'raw-version',
+        title: 'Raw X12 Version Evidence',
+        source: 'X12 Document',
+        summary: 'Inspect the envelope version identifiers Midwest sent.',
+        inspectedLabel: 'Inspect X12 version fields',
+        details: [
+          'ISA12 identifies the interchange control version used by this project profile.',
+          'GS08 identifies the functional-group implementation version.',
+          'This drill sends ISA12 00501 and GS08 005010.',
+        ],
+        rawFrom: 'payloadPreview',
+      },
+      {
+        id: 'profile',
+        title: 'Midwest Partner Profile Evidence',
+        source: 'Midwest Implementation Guide / Active Profile',
+        summary: 'Compare the received version identifiers with FreightBridge\'s active Midwest contract.',
+        inspectedLabel: 'Inspect partner profile',
+        details: [
+          'Midwest\'s active FreightBridge project profile uses ISA12 00401.',
+          'The active functional-group version is GS08 004010.',
+          '00501 / 005010 is not accepted by the current Midwest 214 profile.',
+        ],
+        rawFrom: 'failureDrill',
+      },
+      {
+        id: 'mapping',
+        title: 'Mapping/Profile Failure Evidence',
+        source: 'FreightBridge Integration Error',
+        summary: 'Confirm the persisted failure classification occurs at MAPPING with UNSUPPORTED_X12_VERSION.',
+        inspectedLabel: 'Inspect mapping classification',
+        details: [
+          'The error category is MAPPING_ERROR.',
+          'The stage is MAPPING, not PARSING.',
+          'The error code is UNSUPPORTED_X12_VERSION.',
+        ],
+        rawFrom: 'observedFailure',
+      },
+      {
+        id: 'trace',
+        title: 'Business Trace Evidence',
+        source: 'Business Trace',
+        summary: 'Verify the same load reached FreightBridge but did not produce an Apex-facing status from the incompatible 214.',
+        inspectedLabel: 'Inspect trace evidence',
+        details: [
+          'The failed 214 remains correlated to the same shipment.',
+          'No normalized shipment event should be produced from the wrong version.',
+          'A corrected supported-version retry should preserve the same business identifier.',
+        ],
+        rawFrom: 'steps',
+      },
+    ],
+    requiredEvidenceSourceIds: ['raw-version', 'profile', 'mapping'],
+    lastHealthyOptions: [
+      { id: 'structure', label: 'The 214 arrived and passed X12 structure/control validation', explanation: 'Correct. Version/profile compatibility is the first failed checkpoint.' },
+      { id: 'status-map', label: 'The AT7 shipment status mapped successfully', explanation: 'Status mapping is not reached after version/profile compatibility fails.' },
+      { id: 'apex', label: 'Apex received the shipment update', explanation: 'No Apex-facing status is created from the incompatible 214.' },
+    ],
+    correctLastHealthyId: 'structure',
+    diagnosisOptions: [
+      { id: 'version', label: 'The 214 is structurally valid, but ISA12 00501 / GS08 005010 do not match Midwest\'s supported 00401 / 004010 profile', explanation: 'Correct. This is profile compatibility at the mapping stage, not malformed X12.' },
+      { id: 'controls', label: 'ST02 and SE02 do not match', explanation: 'Those controls match in this incident; that is the Mission 6 failure class.' },
+      { id: 'status', label: 'AT7-01 contains an unsupported shipment-status code', explanation: 'The status code is not the failing field here; the message version is rejected first.' },
+    ],
+    correctDiagnosisId: 'version',
+    planOptions: [
+      { id: 'supported-version', label: 'Confirm the Midwest implementation guide, resend the same 214 using supported 00401 / 004010 version identifiers, and verify normal processing', explanation: 'Correct. Align the message with the active partner profile rather than weakening FreightBridge validation.' },
+      { id: 'accept-any', label: 'Change FreightBridge to accept any X12 version automatically', explanation: 'Version compatibility is part of the partner contract and should not be bypassed blindly.' },
+      { id: 'rewrite-status', label: 'Change only the AT7 shipment-status code', explanation: 'AT7 is not the incompatible field in this incident.' },
+    ],
+    correctPlanId: 'supported-version',
+    remediationLabel: 'Retry with supported Midwest X12 version',
+    recoveryMode: 'INCIDENT_VERIFICATION',
+    verification: 'The corrected retry must keep the same load, use ISA12 00401 and GS08 004010, pass mapping/profile validation, and produce Apex-facing shipment-status evidence.',
+    statusPrompt: 'Write Mike an update covering file arrival, valid X12 structure, received versus supported version identifiers, corrective action, and same-load recovery proof.',
+    debrief: [
+      'Valid X12 syntax is not the same as partner-profile compatibility.',
+      'ISA12 and GS08 are evidence for the version/profile FreightBridge is being asked to process.',
+      'The last healthy checkpoint is successful X12 structure/control validation; the first failed checkpoint is Midwest profile compatibility.',
+      'A corrected 00401 / 004010 retry can map normally and restore Apex-facing status evidence for the same load.',
+    ],
+    hints: [
+      { id: 'source', label: 'Hint 1 - Inspect the envelope versions', body: 'Compare ISA12 and GS08 rather than starting with AT7.' },
+      { id: 'profile', label: 'Hint 2 - Check the partner contract', body: 'The Midwest implementation guide defines 004010 as the supported X12 version for this project.' },
+      { id: 'concept', label: 'Hint 3 - Technical concept', body: 'A message can be structurally valid X12 and still be incompatible with the active trading-partner profile.' },
     ],
   },
 ];

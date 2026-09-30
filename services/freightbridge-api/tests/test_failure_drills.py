@@ -194,6 +194,22 @@ def test_x12_wrong_version_factory_preserves_parseable_isa_and_fails_profile_val
   assert exc.value.code == 'UNSUPPORTED_X12_VERSION'
 
 
+def test_x12_wrong_version_recovery_factory_restores_supported_profile() -> None:
+  _, payload, metadata = ControlledX12FaultFactory().build_recovery_214(
+    scenario_key='X12_214_WRONG_VERSION',
+    load_id='LABFAIL900',
+    run_id=RUN_ID,
+  )
+  interchange = parse_x12(payload)
+  validate_x12_envelopes(interchange)
+  mapped = map_midwest_214(interchange)
+
+  assert metadata['isa12'] == '00401'
+  assert metadata['gs08'] == '004010'
+  assert metadata['correctedFrom'] == 'X12_214_WRONG_VERSION'
+  assert mapped.status.value == 'PICKED_UP'
+
+
 def test_sftp_host_key_drill_records_pre_ingestion_observation_without_transaction(monkeypatch) -> None:
   monkeypatch.setattr(
     'app.integrations.failure_drills.MidwestSftpConfig.from_settings',

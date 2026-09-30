@@ -389,6 +389,7 @@ class IntegrationLabService:
       'APEX_DUPLICATE_SHIPMENT',
       'X12_214_CONTROL_MISMATCH',
       'X12_214_UNSUPPORTED_STATUS',
+      'X12_214_WRONG_VERSION',
     }
     if scenario_key not in supported:
       raise LabExecutionError(
