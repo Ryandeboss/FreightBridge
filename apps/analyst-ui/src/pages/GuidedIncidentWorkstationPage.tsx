@@ -322,31 +322,16 @@ export function GuidedIncidentWorkstation({ mission }: { mission: IncidentMissio
   }
 
   async function applyFixAndRunAgain() {
-    if (!token || !incidentRun || !lastHealthyCorrect || !diagnosisCorrect || !planCorrect || !requiredEvidenceInspected) return;
+    if (!incidentRun || !lastHealthyCorrect || !diagnosisCorrect || !planCorrect || !requiredEvidenceInspected) return;
+    if (mission.missionNumber >= 5 && !token) return;
     setWorking(true);
     setError(null);
     setRecoveryRun(null);
 
     try {
-      let nextRun: LabRun;
-      if (mission.missionNumber >= 5) {
-        nextRun = await recoverLabRun(token, incidentRun.id);
-      } else {
-        nextRun = await createLabRun(token, {
-          scenarioKey: 'FULL_SHIPMENT_LIFECYCLE',
-          loadId: incidentRun.businessIdentifier,
-          equipmentType: 'VAN_53',
-          weightLbs: 42000,
-          pieces: 22,
-          commodityDescription: 'Recovered Training Freight',
-        });
-        let guard = 0;
-        while (nextRun.status !== 'SUCCEEDED' && nextRun.status !== 'FAILED' && guard < 30) {
-          const result = await runNextLabStep(token, nextRun.id);
-          nextRun = result.run;
-          guard += 1;
-        }
-      }
+      const nextRun = mission.missionNumber >= 5
+        ? await recoverLabRun(token as string, incidentRun.id)
+        : buildTrainingRecoveryRun(incidentRun);
       setRecoveryRun(nextRun);
       if (!recoveryVerified(mission, incidentRun, nextRun, readRecord(nextRun.resultSummary.recovery))) {
         setError('The retry did not produce the recovery evidence required for this incident.');
@@ -940,8 +925,12 @@ function VerificationPanel({
           <p>{mission.verification}</p>
         </div>
       </div>
-      {mission.missionNumber >= 5 && (
+      {mission.missionNumber >= 5 ? (
         <p data-testid="recovery-correlation">Recovery stayed correlated to the same incident load.</p>
+      ) : (
+        <p data-testid="training-verification-note">
+          Training verification only: FreightBridge simulates the corrected same-load retry here, so no second Apex load is created.
+        </p>
       )}
       <dl>
         {entries.map(([label, value]) => (
@@ -1052,6 +1041,32 @@ function recoveryVerified(
     && recovery?.status === 'SUCCEEDED'
     && recovery?.sameBusinessIdentifier === true
   );
+}
+
+function buildTrainingRecoveryRun(incidentRun: LabRun): LabRun {
+  const now = new Date().toISOString();
+  return {
+    ...incidentRun,
+    id: incidentRun.id + '-training-verification',
+    scenarioKey: 'TRAINING_VERIFICATION',
+    status: 'SUCCEEDED',
+    resultSummary: {
+      ...incidentRun.resultSummary,
+      shipmentStatus: 'DELIVERED',
+      recovery: {
+        status: 'SUCCEEDED',
+        recoveryKind: 'TRAINING_VERIFICATION',
+        sameBusinessIdentifier: true,
+        parseStatus: 'SUCCEEDED',
+        mappingStatus: 'SUCCEEDED',
+        normalizedShipmentStatus: 'DELIVERED',
+        apexFacingEvidence: true,
+      },
+    },
+    updatedAt: now,
+    completedAt: now,
+    steps: [],
+  };
 }
 
 function verificationEntries(run: LabRun, recovery: Record<string, unknown> | null): Array<[string, string]> {
