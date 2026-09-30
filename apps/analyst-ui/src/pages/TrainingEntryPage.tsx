@@ -1,6 +1,6 @@
 import { ArrowRight, Building2, Network, Truck } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { hasStartedLearningJourney, startLearningJourney } from '../training/journey';
+import { hasStartedLearningJourney } from '../training/journey';
 
 const companies = [
   {
@@ -66,8 +66,7 @@ export function TrainingEntryPage() {
         <div className="journey-entry-action">
           <Link
             className="journey-start-button"
-            to={started ? '/learn/desk' : '/learn/orientation'}
-            onClick={() => startLearningJourney()}
+            to={started ? '/access?next=/learn/desk' : '/access?next=/learn/orientation'}
           >
             {started ? 'Continue Training' : 'Begin Your Journey'}
             <ArrowRight size={18} />
