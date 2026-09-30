@@ -5053,3 +5053,245 @@ input:disabled {
   }
 }
 /* === End M47 document refinement === */
+
+
+/* === Milestone 48: guided troubleshooting workstations === */
+.guided-log-record {
+  min-width: 0;
+}
+.guided-log-record .workstation-log-row {
+  width: 100%;
+}
+.guided-log-record h3 {
+  margin: 0;
+  font: inherit;
+  font-weight: 800;
+}
+.guided-evidence-sources {
+  display: grid;
+  gap: .6rem;
+  padding: .9rem 1rem 1rem;
+  border-top: 1px solid #34434a;
+}
+.guided-evidence-source {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .65rem;
+  align-items: start;
+  padding: .7rem;
+  border: 1px solid #3a4b52;
+  border-radius: 9px;
+  background: #202c31;
+}
+.guided-evidence-source.inspected {
+  border-color: #4d736b;
+}
+.guided-evidence-source > div:first-child {
+  display: grid;
+  gap: .18rem;
+}
+.guided-evidence-source span {
+  color: #8ba0a7;
+  font-size: .65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.guided-evidence-source strong {
+  color: #e0e9eb;
+  font-size: .78rem;
+}
+.guided-evidence-source p {
+  margin: 0;
+  color: #aab8bc;
+  font-size: .72rem;
+  line-height: 1.45;
+}
+.guided-evidence-detail {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: .35rem;
+  padding-top: .45rem;
+  border-top: 1px solid #334147;
+}
+.guided-evidence-detail pre {
+  max-height: 17rem;
+  margin: .25rem 0 0;
+  padding: .65rem;
+  overflow: auto;
+  border-radius: 7px;
+  color: #cfdbde;
+  background: #151e22;
+  font-size: .7rem;
+  white-space: pre-wrap;
+}
+.guided-boundary-classifier,
+.guided-context-tools,
+.guided-console-support {
+  margin: .8rem 1rem;
+  padding: .8rem;
+  border: 1px solid #3a4a50;
+  border-radius: 10px;
+  color: #c7d3d6;
+  background: #202b30;
+}
+.guided-boundary-classifier h3,
+.guided-context-tools h3 {
+  margin: 0 0 .6rem;
+  color: #e0e8ea;
+  font-size: .8rem;
+}
+.guided-boundary-classifier > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .5rem;
+}
+.guided-boundary-classifier article {
+  padding: .65rem;
+  border: 1px solid #3a4a50;
+  border-radius: 8px;
+}
+.guided-boundary-classifier article.active {
+  border-color: #b96a5f;
+  background: #322625;
+}
+.guided-boundary-classifier article strong {
+  color: #dbe6e8;
+  font-size: .72rem;
+}
+.guided-boundary-classifier article p,
+.guided-boundary-classifier > p {
+  margin: .25rem 0 0;
+  color: #aab8bc;
+  font-size: .7rem;
+  line-height: 1.4;
+}
+.guided-context-tools > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+}
+.guided-context-tools a {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .42rem .55rem;
+  border: 1px solid #42535a;
+  border-radius: 7px;
+  color: #d4dfe2;
+  font-size: .7rem;
+  text-decoration: none;
+}
+.guided-console-support {
+  display: grid;
+  gap: .65rem;
+}
+.guided-answer-hints {
+  display: grid;
+  gap: .35rem;
+}
+.guided-answer-hints details {
+  padding: .55rem .65rem;
+  border: 1px solid #dce4e6;
+  border-radius: 8px;
+  background: #fafcfc;
+}
+.guided-answer-hints summary {
+  cursor: pointer;
+  color: #41565d;
+  font-size: .73rem;
+  font-weight: 800;
+}
+.guided-answer-hints p {
+  margin: .4rem 0 0;
+  color: #66777d;
+  font-size: .72rem;
+  line-height: 1.45;
+}
+.guided-workstation-answer {
+  gap: .85rem;
+}
+.guided-workstation-answer .workstation-options > div[role="radiogroup"] {
+  display: grid;
+  gap: .45rem;
+}
+.guided-verification {
+  display: grid;
+  gap: .65rem;
+  padding: .8rem;
+  border: 1px solid #d8e2e4;
+  border-radius: 10px;
+  background: #f8fafb;
+}
+.guided-verification.verified {
+  border-color: #b7d7c9;
+  background: #f0f8f4;
+}
+.guided-verification > div:first-child {
+  display: flex;
+  gap: .55rem;
+  align-items: flex-start;
+}
+.guided-verification p {
+  margin: .15rem 0 0;
+  color: #64757b;
+  font-size: .74rem;
+  line-height: 1.45;
+}
+.guided-verification dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .4rem;
+  margin: 0;
+}
+.guided-verification dl > div {
+  padding: .5rem;
+  border: 1px solid #dce5e7;
+  border-radius: 7px;
+  background: #fff;
+}
+.guided-verification dt {
+  color: #7b898e;
+  font-size: .64rem;
+}
+.guided-verification dd {
+  margin: .18rem 0 0;
+  color: #31484e;
+  font-size: .74rem;
+  font-weight: 800;
+}
+.guided-status-update {
+  display: grid;
+  gap: .35rem;
+}
+.guided-status-update span {
+  color: #41565d;
+  font-size: .74rem;
+  font-weight: 800;
+}
+.guided-status-update textarea {
+  min-height: 6rem;
+  resize: vertical;
+}
+.guided-incident-debrief {
+  display: grid;
+  gap: .35rem;
+}
+.guided-incident-debrief h2,
+.guided-incident-debrief p {
+  margin: 0;
+}
+.guided-incident-debrief > p:not(.eyebrow) {
+  color: #64757b;
+  font-size: .78rem;
+  line-height: 1.5;
+}
+@media (max-width: 760px) {
+  .guided-evidence-source {
+    grid-template-columns: 1fr;
+  }
+  .guided-boundary-classifier > div,
+  .guided-verification dl {
+    grid-template-columns: 1fr;
+  }
+}
+/* === End Milestone 48 === */
