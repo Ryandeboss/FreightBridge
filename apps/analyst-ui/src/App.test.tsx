@@ -3289,7 +3289,8 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     await userEvent.click(screen.getByRole('button', { name: /Apply Fix & Run Again/i }));
 
     expect(await screen.findByTestId('verification-panel')).toHaveTextContent(/SUCCEEDED/i);
-    expect(screen.getByTestId('verification-panel')).toHaveTextContent(/same incident load/i);
+    expect(screen.getByTestId('verification-panel')).toHaveTextContent(/training verification/i);
+    expect(screen.getByTestId('verification-panel')).toHaveTextContent(/no second Apex load is created/i);
     await userEvent.click(screen.getByRole('button', { name: /Complete Lab/i }));
     expect(screen.getByTestId('incident-summary')).toBeInTheDocument();
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('APEX_BAD_AUTH');
@@ -3299,7 +3300,7 @@ test('Training Desk routes healthy progress into the unified workstation and pre
         .filter(([input, init]) => String(input).endsWith('/api/lab/runs') && init?.method === 'POST')
         .map(([, init]) => JSON.parse(String(init?.body)).scenarioKey);
       expect(calls).toContain('APEX_BAD_AUTH');
-      expect(calls).toContain('FULL_SHIPMENT_LIFECYCLE');
+      expect(calls).not.toContain('FULL_SHIPMENT_LIFECYCLE');
     });
 
     await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
@@ -3333,7 +3334,7 @@ test('Training Desk routes healthy progress into the unified workstation and pre
         .filter(([input, init]) => String(input).endsWith('/api/lab/runs') && init?.method === 'POST')
         .map(([, init]) => JSON.parse(String(init?.body)).scenarioKey);
       expect(calls).toContain('APEX_INVALID_JSON');
-      expect(calls).toContain('FULL_SHIPMENT_LIFECYCLE');
+      expect(calls).not.toContain('FULL_SHIPMENT_LIFECYCLE');
     });
 
     await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
@@ -3342,7 +3343,7 @@ test('Training Desk routes healthy progress into the unified workstation and pre
   });
 
   test('Mission 4 separates parsed JSON from contract validation and records analyst notes', async () => {
-    installFetchMock();
+    const fetchMock = installFetchMock();
     window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({ version: 1, completedMissions: ['LEARN_THE_FLOW', 'APEX_BAD_AUTH', 'APEX_INVALID_JSON'] }));
     window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
     window.location.hash = '#/learn/mission/apex-invalid-contract';
@@ -3380,6 +3381,13 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     await chooseIncidentOption(/What should you do next/i, /contract-valid payload/i);
     await userEvent.click(screen.getByRole('button', { name: /Retry with contract-valid payload/i }));
     expect(await screen.findByTestId('verification-panel')).toHaveTextContent(/SUCCEEDED/i);
+    expect(screen.getByTestId('verification-panel')).toHaveTextContent(/TRAINING_VERIFICATION/i);
+    expect(screen.getByTestId('training-verification-note')).toHaveTextContent(/no second Apex load is created/i);
+    const mission4CreateCalls = fetchMock.mock.calls
+      .filter(([input, init]) => String(input).endsWith('/api/lab/runs') && init?.method === 'POST')
+      .map(([, init]) => JSON.parse(String(init?.body)).scenarioKey);
+    expect(mission4CreateCalls).toContain('APEX_INVALID_CONTRACT');
+    expect(mission4CreateCalls).not.toContain('FULL_SHIPMENT_LIFECYCLE');
     await userEvent.type(screen.getByLabelText(/Write Mike/i), 'Mike, JSON parsing passed, contract validation failed, and a contract-valid retry completed healthy recovery.');
     await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
     expect(await screen.findByTestId('incident-debrief')).toHaveTextContent(/MISSION COMPLETE/i);
