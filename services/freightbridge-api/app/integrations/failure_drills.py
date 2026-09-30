@@ -681,6 +681,11 @@ class ControlledFailureDrillService:
     request = self._safe_request(definition, payload_preview=metadata['x12Preview'])
     request.update({'remotePath': remote_path, 'fileName': filename})
     response = self._success_response(definition, observed, payload_preview=metadata['x12Preview'])
+    result_summary = response.get('_resultSummary')
+    if isinstance(result_summary, dict):
+      failure_drill = result_summary.get('failureDrill')
+      if isinstance(failure_drill, dict):
+        failure_drill['x12Fault'] = metadata
     response.update({
       'sftp': {
         'fileName': filename,
