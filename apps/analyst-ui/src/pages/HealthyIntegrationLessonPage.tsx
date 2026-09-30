@@ -34,7 +34,7 @@ const apexJson: ConsoleLine[] = [
   { text: 'Authorization: Bearer ••••••••', annotation: '`Bearer` = Apex must prove it is allowed to call FreightBridge. The real token is hidden here.', quiet: true },
   { text: '' },
   { text: '{' },
-  { text: '  "loadId": "LOAD500",', annotation: '`LOAD500` = Apex's ID for this load. FreightBridge keeps this ID so it can recognize the same shipment later.', emphasis: true },
+  { text: '  "loadId": "LOAD500",', annotation: '`LOAD500` = the load ID Apex assigned. FreightBridge keeps it so the same shipment can be recognized later.', emphasis: true },
   { text: '  "bolNumber": "BOL900",', annotation: '`BOL900` = the Bill of Lading number for this freight.' },
   { text: '  "purchaseOrderNumber": "PO111",', annotation: '`PO111` = the purchase-order number tied to this load.' },
   { text: '  "customerReference": "CUST-REF-500",', annotation: '`CUST-REF-500` = another customer reference that can help identify the load.' },
@@ -105,9 +105,9 @@ const canonicalJson: ConsoleLine[] = [
 ];
 
 const x12Tender: ConsoleLine[] = [
-  { text: 'ISA*00*          *00*          *ZZ*FREIGHTBRIDGE  *ZZ*MWCX           *261001*1400*U*00401*000000901*0*T*:~', annotation: '`FREIGHTBRIDGE` = sender. `MWCX` = Midwest receiver. `261001` = Oct 1, 2026. `1400` = 14:00. `00401` = X12 version. `000000901` = this file's control ID.', quiet: true },
+  { text: 'ISA*00*          *00*          *ZZ*FREIGHTBRIDGE  *ZZ*MWCX           *261001*1400*U*00401*000000901*0*T*:~', annotation: '`FREIGHTBRIDGE` = sender. `MWCX` = Midwest receiver. `261001` = Oct 1, 2026. `1400` = 14:00. `00401` = X12 version. `000000901` = the control ID for this file.', quiet: true },
   { text: 'GS*SM*FREIGHTBRIDGE*MWCX*20261001*1400*901*X*004010~', annotation: '`SM` = this group contains load-tender messages. `FREIGHTBRIDGE` = sender. `MWCX` = receiver. `004010` = the X12 version/profile being used.', quiet: true },
-  { text: 'ST*204*0001~', annotation: '`204` = Load Tender. `0001` = this 204's transaction control number.', emphasis: true },
+  { text: 'ST*204*0001~', annotation: '`204` = Load Tender. `0001` = the control number for this 204.', emphasis: true },
   { text: 'B2**MWCX**LOAD500**PP~', annotation: '`MWCX` = Midwest Carrier. `LOAD500` = the load being offered. `PP` = the payment-method code used by this training profile.', emphasis: true },
   { text: 'L11*BOL900*BM~', annotation: '`BOL900` = Bill of Lading number. `BM` tells Midwest that the value before it is a BOL.' },
   { text: 'L11*PO111*PO~', annotation: '`PO111` = purchase-order number. `PO` tells Midwest that the value before it is a PO.' },
@@ -131,7 +131,7 @@ const responses: ConsoleLine[] = [
   { text: '997 FUNCTIONAL ACKNOWLEDGMENT', annotation: '`997` = technical acknowledgment. It says whether Midwest could receive/read the 204; it does not say whether Midwest accepted the load.', emphasis: true },
   { text: 'ISA*00*          *00*          *ZZ*MWCX           *ZZ*FREIGHTBRIDGE  *261001*1410*U*00401*000000902*0*T*:~', annotation: '`MWCX` = sender now. `FREIGHTBRIDGE` = receiver now.', quiet: true },
   { text: 'GS*FA*MWCX*FREIGHTBRIDGE*20261001*1410*902*X*004010~', annotation: '`FA` = Functional Acknowledgment group. This group contains the 997.', quiet: true },
-  { text: 'ST*997*0002~', annotation: '`997` = Functional Acknowledgment. `0002` = this 997's transaction control number.' },
+  { text: 'ST*997*0002~', annotation: '`997` = Functional Acknowledgment. `0002` = the control number for this 997.' },
   { text: 'AK1*SM*901~', annotation: '`SM` = the original load-tender group. `901` points back to the original GS control number.' },
   { text: 'AK2*204*0001~', annotation: '`204` = the document being acknowledged. `0001` points back to `ST*204*0001`.' },
   { text: 'AK5*A~', annotation: '`A` = the 204 passed the technical EDI check.', emphasis: true },
@@ -140,10 +140,10 @@ const responses: ConsoleLine[] = [
   { text: 'GE*1*902~', annotation: '`GE` = end of the 997 group. `902` matches the GS control number.', quiet: true },
   { text: 'IEA*1*000000902~', annotation: '`IEA` = end of the 997 file. `000000902` matches the ISA control ID.', quiet: true },
   { text: '' },
-  { text: '990 TENDER RESPONSE', annotation: '`990` = the carrier's business answer to the 204: accept or reject the load.', emphasis: true },
-  { text: 'ISA*00*          *00*          *ZZ*MWCX           *ZZ*FREIGHTBRIDGE  *261001*1445*U*00401*000000903*0*T*:~', annotation: '`MWCX` = Midwest is sending the decision. `FREIGHTBRIDGE` = FreightBridge is receiving it. `000000903` = this file's control ID.', quiet: true },
+  { text: '990 TENDER RESPONSE', annotation: '`990` = the carrier business answer to the 204: accept or reject the load.', emphasis: true },
+  { text: 'ISA*00*          *00*          *ZZ*MWCX           *ZZ*FREIGHTBRIDGE  *261001*1445*U*00401*000000903*0*T*:~', annotation: '`MWCX` = Midwest is sending the decision. `FREIGHTBRIDGE` = FreightBridge is receiving it. `000000903` = the control ID for this file.', quiet: true },
   { text: 'GS*GF*MWCX*FREIGHTBRIDGE*20261001*1445*903*X*004010~', annotation: '`GF` = the group code used by this project for the 990 response. `004010` = X12 version/profile.', quiet: true },
-  { text: 'ST*990*0003~', annotation: '`990` = Response to Load Tender. `0003` = this 990's transaction control number.' },
+  { text: 'ST*990*0003~', annotation: '`990` = Response to Load Tender. `0003` = the control number for this 990.' },
   { text: 'B1*MWCX*LOAD500*20261001*A~', annotation: '`LOAD500` = the load. Final `A` = Midwest ACCEPTED the load.', emphasis: true },
   { text: 'L11*BOL900*BM~', annotation: '`BOL900` = the same Bill of Lading from the 204. `BM` says it is a BOL.' },
   { text: 'L11*PO111*PO~', annotation: '`PO111` = the same purchase-order number from the 204. `PO` says it is a purchase order.' },
@@ -154,9 +154,9 @@ const responses: ConsoleLine[] = [
 ];
 
 const status214: ConsoleLine[] = [
-  { text: 'ISA*00*          *00*          *ZZ*MWCX           *ZZ*FREIGHTBRIDGE  *261001*2015*U*00401*000000904*0*T*:~', annotation: '`MWCX` = Midwest is sending this status. `FREIGHTBRIDGE` = FreightBridge is receiving it. `000000904` = this file's control ID.', quiet: true },
+  { text: 'ISA*00*          *00*          *ZZ*MWCX           *ZZ*FREIGHTBRIDGE  *261001*2015*U*00401*000000904*0*T*:~', annotation: '`MWCX` = Midwest is sending this status. `FREIGHTBRIDGE` = FreightBridge is receiving it. `000000904` = the control ID for this file.', quiet: true },
   { text: 'GS*QM*MWCX*FREIGHTBRIDGE*20261001*2015*904*X*004010~', annotation: '`QM` = this group contains shipment-status messages. `004010` = the X12 version/profile.', quiet: true },
-  { text: 'ST*214*0004~', annotation: '`214` = Shipment Status message. `0004` = this 214's transaction control number.', emphasis: true },
+  { text: 'ST*214*0004~', annotation: '`214` = Shipment Status message. `0004` = the control number for this 214.', emphasis: true },
   { text: 'B10*MWC900500*LOAD500*MWCX~', annotation: '`MWC900500` = Midwest's load number. `LOAD500` = FreightBridge/Apex load number. `MWCX` = Midwest Carrier.', emphasis: true },
   { text: 'L11*BOL900*BM~', annotation: '`BOL900` = the same Bill of Lading used earlier. It helps FreightBridge match this status to the right load.' },
   { text: 'L11*PO111*PO~', annotation: '`PO111` = the same purchase-order number used earlier.' },
