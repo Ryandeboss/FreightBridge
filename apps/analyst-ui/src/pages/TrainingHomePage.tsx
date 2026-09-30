@@ -1,17 +1,12 @@
 import {
-  AlertTriangle,
   ArrowRight,
   Award,
   CheckCircle2,
   CircleDot,
   Compass,
-  Map,
-  Network,
   Repeat2,
   Route,
-  Search,
   Workflow,
-  Wrench,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { EntityCard, LockedMarker } from '../components/training/TrainingComponents';
@@ -275,18 +270,6 @@ export function TrainingHomePage() {
           </div>
         </article>
 
-        <article className="panel ops-tools-card">
-          <div className="ops-section-heading">
-            <div><p className="eyebrow">Your Desk</p><h2>Investigate without leaving the workstation</h2></div>
-          </div>
-          <div className="ops-tool-links">
-            <Link to="/learn/tools/transactions"><Search size={18} /><span><strong>Transactions</strong><small>Find what FreightBridge processed</small></span></Link>
-            <Link to="/learn/tools/trace"><Network size={18} /><span><strong>Business Trace</strong><small>Follow one load end to end</small></span></Link>
-            <Link to="/learn/tools/errors"><AlertTriangle size={18} /><span><strong>Errors</strong><small>Inspect recorded failure evidence</small></span></Link>
-            <Link to="/learn/tools/mappings"><Wrench size={18} /><span><strong>Mappings</strong><small>Verify translation profiles</small></span></Link>
-            <Link to="/learn/tools/partners"><Map size={18} /><span><strong>Partners</strong><small>Check capabilities and protocol assumptions</small></span></Link>
-          </div>
-        </article>
       </div>
 
       {orientationComplete && (

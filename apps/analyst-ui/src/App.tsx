@@ -24,11 +24,6 @@ import { TrainingHomePage } from './pages/TrainingHomePage';
 import { TransactionDetailPage } from './pages/TransactionDetailPage';
 import { TransactionsPage } from './pages/TransactionsPage';
 
-function OrientationRoute() {
-  const { isAuthenticated } = useOperationsSession();
-  return isAuthenticated ? <FirstDayOrientationPage /> : <Navigate to="/learn" replace />;
-}
-
 function TrainingRoute() {
   const { isAuthenticated } = useOperationsSession();
   return isAuthenticated ? <TrainingShell /> : <Navigate to="/learn" replace />;
@@ -46,9 +41,9 @@ function AppRoutes() {
         <Route index element={<Navigate to="/learn" replace />} />
         <Route path="/learn" element={<TrainingEntryPage />} />
         <Route path="/access" element={<AccessPage />} />
-        <Route path="/learn/orientation" element={<OrientationRoute />} />
         <Route element={<TrainingRoute />}>
           <Route path="/learn/desk" element={<TrainingHomePage />} />
+          <Route path="/learn/orientation" element={<FirstDayOrientationPage />} />
           <Route path="/learn/healthy/apex-tender" element={<HealthyApexTenderPage />} />
           <Route path="/learn/healthy/mapping-204" element={<HealthyMapping204Page />} />
           <Route path="/learn/healthy/acknowledgments" element={<HealthyResponsesPage />} />
