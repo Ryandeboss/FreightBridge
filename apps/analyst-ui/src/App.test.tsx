@@ -2517,31 +2517,49 @@ test('teaches the healthy flow as five clean animated scenes without calling the
   expect(scene1).toHaveTextContent(/Integration platform/i);
   expect(scene1).toHaveTextContent(/POST \/api\/integrations\/apex\/load-tenders/i);
   expect(scene1).toHaveTextContent(/"loadId": "LOAD500"/i);
-  expect(scene1).toHaveTextContent(/not the X12 204 yet/i);
+  expect(scene1).toHaveTextContent(/"commodityDescription": "Packaged auto parts"/i);
+  expect(scene1).toHaveTextContent(/"scheduledDateTime": "2026-10-02T18:00:00Z"/i);
+  expect(scene1).toHaveTextContent(/Apex business identifier for this load/i);
+  expect(scene1).toHaveTextContent(/What this request means/i);
+  expect(scene1).toHaveTextContent(/has not become X12 yet/i);
 
   await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
   const scene2 = screen.getByTestId('healthy-scene-canonical');
   expect(scene2).toHaveTextContent(/canonical shipment/i);
-  expect(scene2).toHaveTextContent(/shipmentNumber: LOAD500/i);
+  expect(scene2).toHaveTextContent(/"shipment_number": "LOAD500"/i);
+  expect(scene2).toHaveTextContent(/"tender_status": "PENDING"/i);
+  expect(scene2).toHaveTextContent(/neutral business representation/i);
   expect(within(curriculum).getByTestId('curriculum-module-healthy')).toHaveTextContent(/Scene 2 of 5/i);
 
   await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
   const scene3 = screen.getByTestId('healthy-scene-204');
   expect(scene3).toHaveTextContent(/creates the X12 204 load tender/i);
+  expect(scene3).toHaveTextContent(/ISA\*00/i);
   expect(scene3).toHaveTextContent(/ST\*204\*0001~/i);
   expect(scene3).toHaveTextContent(/B2\*\*MWCX\*\*LOAD500/i);
+  expect(scene3).toHaveTextContent(/L3\*42000\*G\*\*\*22~/i);
+  expect(scene3).toHaveTextContent(/IEA\*1\*000000901~/i);
+  expect(scene3).toHaveTextContent(/Motor Carrier Load Tender/i);
+  expect(scene3).toHaveTextContent(/How to read this 204/i);
 
   await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
   const scene4 = screen.getByTestId('healthy-scene-997-990');
-  expect(scene4).toHaveTextContent(/997 ≠ carrier acceptance/i);
-  expect(scene4).toHaveTextContent(/990 is the business tender decision/i);
+  expect(scene4).toHaveTextContent(/AK1\*SM\*901~/i);
+  expect(scene4).toHaveTextContent(/AK9\*A\*1\*1\*1~/i);
+  expect(scene4).toHaveTextContent(/B1\*MWCX\*LOAD500\*20261001\*A~/i);
+  expect(scene4).toHaveTextContent(/technical EDI acknowledgment only/i);
+  expect(scene4).toHaveTextContent(/business answer/i);
 
   await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
   const scene5 = screen.getByTestId('healthy-scene-214');
-  expect(scene5).toHaveTextContent(/AF → PICKED_UP/i);
-  expect(scene5).toHaveTextContent(/X6 → IN_TRANSIT/i);
-  expect(scene5).toHaveTextContent(/X1 → ARRIVED/i);
-  expect(scene5).toHaveTextContent(/D1 → DELIVERED/i);
+  expect(scene5).toHaveTextContent(/ST\*214\*0004~/i);
+  expect(scene5).toHaveTextContent(/B10\*MWC900500\*LOAD500\*MWCX~/i);
+  expect(scene5).toHaveTextContent(/AT7\*X6\*\*\*\*20261001\*2015\*UT~/i);
+  expect(scene5).toHaveTextContent(/SE\*7\*0004~/i);
+  expect(scene5).toHaveTextContent(/IEA\*1\*000000904~/i);
+  expect(scene5).toHaveTextContent(/AF maps to PICKED_UP/i);
+  expect(scene5).toHaveTextContent(/X6 maps to IN_TRANSIT/i);
+  expect(scene5).toHaveTextContent(/How FreightBridge turns a 214/i);
 
   const labCreateCalls = fetchMock.mock.calls.filter(
     ([input, init]) => String(input).endsWith('/api/lab/runs') && init?.method === 'POST',
