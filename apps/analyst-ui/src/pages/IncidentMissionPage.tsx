@@ -68,6 +68,7 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
   const expected = readRecord(failureDrill?.expected);
   const isContractOrMappingMission = mission.scenarioKey === 'APEX_INVALID_CONTRACT' || mission.scenarioKey === 'X12_214_UNSUPPORTED_STATUS';
   const isProfileVersionMission = mission.scenarioKey === 'X12_214_WRONG_VERSION';
+  const isTransportBoundaryMission = mission.scenarioKey === 'SFTP_HOST_KEY_MISMATCH';
   const recoveryEvidence = useMemo(
     () => readRecord(recoveryRun?.resultSummary.recovery),
     [recoveryRun],
@@ -76,15 +77,23 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
   const requiredEvidenceInspected = requiredEvidenceIds.every((id) => inspectedEvidenceIds.includes(id));
   const canDiagnose = requiredEvidenceInspected && lastHealthyId === mission.correctLastHealthyId && diagnosisId === mission.correctDiagnosisId;
   const canPlan = planId === mission.correctPlanId;
-  const recoveryCorrelated = Boolean(
-    incidentRun &&
-    recoveryRun &&
-    recoveryRun.businessIdentifier === incidentRun.businessIdentifier &&
-    (
-      mission.missionNumber < 5 ||
-      recoveryEvidence?.sameBusinessIdentifier === true
-    )
-  );
+  const recoveryCorrelated = isTransportBoundaryMission
+    ? Boolean(
+        recoveryRun &&
+        recoveryEvidence?.status === 'SUCCEEDED' &&
+        recoveryEvidence?.connectionVerified === true &&
+        recoveryEvidence?.transactionCreated === false &&
+        recoveryEvidence?.messageReplayAttempted === false
+      )
+    : Boolean(
+        incidentRun &&
+        recoveryRun &&
+        recoveryRun.businessIdentifier === incidentRun.businessIdentifier &&
+        (
+          mission.missionNumber < 5 ||
+          recoveryEvidence?.sameBusinessIdentifier === true
+        )
+      );
   const selectedLastHealthy = mission.lastHealthyOptions.find((option) => option.id === lastHealthyId);
   const selectedDiagnosis = mission.diagnosisOptions.find((option) => option.id === diagnosisId);
   const selectedPlan = mission.planOptions.find((option) => option.id === planId);
@@ -154,16 +163,23 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
       if (mission.missionNumber >= 5) {
         const recoveredRun = await recoverLabRun(token, incidentRun.id);
         const proof = readRecord(recoveredRun.resultSummary.recovery);
-        const correlated =
-          recoveredRun.businessIdentifier === incidentRun.businessIdentifier &&
-          proof?.sameBusinessIdentifier === true;
-        const succeeded = proof?.status === 'SUCCEEDED' && correlated;
+        const verified = mission.scenarioKey === 'SFTP_HOST_KEY_MISMATCH'
+          ? proof?.connectionVerified === true
+            && proof?.transactionCreated === false
+            && proof?.messageReplayAttempted === false
+          : recoveredRun.businessIdentifier === incidentRun.businessIdentifier
+            && proof?.sameBusinessIdentifier === true;
+        const succeeded = proof?.status === 'SUCCEEDED' && verified;
         setRecoveryRun(recoveredRun);
         setRecoveryState(succeeded ? 'SUCCEEDED' : 'FAILED');
         if (succeeded) {
           setPhase('VERIFY');
         } else {
-          setError('Server-backed recovery did not produce complete same-load verification evidence.');
+          setError(
+            mission.scenarioKey === 'SFTP_HOST_KEY_MISMATCH'
+              ? 'Server-backed recovery did not produce complete SFTP connectivity verification evidence.'
+              : 'Server-backed recovery did not produce complete same-load verification evidence.',
+          );
         }
         return;
       }
@@ -349,6 +365,9 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
               <IncidentAnalystToolbox mission={mission} run={incidentRun} observed={observed} />
             </>
           )}
+          {isTransportBoundaryMission && (
+            <TransportBoundaryPanel observed={observed} />
+          )}
 
           <article className="panel">
             <div className="panel-header">
@@ -478,9 +497,11 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
             </div>
             <p>
               {mission.remediationLabel}.{' '}
-              {mission.missionNumber >= 5
-                ? 'FreightBridge will perform the mission-specific server-backed remediation on the same incident load and return concrete recovery evidence.'
-                : 'FreightBridge will retry the same incident load through the clean training path, then verify that the previously failing flow now progresses normally.'}
+              {isTransportBoundaryMission
+                ? 'FreightBridge will verify the real configured SFTP trust path and required directories without replaying business traffic.'
+                : mission.missionNumber >= 5
+                  ? 'FreightBridge will perform the mission-specific server-backed remediation on the same incident load and return concrete recovery evidence.'
+                  : 'FreightBridge will retry the same incident load through the clean training path, then verify that the previously failing flow now progresses normally.'}
             </p>
             <div className="lab-actions">
               <button className="primary-button" type="button" onClick={runRecovery} disabled={!canPlan || working || recoveryState === 'SUCCEEDED'}>
@@ -506,18 +527,33 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
             {recoveryRun && (
               <>
                 <dl className="definition-grid">
-                <div><dt>Incident Load</dt><dd>{incidentRun.businessIdentifier}</dd></div>
-                <div><dt>Recovery Path</dt><dd>{mission.recoveryMode === 'INCIDENT_VERIFICATION' ? 'Protected incident verification' : 'Corrected healthy lifecycle'}</dd></div>
-                <div><dt>Recovery Load</dt><dd>{recoveryRun.businessIdentifier}</dd></div>
-                <div>
-                  <dt>Correlation</dt>
-                  <dd data-testid="recovery-correlation">
-                    {recoveryCorrelated ? 'MATCHED - same incident load' : 'MISMATCH'}
-                  </dd>
-                </div>
-                <div><dt>Recovery Status</dt><dd>{mission.missionNumber >= 5 ? String(recoveryEvidence?.status ?? recoveryRun.status) : recoveryRun.status}</dd></div>
-                <div><dt>Tender Status</dt><dd>{String(recoveryRun.resultSummary.tenderStatus ?? 'Pending')}</dd></div>
-                <div><dt>Shipment Status</dt><dd>{String(recoveryEvidence?.normalizedShipmentStatus ?? recoveryRun.resultSummary.shipmentStatus ?? 'Pending')}</dd></div>
+                {isTransportBoundaryMission ? (
+                  <>
+                    <div><dt>Recovery Target</dt><dd>Midwest SFTP trust and connectivity</dd></div>
+                    <div><dt>Original Transaction</dt><dd>NONE - failure occurred before ingestion</dd></div>
+                    <div><dt>Recovery Status</dt><dd>{String(recoveryEvidence?.status ?? recoveryRun.status)}</dd></div>
+                    <div><dt>Connection Verified</dt><dd>{recoveryEvidence?.connectionVerified === true ? 'YES' : 'NO'}</dd></div>
+                    <div><dt>Host-Key Pinning</dt><dd>{String(recoveryEvidence?.hostKeyPinning ?? 'Pending')}</dd></div>
+                    <div><dt>Transaction Created</dt><dd>{recoveryEvidence?.transactionCreated === true ? 'YES' : 'NO'}</dd></div>
+                    <div><dt>Message Replay Attempted</dt><dd>{recoveryEvidence?.messageReplayAttempted === true ? 'YES' : 'NO'}</dd></div>
+                    <div><dt>Required Directories</dt><dd>{formatDirectoryReadiness(recoveryEvidence?.directories)}</dd></div>
+                  </>
+                ) : (
+                  <>
+                    <div><dt>Incident Load</dt><dd>{incidentRun.businessIdentifier}</dd></div>
+                    <div><dt>Recovery Path</dt><dd>{mission.recoveryMode === 'INCIDENT_VERIFICATION' ? 'Protected incident verification' : 'Corrected healthy lifecycle'}</dd></div>
+                    <div><dt>Recovery Load</dt><dd>{recoveryRun.businessIdentifier}</dd></div>
+                    <div>
+                      <dt>Correlation</dt>
+                      <dd data-testid="recovery-correlation">
+                        {recoveryCorrelated ? 'MATCHED - same incident load' : 'MISMATCH'}
+                      </dd>
+                    </div>
+                    <div><dt>Recovery Status</dt><dd>{mission.missionNumber >= 5 ? String(recoveryEvidence?.status ?? recoveryRun.status) : recoveryRun.status}</dd></div>
+                    <div><dt>Tender Status</dt><dd>{String(recoveryRun.resultSummary.tenderStatus ?? 'Pending')}</dd></div>
+                    <div><dt>Shipment Status</dt><dd>{String(recoveryEvidence?.normalizedShipmentStatus ?? recoveryRun.resultSummary.shipmentStatus ?? 'Pending')}</dd></div>
+                  </>
+                )}
                 {mission.missionNumber >= 5 && (
                   <>
                     <div><dt>Recovery Action</dt><dd>{String(recoveryEvidence?.recoveryKind ?? 'Unknown')}</dd></div>
@@ -623,7 +659,9 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
                 <dt>Verification</dt>
                 <dd>
                   {recoveryRun
-                    ? `${recoveryRun.status}; ${recoveryCorrelated ? 'same load correlated' : 'load correlation mismatch'}`
+                    ? isTransportBoundaryMission
+                      ? `${String(recoveryEvidence?.status ?? recoveryRun.status)}; trusted SFTP connectivity verified without transaction replay`
+                      : `${recoveryRun.status}; ${recoveryCorrelated ? 'same load correlated' : 'load correlation mismatch'}`
                     : 'Not recorded'}
                 </dd>
               </div>
@@ -645,6 +683,46 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
   );
 }
 
+
+
+
+function TransportBoundaryPanel({
+  observed,
+}: {
+  observed: Record<string, unknown> | null;
+}) {
+  return (
+    <article className="panel transport-boundary-panel" data-testid="transport-boundary-panel">
+      <div className="panel-header">
+        <div>
+          <p className="eyebrow">Milestone 37 · Pre-Transaction Transport Boundary</p>
+          <h2>No integration transaction exists yet</h2>
+        </div>
+        <span className="badge badge-danger">{String(observed?.errorCode ?? 'SFTP_HOST_KEY_MISMATCH')}</span>
+      </div>
+      <p className="muted-text">
+        The controlled probe reaches SSH host identity verification and stops there. FreightBridge never reaches authentication, directory operations, X12 parsing, or transaction persistence.
+      </p>
+      <div className="transport-boundary-flow">
+        <span className="complete">Endpoint configured</span>
+        <span className="failed">Host-key verification failed</span>
+        <span>Authentication not reached</span>
+        <span>File operation not reached</span>
+        <span>Transaction not created</span>
+      </div>
+      <div className="analyst-question">
+        <AlertTriangle size={17} />
+        <div>
+          <strong>Do not invent missing evidence</strong>
+          <span>Transaction Search, Processing Log, and Error Detail are not the primary evidence sources when the failure occurs before an integration transaction is created.</span>
+        </div>
+      </div>
+      <Link className="secondary-button compact-inline-action" to="/learn/tools/partners?partnerCode=MWCX">
+        Open Midwest Partner Profile
+      </Link>
+    </article>
+  );
+}
 
 
 function ProfileVersionCompatibilityPanel({
@@ -822,6 +900,14 @@ function toolHref(tool: string, values: Record<string, string>): string {
 
 function stringOrNull(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function formatDirectoryReadiness(value: unknown): string {
+  const directories = readRecord(value);
+  if (!directories) return 'Pending';
+  return Object.entries(directories)
+    .map(([name, ready]) => `/${name}: ${ready === true ? 'READY' : 'NOT READY'}`)
+    .join(' · ');
 }
 
 
