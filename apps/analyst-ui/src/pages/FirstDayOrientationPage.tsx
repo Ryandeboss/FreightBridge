@@ -109,7 +109,7 @@ export function FirstDayOrientationPage() {
               Previous
             </button>
           ) : (
-            <Link className="secondary-button" to="/learn">Back to Ops Desk</Link>
+            <Link className="secondary-button" to="/learn/desk">Back to Ops Desk</Link>
           )}
         </div>
 

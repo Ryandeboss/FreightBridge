@@ -31,7 +31,7 @@ export function IncidentMissionPage() {
   const mission = findIncidentMissionBySlug(missionSlug);
 
   if (!mission) {
-    return <Navigate to="/learn" replace />;
+    return <Navigate to="/learn/desk" replace />;
   }
 
   const progress = loadTrainingProgress();
@@ -46,7 +46,7 @@ export function IncidentMissionPage() {
     hasCompletedMission(progress, mission.id);
 
   if (!roadmapPrerequisiteSatisfied || !finalShiftPrerequisiteSatisfied) {
-    return <Navigate to="/learn" replace />;
+    return <Navigate to="/learn/desk" replace />;
   }
 
   return <IncidentMission mission={mission} />;
@@ -237,7 +237,7 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
 
   return (
     <section className="training-stack" data-testid="incident-mission-page">
-      <Link className="secondary-button training-back-link" to="/learn">
+      <Link className="secondary-button training-back-link" to="/learn/desk">
         <ArrowLeft size={16} />
         Training Desk
       </Link>
@@ -693,7 +693,7 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
             {mission.debrief.map((item) => <li key={item}>{item}</li>)}
           </ul>
           <div className="lab-actions">
-            <Link className="primary-button" to="/learn">Return to Training Desk</Link>
+            <Link className="primary-button" to="/learn/desk">Return to Training Desk</Link>
             <button className="secondary-button" type="button" onClick={startIncident} disabled={working} data-testid={`replay-incident-${mission.id}`}>
               <RefreshCw size={16} />
               Replay Incident

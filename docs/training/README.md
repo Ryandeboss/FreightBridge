@@ -1,6 +1,6 @@
 # FreightBridge Training Mode
 
-Training Mode turns FreightBridge into a guided workplace simulation for a new FreightBridge Integration Support Analyst. The default authenticated experience is `#/learn`; the original technical workspace remains available as the Advanced Console.
+Training Mode turns FreightBridge into a guided workplace simulation for a new FreightBridge Integration Support Analyst. The public front door is `#/learn`: a deliberately minimal three-company entry screen with no console navigation or technical clutter. New learners choose **Begin Your Journey**, complete the small access step, and enter orientation; returning learners choose **Continue Training**, validate access, and resume the workstation at `#/learn/desk`. The original technical workspace remains available as the Advanced Console.
 
 ## What The Learner Does
 
@@ -86,6 +86,8 @@ The UI does not claim partner-side facts FreightBridge cannot observe.
 
 ## Training Progress
 
+The M41 journey-start state is browser-local as well; this milestone does not introduce learner accounts yet.
+
 Mission progress is stored in browser `localStorage` under:
 
 ```text
@@ -98,15 +100,16 @@ After Mission 10, the Training Desk switches to a **10 / 10 Training Complete** 
 
 ## Manual Acceptance
 
-1. Unlock the deployed app with the operations token.
-2. Confirm the default route is `#/learn`.
-3. Complete/review First-Day Orientation.
-4. Complete the four-part guided healthy flow and verify 997 is technical acknowledgment while 990 is the business tender decision.
-5. Complete Missions 1–9 using the real controlled failure drills.
-6. Complete the Replay & Sequence Clinic and verify exact replay side effects are skipped while late event history does not regress `DELIVERED`.
-7. Confirm Mission 10 unlocks only after advanced practice.
-8. Complete Mission 10 by diagnosing `SHIPMENT_NOT_FOUND` at business validation and correcting the B10 shipment reference.
-9. Return to the Training Desk and confirm the completed state shows **10 / 10**, inbox count **0**, and **No training incidents waiting**.
-10. Open the Advanced Console and confirm the full operations/configuration workspace remains available.
+1. Open the deployed app and confirm the first screen is the clean `#/learn` three-company entry with no token field, mission board, or Ops Desk navigation.
+2. Confirm Apex Logistics, FreightBridge, and Midwest Carrier are the only three company cards and **Begin Your Journey** is the primary action.
+3. Choose **Begin Your Journey**, enter the access key on the second-step access screen, and confirm the app opens First-Day Orientation.
+4. Complete/review First-Day Orientation.
+5. Complete the four-part guided healthy flow and verify 997 is technical acknowledgment while 990 is the business tender decision.
+6. Complete Missions 1–9 using the real controlled failure drills.
+7. Complete the Replay & Sequence Clinic and verify exact replay side effects are skipped while late event history does not regress `DELIVERED`.
+8. Confirm Mission 10 unlocks only after advanced practice.
+9. Complete Mission 10 by diagnosing `SHIPMENT_NOT_FOUND` at business validation and correcting the B10 shipment reference.
+10. Return to the Training Desk and confirm the completed state shows **10 / 10**, inbox count **0**, and **No training incidents waiting**.
+11. Open the Advanced Console and confirm the full operations/configuration workspace remains available.
 
 See [FreightBridge employee POV](freightbridge-employee-pov.md), [Healthy integration baseline](healthy-integration-baseline.md), and [Incident game loop](incident-game-loop.md) for the underlying training model.

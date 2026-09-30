@@ -209,7 +209,7 @@ export function HealthyResponsesPage() {
 
   return (
     <section className="healthy-guide healthy-response-page" data-testid="healthy-responses-page">
-      <Link className="secondary-button training-back-link" to="/learn"><ArrowLeft size={16} />Ops Desk</Link>
+      <Link className="secondary-button training-back-link" to="/learn/desk"><ArrowLeft size={16} />Ops Desk</Link>
 
       <header className="healthy-guide-header">
         <div>
@@ -391,7 +391,7 @@ function StepEvidence({ step }: { step: LabStep }) {
 function RecoveryState({ title, detail, runId }: { title: string; detail: string; runId?: string }) {
   return (
     <section className="healthy-guide" data-testid="healthy-response-recovery">
-      <Link className="secondary-button training-back-link" to="/learn"><ArrowLeft size={16} />Ops Desk</Link>
+      <Link className="secondary-button training-back-link" to="/learn/desk"><ArrowLeft size={16} />Ops Desk</Link>
       <article className="panel training-alert" role="alert">
         <AlertTriangle size={20} />
         <div>

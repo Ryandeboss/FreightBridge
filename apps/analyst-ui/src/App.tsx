@@ -19,23 +19,30 @@ import { LearnTheFlowMissionPage } from './pages/LearnTheFlowMissionPage';
 import { MappingDetailPage, MappingsPage } from './pages/MappingsPage';
 import { PartnerDetailPage, PartnersPage } from './pages/PartnersPage';
 import { ReplaySequencePracticePage } from './pages/ReplaySequencePracticePage';
+import { TrainingEntryPage } from './pages/TrainingEntryPage';
 import { TrainingHomePage } from './pages/TrainingHomePage';
 import { TransactionDetailPage } from './pages/TransactionDetailPage';
 import { TransactionsPage } from './pages/TransactionsPage';
 
-function AppRoutes() {
+function TrainingRoute() {
   const { isAuthenticated } = useOperationsSession();
+  return isAuthenticated ? <TrainingShell /> : <Navigate to="/learn" replace />;
+}
 
-  if (!isAuthenticated) {
-    return <AccessPage />;
-  }
+function ConsoleRoute() {
+  const { isAuthenticated } = useOperationsSession();
+  return isAuthenticated ? <AppShell /> : <Navigate to="/learn" replace />;
+}
 
+function AppRoutes() {
   return (
     <HashRouter>
       <Routes>
-        <Route element={<TrainingShell />}>
-          <Route index element={<Navigate to="/learn" replace />} />
-          <Route path="/learn" element={<TrainingHomePage />} />
+        <Route index element={<Navigate to="/learn" replace />} />
+        <Route path="/learn" element={<TrainingEntryPage />} />
+        <Route path="/access" element={<AccessPage />} />
+        <Route element={<TrainingRoute />}>
+          <Route path="/learn/desk" element={<TrainingHomePage />} />
           <Route path="/learn/orientation" element={<FirstDayOrientationPage />} />
           <Route path="/learn/healthy/apex-tender" element={<HealthyApexTenderPage />} />
           <Route path="/learn/healthy/mapping-204" element={<HealthyMapping204Page />} />
@@ -46,7 +53,7 @@ function AppRoutes() {
           <Route path="/learn/tools/:tool" element={<AnalystToolsPage />} />
           <Route path="/learn/practice/replay-sequence" element={<ReplaySequencePracticePage />} />
         </Route>
-        <Route element={<AppShell />}>
+        <Route element={<ConsoleRoute />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/transactions" element={<TransactionsPage />} />
           <Route path="/transactions/:transactionId" element={<TransactionDetailPage />} />

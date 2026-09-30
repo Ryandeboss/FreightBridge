@@ -2248,15 +2248,22 @@ async function completeIncidentMission({
 }
 
 describe('Analyst Console', () => {
-  test('validates token at runtime and stores it only in session storage', async () => {
+  test('starts on the public journey entry, then validates access and opens orientation', async () => {
     const fetchMock = installFetchMock();
     render(<App />);
 
-    await userEvent.type(screen.getByLabelText(/operations bearer token/i), token);
-    await userEvent.click(screen.getByRole('button', { name: /unlock console/i }));
+    expect(await screen.findByTestId('journey-entry-page')).toBeInTheDocument();
+    expect(screen.queryByLabelText(/access key/i)).not.toBeInTheDocument();
 
-    expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
-    expect(window.location.hash).toBe('#/learn');
+    await userEvent.click(screen.getByRole('link', { name: /Begin Your Journey/i }));
+    expect(await screen.findByTestId('journey-access-page')).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText(/access key/i), token);
+    await userEvent.click(screen.getByRole('button', { name: /Enter Training/i }));
+
+    expect(await screen.findByTestId('first-day-orientation-page')).toBeInTheDocument();
+    expect(window.location.hash).toBe('#/learn/orientation');
+    expect(window.localStorage.getItem('freightbridge.learningJourneyStarted')).toBe('true');
     expect(window.sessionStorage.getItem(OPERATIONS_TOKEN_STORAGE_KEY)).toBe(token);
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/api/operations/summary'),
@@ -2266,15 +2273,17 @@ describe('Analyst Console', () => {
     );
   });
 
-  test('rejects invalid token without opening the console', async () => {
+  test('rejects invalid access without leaving the learner access step', async () => {
     installFetchMock();
     render(<App />);
 
-    await userEvent.type(screen.getByLabelText(/operations bearer token/i), 'bad-token');
-    await userEvent.click(screen.getByRole('button', { name: /unlock console/i }));
+    await userEvent.click(await screen.findByRole('link', { name: /Begin Your Journey/i }));
+    await userEvent.type(screen.getByLabelText(/access key/i), 'bad-token');
+    await userEvent.click(screen.getByRole('button', { name: /Enter Training/i }));
 
     expect(await screen.findByText(/missing or invalid operations bearer token/i)).toBeInTheDocument();
-    expect(screen.queryByTestId('dashboard-page')).not.toBeInTheDocument();
+    expect(screen.getByTestId('journey-access-page')).toBeInTheDocument();
+    expect(screen.queryByTestId('ops-desk-shell')).not.toBeInTheDocument();
   });
 
   test('keeps core console routes available', async () => {
@@ -2303,10 +2312,54 @@ describe('Analyst Console', () => {
     }
   });
 
+  test('shows a clean public three-company entry before any access prompt', async () => {
+    installFetchMock();
+    window.location.hash = '#/learn';
+    render(<App />);
+
+    expect(await screen.findByTestId('journey-entry-page')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Three companies\. One connected shipping journey\./i })).toBeInTheDocument();
+    expect(screen.getByTestId('journey-company-apex')).toHaveTextContent(/Sends freight requests/i);
+    expect(screen.getByTestId('journey-company-freightbridge')).toHaveTextContent(/Translates, routes, and verifies/i);
+    expect(screen.getByTestId('journey-company-midwest')).toHaveTextContent(/Accepts freight and sends shipment updates/i);
+    expect(screen.queryByTestId('ops-desk-shell')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Training Queue/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/access key/i)).not.toBeInTheDocument();
+
+    const begin = screen.getByRole('link', { name: /Begin Your Journey/i });
+    expect(begin).toHaveAttribute('href', '#/access?next=/learn/orientation');
+    await userEvent.click(begin);
+
+    expect(await screen.findByTestId('journey-access-page')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /One quick step before training/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/access key/i)).toBeInTheDocument();
+  });
+
+  test('shows Continue Training and resumes the desk after access validation', async () => {
+    installFetchMock();
+    window.localStorage.setItem('freightbridge.learningJourneyStarted', 'true');
+    window.location.hash = '#/learn';
+    render(<App />);
+
+    expect(await screen.findByTestId('journey-entry-page')).toBeInTheDocument();
+    const continueLink = screen.getByRole('link', { name: /Continue Training/i });
+    expect(continueLink).toHaveAttribute('href', '#/access?next=/learn/desk');
+    expect(screen.getByText(/Pick up where you left off/i)).toBeInTheDocument();
+
+    await userEvent.click(continueLink);
+    expect(await screen.findByTestId('journey-access-page')).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText(/access key/i), token);
+    await userEvent.click(screen.getByRole('button', { name: /Enter Training/i }));
+
+    expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
+    expect(window.location.hash).toBe('#/learn/desk');
+    expect(screen.getByTestId('ops-desk-shell')).toBeInTheDocument();
+  });
+
   test('renders Training Home and navigates to the Advanced Console', async () => {
     installFetchMock();
     window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
-    window.location.hash = '#/learn';
+    window.location.hash = '#/learn/desk';
     render(<App />);
 
     expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
@@ -2494,7 +2547,7 @@ test('Training Desk points to Healthy Part 2 after Part 1 and Healthy Part 3 aft
     part1Complete: true,
     completedAt: '2026-09-24T15:03:00Z',
   }));
-  window.location.hash = '#/learn';
+  window.location.hash = '#/learn/desk';
   const { rerender } = render(<App />);
 
   expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
@@ -2625,7 +2678,7 @@ test('Training Desk promotes Healthy Part 3 after Part 2 and Healthy Part 4 afte
     part2Complete: true,
     part2CompletedAt: '2026-09-24T15:10:00Z',
   }));
-  window.location.hash = '#/learn';
+  window.location.hash = '#/learn/desk';
   const { rerender } = render(<App />);
 
   expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
@@ -2762,7 +2815,7 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
     part3Complete: true,
     part3CompletedAt: '2026-09-24T15:30:00Z',
   }));
-  window.location.hash = '#/learn';
+  window.location.hash = '#/learn/desk';
   const { rerender } = render(<App />);
 
   expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
@@ -2868,7 +2921,7 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
   test('keeps future incident missions locked until prerequisites are complete', async () => {
     installFetchMock();
     window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
-    window.location.hash = '#/learn';
+    window.location.hash = '#/learn/desk';
     render(<App />);
 
     expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
@@ -2997,7 +3050,7 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
     installFetchMock();
     window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({ version: 1, completedMissions: ['LEARN_THE_FLOW'] }));
     window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
-    window.location.hash = '#/learn';
+    window.location.hash = '#/learn/desk';
     render(<App />);
 
     expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
@@ -3448,7 +3501,7 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
     render(<App />);
 
     expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
-    expect(window.location.hash).toBe('#/learn');
+    expect(window.location.hash).toBe('#/learn/desk');
     expect(screen.getByTestId('mission-10-card')).toHaveTextContent(/Locked/i);
   });
 
@@ -3464,7 +3517,7 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
     }));
     window.localStorage.setItem('freightbridge.replaySequencePracticeComplete', 'true');
     window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
-    window.location.hash = '#/learn';
+    window.location.hash = '#/learn/desk';
     render(<App />);
 
     expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
@@ -4005,8 +4058,12 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
     window.location.hash = '#/dashboard';
     render(<App />);
 
-    expect(await screen.findByText(/session expired or the token was rejected/i)).toBeInTheDocument();
+    expect(await screen.findByTestId('journey-entry-page')).toBeInTheDocument();
     expect(window.sessionStorage.getItem(OPERATIONS_TOKEN_STORAGE_KEY)).toBeNull();
+
+    await userEvent.click(screen.getByRole('link', { name: /Begin Your Journey|Continue Training/i }));
+    expect(await screen.findByTestId('journey-access-page')).toBeInTheDocument();
+    expect(screen.getByText(/session expired or the token was rejected/i)).toBeInTheDocument();
   });
 
   test('does not rely on a Vite operations bearer token variable', () => {

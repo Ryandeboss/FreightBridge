@@ -32,7 +32,7 @@ export function TrainingShell() {
   return (
     <div className="ops-desk-shell" data-testid="ops-desk-shell">
       <header className="ops-topbar">
-        <Link className="ops-brand" to="/learn" aria-label="FreightBridge Ops Desk">
+        <Link className="ops-brand" to="/learn/desk" aria-label="FreightBridge Ops Desk">
           <span className="brand-mark"><ShieldCheck size={20} /></span>
           <span><strong>FreightBridge</strong><small>Ops Desk · Training</small></span>
         </Link>
@@ -51,7 +51,7 @@ export function TrainingShell() {
         <aside className="ops-left-rail" aria-label="FreightBridge training workspace navigation">
           <div>
             <p className="ops-rail-label">Workspace</p>
-            <NavLink className={navClass} end to="/learn">
+            <NavLink className={navClass} end to="/learn/desk">
               <Inbox size={17} /><span>Inbox</span><span className="ops-nav-count">{trainingComplete ? 0 : 1}</span>
             </NavLink>
             <NavLink className={navClass} to="/learn/orientation">
@@ -60,7 +60,7 @@ export function TrainingShell() {
             <NavLink className={navClass} to={healthyPath}>
               <Workflow size={17} /><span>Healthy Flow</span>
             </NavLink>
-            <Link className="ops-nav-link" to="/learn">
+            <Link className="ops-nav-link" to="/learn/desk">
               <GraduationCap size={17} /><span>Training Desk</span>
             </Link>
           </div>
