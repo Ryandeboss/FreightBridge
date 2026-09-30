@@ -9,7 +9,7 @@ import {
   Sparkles,
   Truck,
 } from 'lucide-react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import type { TrainingOutletContext } from '../components/training/TrainingShell';
 import {
@@ -389,7 +389,7 @@ function MessageConsole({ title, meta, lines }: { title: string; meta: string; l
           <code
             key={index}
             className={(line.emphasis ? 'emphasis ' : '') + (line.quiet ? 'quiet' : '')}
-            style={{ '--line-delay': String(index) } as React.CSSProperties}
+            style={{ '--line-delay': String(index) } as CSSProperties}
           >
             {line.text || ' '}
           </code>
