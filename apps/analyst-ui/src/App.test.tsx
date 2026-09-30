@@ -3475,8 +3475,8 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
     render(<App />);
 
     expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
+    expect(window.location.hash).toBe('#/learn');
     expect(screen.getByTestId('mission-10-card')).toHaveTextContent(/Locked/i);
-    expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Replay & Sequence Clinic/i);
   });
 
   test('opens Mission 10 after advanced replay and sequence practice', async () => {
