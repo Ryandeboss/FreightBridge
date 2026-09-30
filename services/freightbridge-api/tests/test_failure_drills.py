@@ -207,7 +207,7 @@ def test_x12_wrong_version_recovery_factory_restores_supported_profile() -> None
   assert metadata['isa12'] == '00401'
   assert metadata['gs08'] == '004010'
   assert metadata['correctedFrom'] == 'X12_214_WRONG_VERSION'
-  assert mapped.status == 'PICKED_UP'
+  assert mapped.status.value == 'PICKED_UP'
 
 
 def test_sftp_host_key_drill_records_pre_ingestion_observation_without_transaction(monkeypatch) -> None:
