@@ -2861,7 +2861,7 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
 
 
 
-  test('keeps compact analyst tools inside the Ops Desk and preserves full-console escalation', async () => {
+  test('keeps contextual analyst tools routable without exposing them in permanent course navigation', async () => {
     installFetchMock();
     window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
     window.location.hash = '#/learn/tools/transactions';
@@ -2869,11 +2869,13 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
 
     expect(await screen.findByTestId('analyst-tools-page')).toBeInTheDocument();
     expect(screen.getByTestId('ops-desk-shell')).toBeInTheDocument();
-    expect(screen.getByTestId('ops-coach')).toHaveTextContent(/Mike/i);
+    expect(screen.queryByTestId('ops-coach')).not.toBeInTheDocument();
+    const curriculum = screen.getByTestId('curriculum-sidebar');
+    expect(within(curriculum).queryByRole('link', { name: /Transactions/i })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /^Transactions$/i })).toBeInTheDocument();
     expect(screen.getByText(/When analysts use this/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Open This Tool in Full Console/i })).toHaveAttribute('href', '#/transactions');
-    expect(screen.getByTestId('ops-coach').querySelector('.ops-coach-console-link')).toHaveTextContent('Open Full Console');
+    expect(within(curriculum).getByRole('link', { name: /Advanced Console/i })).toHaveAttribute('href', '#/dashboard');
   });
 
   test('finds a load and uses the processing log to identify the last successful checkpoint', async () => {
@@ -3635,7 +3637,8 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
     expect(screen.getByTestId('training-complete-inbox')).toHaveTextContent(/No training incidents waiting/i);
     expect(screen.getByTestId('ops-inbox').querySelector('.ops-count-badge')).toHaveTextContent('0');
     expect(screen.getByTestId('ops-current-focus')).toHaveTextContent(/Training path finished/i);
-    expect(screen.getByTestId('ops-desk-shell').querySelector('.ops-nav-count')).toHaveTextContent('0');
+    expect(screen.getByTestId('curriculum-progress')).toHaveTextContent(/100%/i);
+    expect(screen.getByTestId('curriculum-module-final')).toHaveTextContent(/Complete/i);
     expect(screen.getByRole('link', { name: /^Open Advanced Console$/i })).toHaveAttribute('href', '#/dashboard');
   }, 15000);
 
