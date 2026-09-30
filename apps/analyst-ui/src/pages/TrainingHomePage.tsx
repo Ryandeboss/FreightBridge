@@ -63,7 +63,7 @@ export function TrainingHomePage() {
     : healthyPart4Complete
       ? 'Review Healthy Walkthrough'
       : 'Continue Healthy Walkthrough';
-  const finalMission = trainingMissions.find((mission) => mission.id === PRODUCTION_INCIDENT_MISSION_ID) ?? trainingMissions.at(-1)!;
+  const finalMission = trainingMissions.find((mission) => mission.id === PRODUCTION_INCIDENT_MISSION_ID) ?? trainingMissions[trainingMissions.length - 1]!;
   const currentMission = trainingMissions.find(
     (mission) => mission.implemented && isMissionUnlocked(mission.id, progress) && !hasCompletedMission(progress, mission.id),
   ) ?? finalMission;
