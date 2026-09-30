@@ -2519,7 +2519,7 @@ test('teaches the healthy flow as five clean animated scenes without calling the
   expect(scene1).toHaveTextContent(/"loadId": "LOAD500"/i);
   expect(scene1).toHaveTextContent(/"commodityDescription": "Packaged auto parts"/i);
   expect(scene1).toHaveTextContent(/"scheduledDateTime": "2026-10-02T18:00:00Z"/i);
-  expect(scene1).toHaveTextContent(/Apex business identifier for this load/i);
+  expect(scene1).toHaveTextContent(/LOAD500.*load ID Apex assigned/i);
   expect(scene1).toHaveTextContent(/What this request means/i);
   expect(scene1).toHaveTextContent(/has not become X12 yet/i);
 
@@ -2539,7 +2539,9 @@ test('teaches the healthy flow as five clean animated scenes without calling the
   expect(scene3).toHaveTextContent(/B2\*\*MWCX\*\*LOAD500/i);
   expect(scene3).toHaveTextContent(/L3\*42000\*G\*\*\*22~/i);
   expect(scene3).toHaveTextContent(/IEA\*1\*000000901~/i);
-  expect(scene3).toHaveTextContent(/Motor Carrier Load Tender/i);
+  expect(scene3).toHaveTextContent(/FREIGHTBRIDGE.*sender.*MWCX.*receiver/i);
+  expect(scene3).toHaveTextContent(/BOL900.*Bill of Lading number/i);
+  expect(scene3).toHaveTextContent(/LD.*load\/pickup stop/i);
   expect(scene3).toHaveTextContent(/How to read this 204/i);
 
   await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
@@ -2547,8 +2549,8 @@ test('teaches the healthy flow as five clean animated scenes without calling the
   expect(scene4).toHaveTextContent(/AK1\*SM\*901~/i);
   expect(scene4).toHaveTextContent(/AK9\*A\*1\*1\*1~/i);
   expect(scene4).toHaveTextContent(/B1\*MWCX\*LOAD500\*20261001\*A~/i);
-  expect(scene4).toHaveTextContent(/technical EDI acknowledgment only/i);
-  expect(scene4).toHaveTextContent(/business answer/i);
+  expect(scene4).toHaveTextContent(/997.*technical acknowledgment/i);
+  expect(scene4).toHaveTextContent(/Final `A` = Midwest ACCEPTED the load/i);
 
   await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
   const scene5 = screen.getByTestId('healthy-scene-214');
@@ -2557,6 +2559,8 @@ test('teaches the healthy flow as five clean animated scenes without calling the
   expect(scene5).toHaveTextContent(/AT7\*X6\*\*\*\*20261001\*2015\*UT~/i);
   expect(scene5).toHaveTextContent(/SE\*7\*0004~/i);
   expect(scene5).toHaveTextContent(/IEA\*1\*000000904~/i);
+  expect(scene5).toHaveTextContent(/X6.*IN_TRANSIT/i);
+  expect(scene5).toHaveTextContent(/Toledo.*event city/i);
   expect(scene5).toHaveTextContent(/AF maps to PICKED_UP/i);
   expect(scene5).toHaveTextContent(/X6 maps to IN_TRANSIT/i);
   expect(scene5).toHaveTextContent(/How FreightBridge turns a 214/i);
