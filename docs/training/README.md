@@ -35,7 +35,8 @@ Training Mode now includes the complete 10-mission path plus guided and advanced
 
 Before the incident queue, the learner also completes:
 
-- **First-Day Orientation** — a six-scene, full-screen story wizard that introduces the three companies, the shipment lifecycle, 204/997/990, 214 status progression, REST/JSON versus X12, and the analyst's Network / Messages / Mapping mental model before any workstation tools appear.
+- **First-Day Orientation** — a six-scene story wizard that introduces the three companies, the shipment lifecycle, 204/997/990, 214 status progression, REST/JSON versus X12, and the analyst's Network / Messages / Mapping mental model before any workstation tools appear.
+- **EDI & Protocol Basics** — a seven-lesson bootcamp separating exchange method from message format, then teaching REST/JSON, SFTP/X12, X12 envelope basics, 204/997/990/214 roles, canonical correlation, and the Midwest 214 status mapping before troubleshooting begins.
 - **Guided Healthy Flow Parts 1–4** — Apex REST/JSON → canonical shipment → Midwest 204 → 997 → 990 → 214 → Apex-facing updates.
 - **Replay & Sequence Clinic** — duplicate business attempts, exact X12 replay suppression, and late/out-of-order event chronology.
 
@@ -43,7 +44,7 @@ Mission 10 stays locked until the Replay & Sequence Clinic is complete.
 
 ## Curriculum Shell And Contextual Tools
 
-The persistent learner shell is course-oriented rather than tool-oriented. It contains a collapsible module outline with progress for Orientation, Healthy Integration, Guided Troubleshooting, Advanced Incidents, and the Final Shift. Mike's former persistent right-side coach panel has been removed.
+The persistent learner shell is course-oriented rather than tool-oriented. It contains a collapsible module outline with progress for Orientation, EDI & Protocol Basics, Healthy Integration, Guided Troubleshooting, Advanced Incidents, and the Final Shift. Mike's former persistent right-side coach panel has been removed.
 
 Investigation capabilities still reuse the same FreightBridge operations/configuration APIs, but learner-facing tool links are no longer exposed in the permanent sidebar or Training Home. Transaction evidence, raw payloads, processing logs, errors, partner rules, and mapping information are intended to appear only when a lesson or lab gives the learner a reason to use them. The Advanced Console continues to expose the full technical workspace.
 
@@ -96,13 +97,15 @@ After Mission 10, the Training Desk switches to a **10 / 10 Training Complete** 
 2. Confirm Apex Logistics, FreightBridge, and Midwest Carrier are the only three company cards and **Begin Your Journey** is the primary action.
 3. Choose **Begin Your Journey**, enter the access key on the second-step access screen, and confirm the app opens First-Day Orientation.
 4. Complete/review First-Day Orientation inside the minimal curriculum shell and confirm the sidebar updates the Orientation module from Scene 1 through Scene 6 while the lesson remains low-clutter: companies → tender begins → 204/997/990 → 214 shipment movement → translation → your job.
-5. Complete the four-part guided healthy flow and verify 997 is technical acknowledgment while 990 is the business tender decision.
-6. Complete Missions 1–9 using the real controlled failure drills.
-7. Complete the Replay & Sequence Clinic and verify exact replay side effects are skipped while late event history does not regress `DELIVERED`.
-8. Confirm Mission 10 unlocks only after advanced practice.
-9. Complete Mission 10 by diagnosing `SHIPMENT_NOT_FOUND` at business validation and correcting the B10 shipment reference.
-10. Return to the Training Desk and confirm the completed state shows **10 / 10**, inbox count **0**, and **No training incidents waiting**.
-11. Confirm the curriculum sidebar can collapse, Mike's persistent right panel is gone, and Transactions / Business Trace / Errors / Mappings / Partners do not appear as permanent learner navigation.
-12. Open the Advanced Console and confirm the full operations/configuration workspace remains available.
+5. Confirm Orientation hands off to EDI & Protocol Basics, the sidebar shows Lesson 1 through Lesson 7, and the learner must correctly distinguish SFTP/X12, ST/SE, 997/990, and shipment correlation before continuing.
+6. Complete the bootcamp and verify the Healthy Integration module unlocks only afterward for new progress, while older downstream progress remains recognized.
+7. Complete the four-part guided healthy flow and verify 997 is technical acknowledgment while 990 is the business tender decision.
+8. Complete Missions 1–9 using the real controlled failure drills.
+9. Complete the Replay & Sequence Clinic and verify exact replay side effects are skipped while late event history does not regress `DELIVERED`.
+10. Confirm Mission 10 unlocks only after advanced practice.
+11. Complete Mission 10 by diagnosing `SHIPMENT_NOT_FOUND` at business validation and correcting the B10 shipment reference.
+12. Return to the Training Desk and confirm the completed state shows **10 / 10**, inbox count **0**, and **No training incidents waiting**.
+13. Confirm the curriculum sidebar can collapse, Mike's persistent right panel is gone, and Transactions / Business Trace / Errors / Mappings / Partners do not appear as permanent learner navigation.
+14. Open the Advanced Console and confirm the full operations/configuration workspace remains available.
 
 See [FreightBridge employee POV](freightbridge-employee-pov.md), [Healthy integration baseline](healthy-integration-baseline.md), and [Incident game loop](incident-game-loop.md) for the underlying training model.

@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  Code2,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -34,6 +35,11 @@ import {
   trainingMissions,
 } from '../../training/missions';
 import { isFirstDayOrientationComplete } from '../../training/orientation';
+import {
+  EDI_BOOTCAMP_LESSON_COUNT,
+  isEdiBootcampComplete,
+  loadEdiBootcampState,
+} from '../../training/ediBootcamp';
 import { isReplaySequencePracticeComplete } from '../../training/advancedPractice';
 import { hasCompletedMission, loadTrainingProgress } from '../../training/progress';
 
@@ -53,6 +59,7 @@ const ADVANCED_MISSION_IDS = [
 
 export type TrainingOutletContext = {
   setOrientationScene: (scene: number) => void;
+  setBootcampLesson: (lesson: number) => void;
 };
 
 function missionPath(missionId: string): string {
@@ -74,6 +81,7 @@ export function TrainingShell() {
   const { lock } = useOperationsSession();
   const location = useLocation();
   const [orientationScene, setOrientationScene] = useState(1);
+  const [bootcampLesson, setBootcampLesson] = useState(() => loadEdiBootcampState().lesson);
   const [collapsed, setCollapsed] = useState(
     () => typeof window !== 'undefined' && window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === 'true',
   );
@@ -85,6 +93,7 @@ export function TrainingShell() {
   // later mission completions without the newer orientation/healthy-flow keys.
   // Downstream work therefore implies that prerequisite course modules were completed.
   const orientationStoredComplete = isFirstDayOrientationComplete();
+  const bootcampState = loadEdiBootcampState();
   const healthyParts = [
     isHealthyApexTenderComplete(),
     isHealthyMapping204Complete(),
@@ -102,8 +111,13 @@ export function TrainingShell() {
   const advancedHasProgress = rawAdvancedCompletedUnits > 0 || finalComplete;
   const guidedHasProgress = rawGuidedCompleted > 0 || advancedHasProgress;
   const healthyHasProgress = rawHealthyCompletedUnits > 0 || guidedHasProgress;
+  const bootcampHasProgress = bootcampState.lesson > 1 || bootcampState.complete || healthyHasProgress;
 
-  const orientationComplete = orientationStoredComplete || healthyHasProgress;
+  const bootcampComplete = isEdiBootcampComplete() || healthyHasProgress;
+  const orientationComplete = orientationStoredComplete || bootcampHasProgress;
+  const bootcampCompletedUnits = bootcampComplete
+    ? EDI_BOOTCAMP_LESSON_COUNT
+    : Math.max(0, Math.min(EDI_BOOTCAMP_LESSON_COUNT - 1, bootcampLesson - 1));
   const healthyCompletedUnits = guidedHasProgress ? 5 : rawHealthyCompletedUnits;
   const healthyComplete = healthyCompletedUnits >= 5;
   const guidedCompleted = advancedHasProgress ? GUIDED_MISSION_IDS.length : rawGuidedCompleted;
@@ -138,19 +152,30 @@ export function TrainingShell() {
       meta: orientationComplete ? 'Complete' : `Scene ${orientationScene} of 6`,
     },
     {
-      id: 'healthy',
+      id: 'bootcamp',
       number: '02',
+      title: 'EDI & Protocol Basics',
+      description: 'REST, JSON, SFTP, X12, envelopes, and core documents',
+      icon: Code2,
+      to: '/learn/bootcamp',
+      unlocked: orientationComplete || bootcampHasProgress,
+      progress: bootcampComplete ? 100 : percent(bootcampCompletedUnits, EDI_BOOTCAMP_LESSON_COUNT),
+      meta: bootcampComplete ? 'Complete' : `Lesson ${bootcampLesson} of ${EDI_BOOTCAMP_LESSON_COUNT}`,
+    },
+    {
+      id: 'healthy',
+      number: '03',
       title: 'Healthy Integration',
       description: 'See a normal shipment before debugging failures',
       icon: Workflow,
       to: healthyModulePath,
-      unlocked: orientationComplete || healthyCompletedUnits > 0,
+      unlocked: bootcampComplete || healthyCompletedUnits > 0,
       progress: percent(healthyCompletedUnits, 5),
       meta: healthyComplete ? 'Complete' : `${healthyCompletedUnits} of 5 lessons`,
     },
     {
       id: 'guided',
-      number: '03',
+      number: '04',
       title: 'Guided Troubleshooting',
       description: 'Authentication, parsing, contracts, replay, and mapping',
       icon: Route,
@@ -161,7 +186,7 @@ export function TrainingShell() {
     },
     {
       id: 'advanced',
-      number: '04',
+      number: '05',
       title: 'Advanced Incidents',
       description: 'Profiles, SFTP trust, replay, and sequencing',
       icon: BookOpen,
@@ -172,7 +197,7 @@ export function TrainingShell() {
     },
     {
       id: 'final',
-      number: '05',
+      number: '06',
       title: 'Final Shift',
       description: 'Solve a production-style incident independently',
       icon: Flag,
@@ -185,16 +210,18 @@ export function TrainingShell() {
 
   const totalCompletedUnits =
     (orientationComplete ? 1 : 0)
+    + bootcampCompletedUnits
     + healthyCompletedUnits
     + guidedCompleted
     + advancedCompletedUnits
     + (finalComplete ? 1 : 0);
-  const totalUnits = 1 + 5 + GUIDED_MISSION_IDS.length + 3 + 1;
+  const totalUnits = 1 + EDI_BOOTCAMP_LESSON_COUNT + 5 + GUIDED_MISSION_IDS.length + 3 + 1;
   const courseProgress = percent(totalCompletedUnits, totalUnits);
 
   const pathname = location.pathname;
   let activeModuleId = modules.find((module) => module.unlocked && module.progress < 100)?.id ?? 'final';
   if (pathname.startsWith('/learn/orientation')) activeModuleId = 'orientation';
+  else if (pathname.startsWith('/learn/bootcamp')) activeModuleId = 'bootcamp';
   else if (pathname.startsWith('/learn/healthy') || pathname.includes('/mission/learn-the-flow')) activeModuleId = 'healthy';
   else if (pathname.startsWith('/learn/practice/replay-sequence')) activeModuleId = 'advanced';
   else if (pathname.startsWith('/learn/mission/')) {
@@ -303,7 +330,7 @@ export function TrainingShell() {
       </header>
 
       <main className="course-main">
-        <Outlet context={{ setOrientationScene }} />
+        <Outlet context={{ setOrientationScene, setBootcampLesson }} />
       </main>
     </div>
   );

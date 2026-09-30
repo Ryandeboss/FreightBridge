@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   CircleDot,
   Compass,
+  Code2,
   Repeat2,
   Route,
   Workflow,
@@ -28,6 +29,7 @@ import {
 } from '../training/healthyWalkthrough';
 import { isReplaySequencePracticeComplete } from '../training/advancedPractice';
 import { isFirstDayOrientationComplete } from '../training/orientation';
+import { isEdiBootcampComplete } from '../training/ediBootcamp';
 import { hasCompletedMission, loadTrainingProgress } from '../training/progress';
 
 export function TrainingHomePage() {
@@ -43,6 +45,7 @@ export function TrainingHomePage() {
   const healthyPart2Complete = isHealthyMapping204Complete();
   const healthyPart3Complete = isHealthy997990Complete();
   const healthyPart4Complete = isHealthyShipmentStatusComplete();
+  const bootcampComplete = isEdiBootcampComplete() || healthyPart1Complete || completedCount > 0;
   const healthyPath = healthyWalkthroughNextPath();
   const healthyTitle = !healthyPart1Complete
     ? 'Healthy Flow Part 1'
@@ -111,6 +114,12 @@ export function TrainingHomePage() {
                   {orientationComplete ? 'Review First-Day Orientation' : 'Start First-Day Orientation'}
                 </Link>
                 {orientationComplete && (
+                  <Link className={bootcampComplete ? 'secondary-button' : 'primary-button'} to="/learn/bootcamp">
+                    <Code2 size={16} />
+                    {bootcampComplete ? 'Review EDI & Protocol Basics' : 'Start EDI & Protocol Basics'}
+                  </Link>
+                )}
+                {bootcampComplete && (
                   <Link className={healthyPart4Complete ? 'secondary-button' : 'primary-button'} to={healthyPath}>
                     <Workflow size={16} />
                     {healthyAction}
@@ -121,7 +130,7 @@ export function TrainingHomePage() {
                     Advanced Replay & Sequence Practice<ArrowRight size={16} />
                   </Link>
                 ) : (
-                  <Link className={orientationComplete && healthyPart4Complete ? 'primary-button' : 'secondary-button'} to={`/learn/mission/${currentMission.slug}`}>
+                  <Link className={bootcampComplete && healthyPart4Complete ? 'primary-button' : 'secondary-button'} to={`/learn/mission/${currentMission.slug}`}>
                     {currentMissionComplete ? 'Review Current Mission' : 'Start Current Mission'}<ArrowRight size={16} />
                   </Link>
                 )}
@@ -168,10 +177,26 @@ export function TrainingHomePage() {
                 <span className="ops-inbox-icon"><Route size={18} /></span>
                 <span>
                   <small>Next</small>
-                  <strong>{currentMission.title}</strong>
-                  <span>Your first shipment walkthrough is ready after the orientation briefing.</span>
+                  <strong>EDI & Protocol Basics</strong>
+                  <span>Learn REST, JSON, SFTP, X12, and the 204 / 997 / 990 / 214 message roles before opening the healthy shipment.</span>
                 </span>
               </div>
+            </>
+          ) : !bootcampComplete ? (
+            <>
+              <Link className="ops-inbox-item active" to="/learn/bootcamp">
+                <span className="ops-inbox-icon"><Code2 size={18} /></span>
+                <span>
+                  <small>Module 02 · Foundations</small>
+                  <strong>EDI & Protocol Basics</strong>
+                  <span>Separate transport from message format, read basic REST/JSON and X12 evidence, and learn what 204, 997, 990, and 214 actually mean.</span>
+                </span>
+                <ArrowRight size={16} />
+              </Link>
+              <Link className="ops-inbox-item muted" to="/learn/orientation">
+                <span className="ops-inbox-icon"><CheckCircle2 size={18} /></span>
+                <span><small>Completed</small><strong>First-Day Orientation</strong><span>The three-company shipment story is complete.</span></span>
+              </Link>
             </>
           ) : !healthyPart4Complete ? (
             <>
@@ -272,7 +297,7 @@ export function TrainingHomePage() {
 
       </div>
 
-      {orientationComplete && (
+      {bootcampComplete && (
         <article className="panel healthy-home-card" data-testid="healthy-home-card">
           <div>
             <p className="eyebrow">Guided healthy flow</p>

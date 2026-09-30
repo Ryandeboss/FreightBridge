@@ -9,6 +9,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { FailureDetailPage } from './pages/FailureDetailPage';
 import { FailuresPage } from './pages/FailuresPage';
 import { FirstDayOrientationPage } from './pages/FirstDayOrientationPage';
+import { EdiProtocolBootcampPage } from './pages/EdiProtocolBootcampPage';
 import { HealthyApexTenderPage } from './pages/HealthyApexTenderPage';
 import { HealthyMapping204Page } from './pages/HealthyMapping204Page';
 import { HealthyResponsesPage } from './pages/HealthyResponsesPage';
@@ -44,6 +45,7 @@ function AppRoutes() {
         <Route element={<TrainingRoute />}>
           <Route path="/learn/desk" element={<TrainingHomePage />} />
           <Route path="/learn/orientation" element={<FirstDayOrientationPage />} />
+          <Route path="/learn/bootcamp" element={<EdiProtocolBootcampPage />} />
           <Route path="/learn/healthy/apex-tender" element={<HealthyApexTenderPage />} />
           <Route path="/learn/healthy/mapping-204" element={<HealthyMapping204Page />} />
           <Route path="/learn/healthy/acknowledgments" element={<HealthyResponsesPage />} />
