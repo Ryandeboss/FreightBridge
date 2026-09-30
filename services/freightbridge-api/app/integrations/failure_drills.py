@@ -332,10 +332,45 @@ class ControlledFailureDrillService:
       return self._recover_duplicate_shipment(run)
     if scenario_key in ('X12_214_CONTROL_MISMATCH', 'X12_214_UNSUPPORTED_STATUS', 'X12_214_WRONG_VERSION'):
       return self._recover_x12_214(run)
+    if scenario_key == 'SFTP_HOST_KEY_MISMATCH':
+      return self._recover_sftp_connectivity(run)
     raise LabDrillMismatch(
       'LAB_RECOVERY_NOT_SUPPORTED',
       f'No controlled recovery is defined for {scenario_key}.',
     )
+
+
+  def _recover_sftp_connectivity(self, run: dict[str, object]) -> dict[str, object]:
+    config = MidwestSftpConfig.from_settings()
+    directories = {}
+    try:
+      with self.sftp_client_factory(config) as client:
+        for directory in ('/inbound', OUTBOUND_DIR, ARCHIVE_DIR, ERROR_DIR):
+          directories[directory.removeprefix('/')] = client.exists(directory)
+    except MidwestSftpError as exc:
+      raise LabDrillMismatch(
+        'LAB_RECOVERY_NOT_VERIFIED',
+        'Configured Midwest SFTP connectivity could not be verified.',
+      ) from exc
+
+    if not all(directories.values()):
+      raise LabDrillMismatch(
+        'LAB_RECOVERY_NOT_VERIFIED',
+        'Configured Midwest SFTP connection succeeded but required directories were not all reachable.',
+      )
+
+    return {
+      'status': 'SUCCEEDED',
+      'recoveryKind': 'SFTP_CONNECTIVITY_VERIFIED',
+      'connectionVerified': True,
+      'hostKeyPinning': 'VERIFIED',
+      'directories': directories,
+      'transactionCreated': False,
+      'messageReplayAttempted': False,
+      'originalFailurePreTransaction': True,
+      'transport': 'SFTP',
+    }
+
 
   def _recover_duplicate_shipment(self, run: dict[str, object]) -> dict[str, object]:
     load_id = str(run['business_identifier'])
