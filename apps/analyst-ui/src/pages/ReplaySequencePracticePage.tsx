@@ -68,7 +68,7 @@ export function ReplaySequencePracticePage() {
     && checksPassed
   );
 
-  if (!unlocked) return <Navigate to="/learn" replace />;
+  if (!unlocked) return <Navigate to="/learn/desk" replace />;
 
   async function startPractice() {
     if (!token) return;
@@ -115,7 +115,7 @@ export function ReplaySequencePracticePage() {
 
   return (
     <section className="replay-sequence-page" data-testid="replay-sequence-practice-page">
-      <Link className="secondary-button training-back-link" to="/learn"><ArrowLeft size={16} />Ops Desk</Link>
+      <Link className="secondary-button training-back-link" to="/learn/desk"><ArrowLeft size={16} />Ops Desk</Link>
 
       <header className="healthy-guide-header">
         <div>
