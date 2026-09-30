@@ -69,7 +69,7 @@ export function EdiProtocolBootcampPage() {
     if (!canContinue) return;
     completeEdiBootcamp();
     setBootcampLesson(EDI_BOOTCAMP_LESSON_COUNT);
-    navigate('/learn/healthy/apex-tender');
+    navigate('/learn/healthy/workstation');
   }
 
   return (
