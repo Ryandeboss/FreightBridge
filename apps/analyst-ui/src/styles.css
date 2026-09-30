@@ -4907,3 +4907,149 @@ input:disabled {
   }
 }
 /* === End Milestone 47 === */
+
+
+/* === M47 refinement: full annotated teaching documents === */
+.course-main:has(.healthy-story-page) {
+  overflow: visible;
+}
+.healthy-story-page {
+  height: auto;
+  min-height: calc(100vh - 6.3rem);
+  overflow: visible;
+  padding-bottom: .35rem;
+}
+.healthy-story-stage {
+  min-height: auto;
+}
+.healthy-story-scene {
+  grid-template-rows: auto auto auto auto auto;
+  align-content: start;
+  gap: 1rem;
+  padding-bottom: 1rem;
+}
+.healthy-story-network {
+  min-height: 8.5rem;
+}
+.healthy-message-console {
+  width: min(1040px, 100%);
+  min-height: 0;
+  overflow: hidden;
+  display: block;
+}
+.healthy-console-body {
+  min-height: 0;
+  overflow: visible;
+  display: block;
+  padding: .3rem 0;
+}
+.healthy-console-line {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(16rem, .9fr);
+  gap: 1rem;
+  align-items: start;
+  padding: .34rem .8rem;
+  border-bottom: 1px solid rgba(255,255,255,.045);
+  opacity: 0;
+  animation: healthyAnnotatedLine 260ms ease forwards;
+  animation-delay: calc(var(--line-delay) * 35ms);
+}
+.healthy-console-line:last-child {
+  border-bottom: 0;
+}
+.healthy-console-line code {
+  min-width: 0;
+  min-height: 0;
+  display: block;
+  color: #d6e0e3;
+  font-size: clamp(.67rem, .82vw, .78rem);
+  line-height: 1.46;
+  opacity: 1;
+  animation: none;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.healthy-console-line.emphasis code {
+  color: #96e0d2;
+  font-weight: 800;
+}
+.healthy-console-line.quiet code {
+  color: #87999f;
+}
+.healthy-line-annotation {
+  min-width: 0;
+  color: #91a4aa;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: clamp(.63rem, .74vw, .72rem);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.healthy-console-line.emphasis .healthy-line-annotation {
+  color: #93c9bd;
+}
+.healthy-document-explanation {
+  width: min(1040px, 100%);
+  margin: .15rem auto .3rem;
+  padding: .4rem .25rem .15rem;
+  border-top: 1px solid #e6ecee;
+}
+.healthy-document-explanation h2 {
+  margin: 0 0 .42rem;
+  color: #263a40;
+  font-size: .92rem;
+}
+.healthy-document-explanation > div {
+  max-width: 940px;
+  display: grid;
+  gap: .42rem;
+}
+.healthy-document-explanation p {
+  margin: 0;
+  color: #607178;
+  font-size: .78rem;
+  line-height: 1.55;
+}
+.healthy-document-explanation strong {
+  color: #294c4f;
+}
+@keyframes healthyAnnotatedLine {
+  from { opacity: 0; transform: translateX(-4px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@media (max-height: 760px) and (min-width: 821px) {
+  .healthy-story-page {
+    height: auto;
+    min-height: calc(100vh - 6.1rem);
+  }
+  .healthy-story-scene {
+    grid-template-rows: auto auto auto auto auto;
+    gap: .8rem;
+  }
+  .healthy-console-body {
+    padding: .3rem 0;
+  }
+  .healthy-console-line code {
+    font-size: .67rem;
+    line-height: 1.4;
+  }
+}
+@media (max-width: 900px) {
+  .healthy-console-line {
+    grid-template-columns: 1fr;
+    gap: .12rem;
+    padding-block: .42rem;
+  }
+  .healthy-line-annotation {
+    padding-left: .6rem;
+    border-left: 2px solid rgba(150,224,210,.2);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .healthy-console-line {
+    animation: none !important;
+    opacity: 1;
+  }
+}
+/* === End M47 document refinement === */
