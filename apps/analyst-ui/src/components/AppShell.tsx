@@ -5,7 +5,7 @@ import { fetchSystemStatus, type SystemStatus } from '../api/health';
 import { useOperationsSession } from '../auth/OperationsSession';
 
 const navItems = [
-  { to: '/learn', label: 'Back to Training', icon: GraduationCap },
+  { to: '/learn/desk', label: 'Back to Training', icon: GraduationCap },
   { to: '/dashboard', label: 'Dashboard', icon: BarChart3 },
   { to: '/transactions', label: 'Transactions', icon: Activity },
   { to: '/failures', label: 'Failures', icon: AlertTriangle },
