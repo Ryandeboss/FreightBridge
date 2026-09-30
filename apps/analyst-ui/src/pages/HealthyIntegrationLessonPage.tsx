@@ -162,7 +162,7 @@ const status214: ConsoleLine[] = [
   { text: 'L11*PO111*PO~', annotation: 'Repeats the purchase-order reference.' },
   { text: 'AT7*X6****20261001*2015*UT~', annotation: 'X6 is Midwest’s status code for en route; date/time says when the event occurred.', emphasis: true },
   { text: 'MS1*Toledo*OH~', annotation: 'Event location reported by the carrier.' },
-  { text: 'SE*8*0004~', annotation: 'Ends the 214 transaction.' },
+  { text: 'SE*7*0004~', annotation: 'Ends the 214 transaction.' },
   { text: 'GE*1*904~', annotation: 'Ends the shipment-status functional group.', quiet: true },
   { text: 'IEA*1*000000904~', annotation: 'Ends the 214 interchange.', quiet: true },
 ];
