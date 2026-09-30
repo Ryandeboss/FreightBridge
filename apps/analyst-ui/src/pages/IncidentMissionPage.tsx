@@ -67,6 +67,7 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
   const observed = readRecord(failureDrill?.observed);
   const expected = readRecord(failureDrill?.expected);
   const isContractOrMappingMission = mission.scenarioKey === 'APEX_INVALID_CONTRACT' || mission.scenarioKey === 'X12_214_UNSUPPORTED_STATUS';
+  const isProfileVersionMission = mission.scenarioKey === 'X12_214_WRONG_VERSION';
   const recoveryEvidence = useMemo(
     () => readRecord(recoveryRun?.resultSummary.recovery),
     [recoveryRun],
@@ -342,6 +343,12 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
               <IncidentAnalystToolbox mission={mission} run={incidentRun} observed={observed} />
             </>
           )}
+          {isProfileVersionMission && (
+            <>
+              <ProfileVersionCompatibilityPanel observed={observed} />
+              <IncidentAnalystToolbox mission={mission} run={incidentRun} observed={observed} />
+            </>
+          )}
 
           <article className="panel">
             <div className="panel-header">
@@ -538,6 +545,15 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
                     {recoveryEvidence?.correctedAt7 && (
                       <div><dt>Corrected AT7-01</dt><dd>{String(recoveryEvidence.correctedAt7)}</dd></div>
                     )}
+                    {recoveryEvidence?.correctedIsa12 && (
+                      <div><dt>Corrected ISA12</dt><dd>{String(recoveryEvidence.correctedIsa12)}</dd></div>
+                    )}
+                    {recoveryEvidence?.correctedGs08 && (
+                      <div><dt>Corrected GS08</dt><dd>{String(recoveryEvidence.correctedGs08)}</dd></div>
+                    )}
+                    {recoveryEvidence?.profileCompatibility && (
+                      <div><dt>Profile Compatibility</dt><dd>{String(recoveryEvidence.profileCompatibility)}</dd></div>
+                    )}
                     {recoveryEvidence?.parseStatus && (
                       <div><dt>Parsing</dt><dd>{String(recoveryEvidence.parseStatus)}</dd></div>
                     )}
@@ -630,6 +646,48 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
 }
 
 
+
+function ProfileVersionCompatibilityPanel({
+  observed,
+}: {
+  observed: Record<string, unknown> | null;
+}) {
+  return (
+    <article className="panel profile-version-panel" data-testid="profile-version-compatibility">
+      <div className="panel-header">
+        <div>
+          <p className="eyebrow">Milestone 36 · X12/Profile Compatibility</p>
+          <h2>Structurally valid does not mean profile-compatible</h2>
+        </div>
+        <span className="badge badge-danger">{String(observed?.errorCode ?? 'UNSUPPORTED_X12_VERSION')}</span>
+      </div>
+      <div className="profile-version-grid">
+        <article>
+          <span>Received from Midwest</span>
+          <strong>ISA12 00501</strong>
+          <strong>GS08 005010</strong>
+          <small>The transaction can still be structurally parseable.</small>
+        </article>
+        <div className="profile-version-compare">≠</div>
+        <article className="supported">
+          <span>Active FreightBridge profile</span>
+          <strong>ISA12 00401</strong>
+          <strong>GS08 004010</strong>
+          <small>This is the supported Midwest project contract.</small>
+        </article>
+      </div>
+      <div className="analyst-question">
+        <SlidersHorizontal size={17} />
+        <div>
+          <strong>Analyst distinction</strong>
+          <span>Mission 6 failed X12 control validation. Mission 7 passed structure but failed AT7 semantic mapping. Mission 8 passes structure and uses a valid status, but fails the partner version/profile gate.</span>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+
 function FailureBoundaryClassifier({
   mission,
   observed,
@@ -707,7 +765,7 @@ function IncidentAnalystToolbox({
   const transactionId = stringOrNull(observed?.transactionId);
   const errorId = stringOrNull(observed?.errorId);
   const businessId = stringOrNull(observed?.businessIdentifier) ?? run.businessIdentifier;
-  const mappingIncident = mission.scenarioKey === 'X12_214_UNSUPPORTED_STATUS';
+  const mappingIncident = mission.scenarioKey === 'X12_214_UNSUPPORTED_STATUS' || mission.scenarioKey === 'X12_214_WRONG_VERSION';
 
   return (
     <article className="panel incident-toolbox" data-testid="incident-analyst-toolbox">
@@ -748,7 +806,7 @@ function IncidentAnalystToolbox({
         {mappingIncident && (
           <Link to="/learn/tools/mappings">
             <SlidersHorizontal size={16} />
-            <span><strong>Mapping Viewer</strong><small>Compare the active Midwest profile with AT7-01</small></span>
+            <span><strong>Mapping Viewer</strong><small>{mission.scenarioKey === 'X12_214_WRONG_VERSION' ? 'Compare the active Midwest X12 profile version' : 'Compare the active Midwest profile with AT7-01'}</small></span>
           </Link>
         )}
       </div>
