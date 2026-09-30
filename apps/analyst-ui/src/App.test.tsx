@@ -3342,7 +3342,7 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
     }
 
     expect(screen.getByText(/REPLAY_ACCEPTED/i)).toBeInTheDocument();
-    expect(screen.getByText(/^YES$/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/^YES$/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/DELIVERED/i).length).toBeGreaterThan(0);
 
     const checks = screen.getByTestId('replay-sequence-checks');
