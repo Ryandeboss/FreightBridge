@@ -12,6 +12,7 @@ type LabWorkstationProps = {
   code: ReactNode;
   answer: ReactNode;
   defaultTab?: LabWorkstationTab;
+  statusTone?: 'danger' | 'success' | 'neutral';
 };
 
 const tabs: Array<{ id: LabWorkstationTab; label: string; icon: typeof TerminalSquare }> = [
@@ -29,6 +30,7 @@ export function LabWorkstation({
   code,
   answer,
   defaultTab = 'console',
+  statusTone = 'danger',
 }: LabWorkstationProps) {
   const [activeTab, setActiveTab] = useState<LabWorkstationTab>(defaultTab);
 
@@ -40,7 +42,7 @@ export function LabWorkstation({
           <h1>{title}</h1>
           <p>{subtitle}</p>
         </div>
-        <span className="lab-workstation-status">{statusLabel}</span>
+        <span className={'lab-workstation-status ' + statusTone}>{statusLabel}</span>
       </header>
 
       <nav className="lab-workstation-tabs" role="tablist" aria-label="Lab workstation views">
