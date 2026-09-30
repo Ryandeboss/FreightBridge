@@ -185,6 +185,56 @@ def test_lab_failure_drill_scenarios_are_server_declared_with_expected_metadata(
   assert scenarios['SFTP_HOST_KEY_MISMATCH']['expected_failure']['stage'] == 'TRANSPORT_BOUNDARY'
 
 
+def test_lab_sftp_host_key_recovery_accepts_pre_transaction_connectivity_proof() -> None:
+  run = {
+    **lab_run(status='SUCCEEDED', step_status='SUCCEEDED'),
+    'scenario_key': 'SFTP_HOST_KEY_MISMATCH',
+    'result_summary': {
+      'failureDrill': {
+        'observed': {
+          'transactionId': None,
+          'businessIdentifier': None,
+        }
+      }
+    },
+  }
+
+  class FakeRepository:
+    def __init__(self) -> None:
+      self.run = run
+
+    def get_run(self, run_id: UUID):
+      return self.run
+
+    def update_run_summary(self, run_id: UUID, result_summary: dict[str, object], *, status: str) -> None:
+      self.run = {**self.run, 'result_summary': result_summary, 'status': status}
+
+  class FakeRecoveryService:
+    def recover(self, candidate: dict[str, object]) -> dict[str, object]:
+      assert candidate['scenario_key'] == 'SFTP_HOST_KEY_MISMATCH'
+      return {
+        'status': 'SUCCEEDED',
+        'recoveryKind': 'SFTP_CONNECTIVITY_VERIFIED',
+        'connectionVerified': True,
+        'hostKeyPinning': 'VERIFIED',
+        'directories': {'inbound': True, 'outbound': True, 'archive': True, 'error': True},
+        'transactionCreated': False,
+        'messageReplayAttempted': False,
+        'originalFailurePreTransaction': True,
+      }
+
+  repository = FakeRepository()
+  service = IntegrationLabService(repository=repository)  # type: ignore[arg-type]
+  service.failure_drills = FakeRecoveryService()  # type: ignore[assignment]
+
+  recovered = service.recover_run(RUN_ID)
+
+  recovery = recovered['result_summary']['recovery']
+  assert recovery['connectionVerified'] is True
+  assert recovery['transactionCreated'] is False
+  assert recovery['messageReplayAttempted'] is False
+
+
 def test_lab_create_request_accepts_predefined_failure_drills_only() -> None:
   request = CreateLabRunRequest.model_validate({'scenarioKey': 'APEX_BAD_AUTH'})
 

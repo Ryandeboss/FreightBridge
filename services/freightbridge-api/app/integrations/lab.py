@@ -390,6 +390,7 @@ class IntegrationLabService:
       'X12_214_CONTROL_MISMATCH',
       'X12_214_UNSUPPORTED_STATUS',
       'X12_214_WRONG_VERSION',
+      'SFTP_HOST_KEY_MISMATCH',
     }
     if scenario_key not in supported:
       raise LabExecutionError(
@@ -414,40 +415,62 @@ class IntegrationLabService:
     except LabDrillMismatch as exc:
       raise LabExecutionError(exc.code, exc.message) from exc
 
-    if recovery.get('sameBusinessIdentifier') is not True:
-      raise LabExecutionError(
-        'LAB_RECOVERY_NOT_VERIFIED',
-        'Recovery did not preserve the incident business identifier.',
-      )
-
-    if scenario_key == 'APEX_DUPLICATE_SHIPMENT':
-      if recovery.get('idempotentReplay') is not True or recovery.get('duplicate204Created') is True:
+    if scenario_key == 'SFTP_HOST_KEY_MISMATCH':
+      failure_drill = dict((run.get('result_summary') or {}).get('failureDrill') or {})
+      observed = dict(failure_drill.get('observed') or {})
+      if observed.get('transactionId') is not None or observed.get('businessIdentifier') is not None:
         raise LabExecutionError(
           'LAB_RECOVERY_NOT_VERIFIED',
-          'Duplicate-shipment safe replay proof was incomplete.',
+          'Host-key mismatch drill unexpectedly created transaction or business evidence.',
+        )
+      directories = recovery.get('directories')
+      if (
+        recovery.get('connectionVerified') is not True
+        or recovery.get('transactionCreated') is not False
+        or recovery.get('messageReplayAttempted') is not False
+        or not isinstance(directories, dict)
+        or not directories
+        or not all(value is True for value in directories.values())
+      ):
+        raise LabExecutionError(
+          'LAB_RECOVERY_NOT_VERIFIED',
+          'SFTP connectivity recovery proof was incomplete.',
         )
     else:
-      statuses = self.apex.get(f'/v1/loads/{load_id}/shipment-statuses')
-      events = [
-        event
-        for event in statuses.get('events', [])
-        if isinstance(event, dict)
-      ]
-      recovery.update({
-        'baselineDispatchStatus': (
-          baseline_dispatch.get('status')
-          if isinstance(baseline_dispatch, dict)
-          else None
-        ),
-        'normalizedShipmentStatus': statuses.get('currentStatus'),
-        'apexStatusEventCount': len(events),
-        'apexFacingEvidence': bool(events),
-      })
-      if not events:
+      if recovery.get('sameBusinessIdentifier') is not True:
         raise LabExecutionError(
           'LAB_RECOVERY_NOT_VERIFIED',
-          'Corrected 214 did not produce Apex-facing shipment-status evidence.',
+          'Recovery did not preserve the incident business identifier.',
         )
+
+      if scenario_key == 'APEX_DUPLICATE_SHIPMENT':
+        if recovery.get('idempotentReplay') is not True or recovery.get('duplicate204Created') is True:
+          raise LabExecutionError(
+            'LAB_RECOVERY_NOT_VERIFIED',
+            'Duplicate-shipment safe replay proof was incomplete.',
+          )
+      else:
+        statuses = self.apex.get(f'/v1/loads/{load_id}/shipment-statuses')
+        events = [
+          event
+          for event in statuses.get('events', [])
+          if isinstance(event, dict)
+        ]
+        recovery.update({
+          'baselineDispatchStatus': (
+            baseline_dispatch.get('status')
+            if isinstance(baseline_dispatch, dict)
+            else None
+          ),
+          'normalizedShipmentStatus': statuses.get('currentStatus'),
+          'apexStatusEventCount': len(events),
+          'apexFacingEvidence': bool(events),
+        })
+        if not events:
+          raise LabExecutionError(
+            'LAB_RECOVERY_NOT_VERIFIED',
+            'Corrected 214 did not produce Apex-facing shipment-status evidence.',
+          )
 
     result_summary = dict(run.get('result_summary') or {})
     result_summary['recovery'] = recovery

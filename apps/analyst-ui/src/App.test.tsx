@@ -1116,6 +1116,31 @@ const completedWrongVersionLabRun = makeCompletedFailureLabRun({
   },
 });
 
+const completedHostKeyMismatchLabRun = makeCompletedFailureLabRun({
+  id: 'acacacac-acac-4cac-8cac-acacacacacac',
+  scenarioKey: 'SFTP_HOST_KEY_MISMATCH',
+  businessIdentifier: 'LABSFTP900',
+  stepKey: 'INJECT_SFTP_HOST_KEY_MISMATCH',
+  displayName: 'Probe SFTP host-key mismatch',
+  name: 'SFTP Host-Key Mismatch',
+  errorCode: 'SFTP_HOST_KEY_MISMATCH',
+  category: 'TRANSPORT_ERROR',
+  stage: 'TRANSPORT_BOUNDARY',
+  safeMessage: 'Failure occurred before an integration transaction could be created.',
+  guidance: 'Check SFTP host-key pinning and endpoint identity.',
+  injectedFault: 'Temporary in-memory host-key fingerprint mismatch.',
+  payloadPreview: {
+    probe: 'host-key-verification',
+    expectedFingerprint: 'temporary-invalid-fingerprint',
+    productionConfigurationChanged: false,
+  },
+  documentTypeOverride: null,
+  stepDocumentTypeOverride: 'TRANSPORT_PROBE',
+  transportOverride: 'SFTP',
+  messageFormatOverride: 'NONE',
+  preTransaction: true,
+});
+
 const failureRunsByScenario: Record<string, ReturnType<typeof makeCompletedFailureLabRun>> = {
   APEX_BAD_AUTH: completedBadAuthLabRun,
   APEX_INVALID_JSON: completedInvalidJsonLabRun,
@@ -1124,6 +1149,7 @@ const failureRunsByScenario: Record<string, ReturnType<typeof makeCompletedFailu
   X12_214_CONTROL_MISMATCH: completedControlMismatchLabRun,
   X12_214_UNSUPPORTED_STATUS: completedUnsupportedStatusLabRun,
   X12_214_WRONG_VERSION: completedWrongVersionLabRun,
+  SFTP_HOST_KEY_MISMATCH: completedHostKeyMismatchLabRun,
 };
 
 function makeCompletedFailureLabRun({
@@ -1140,6 +1166,11 @@ function makeCompletedFailureLabRun({
   guidance,
   injectedFault,
   payloadPreview,
+  documentTypeOverride,
+  stepDocumentTypeOverride,
+  transportOverride,
+  messageFormatOverride,
+  preTransaction = false,
 }: {
   id: string;
   scenarioKey: string;
@@ -1154,9 +1185,19 @@ function makeCompletedFailureLabRun({
   guidance: string;
   injectedFault: string;
   payloadPreview: Record<string, unknown>;
+  documentTypeOverride?: string | null;
+  stepDocumentTypeOverride?: string;
+  transportOverride?: string;
+  messageFormatOverride?: string;
+  preTransaction?: boolean;
 }) {
-  const documentType = scenarioKey.startsWith('X12_') ? '214' : 'APEX_LOAD_TENDER';
-  const transport = scenarioKey.startsWith('X12_') ? 'SFTP' : 'REST';
+  const documentType = documentTypeOverride !== undefined
+    ? documentTypeOverride
+    : scenarioKey.startsWith('X12_') ? '214' : 'APEX_LOAD_TENDER';
+  const transport = transportOverride ?? (scenarioKey.startsWith('X12_') ? 'SFTP' : 'REST');
+  const observedBusinessIdentifier = preTransaction
+    ? null
+    : stage === 'AUTHENTICATION' || stage === 'PARSING' ? null : businessIdentifier;
   return {
     ...completedFailureLabRun,
     id,
@@ -1177,16 +1218,16 @@ function makeCompletedFailureLabRun({
           transport,
         },
         observed: {
-          errorId,
-          transactionId,
-          correlationId: `lab-failure-${scenarioKey.toLowerCase()}`,
-          businessIdentifier: stage === 'AUTHENTICATION' || stage === 'PARSING' ? null : businessIdentifier,
+          errorId: preTransaction ? null : errorId,
+          transactionId: preTransaction ? null : transactionId,
+          correlationId: preTransaction ? null : `lab-failure-${scenarioKey.toLowerCase()}`,
+          businessIdentifier: observedBusinessIdentifier,
           errorCode,
           category,
           stage,
           retryable: false,
           safeMessage,
-          processingStatus: 'FAILED',
+          processingStatus: preTransaction ? null : 'FAILED',
           documentType,
           transport,
         },
@@ -1204,6 +1245,10 @@ function makeCompletedFailureLabRun({
         runId: id,
         stepKey,
         displayName,
+        transport,
+        messageFormat: messageFormatOverride ?? (scenarioKey.startsWith('X12_') ? 'X12' : 'JSON'),
+        documentType: stepDocumentTypeOverride ?? documentType ?? 'TRANSPORT_PROBE',
+        relatedTransactionIds: preTransaction ? [] : completedFailureLabRun.steps[0].relatedTransactionIds,
         responseSummary: {
           drillOutcome: 'EXPECTED_FAILURE_OBSERVED',
           expectedFailure: {
@@ -1213,13 +1258,13 @@ function makeCompletedFailureLabRun({
             retryable: false,
           },
           observedFailure: {
-            errorId,
-            transactionId,
-            businessIdentifier: stage === 'AUTHENTICATION' || stage === 'PARSING' ? null : businessIdentifier,
+            errorId: preTransaction ? null : errorId,
+            transactionId: preTransaction ? null : transactionId,
+            businessIdentifier: observedBusinessIdentifier,
             errorCode,
             category,
             stage,
-            processingStatus: 'FAILED',
+            processingStatus: preTransaction ? null : 'FAILED',
           },
         },
       },
@@ -1745,6 +1790,23 @@ function installFetchMock(options: {
           normalizedShipmentStatus: 'PICKED_UP',
           apexFacingEvidence: true,
           correctedX12: 'ISA*00*          *00*          *ZZ*MWCX           *ZZ*FREIGHTBRIDGE  *260924*1510*U*00401*000000998*0*T*:~GS*QM*MWCX*FREIGHTBRIDGE*20260924*1510*998*X*004010~ST*214*9876~AT7*AF****20260924*1510*UT~SE*7*9876~GE*1*998~IEA*1*000000998~',
+        };
+      } else if (scenarioKey === 'SFTP_HOST_KEY_MISMATCH') {
+        recovery = {
+          status: 'SUCCEEDED',
+          recoveryKind: 'SFTP_CONNECTIVITY_VERIFIED',
+          connectionVerified: true,
+          hostKeyPinning: 'VERIFIED',
+          directories: {
+            inbound: true,
+            outbound: true,
+            archive: true,
+            error: true,
+          },
+          transactionCreated: false,
+          messageReplayAttempted: false,
+          originalFailurePreTransaction: true,
+          transport: 'SFTP',
         };
       } else {
         return jsonResponse(
@@ -3082,7 +3144,78 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('WRONG_X12_VERSION');
 
     await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
-    expect(await screen.findByTestId('mission-9-card')).toHaveTextContent(/Locked/i);
+    expect(await screen.findByTestId('mission-9-card')).toHaveTextContent(/Open Mission/i);
+  }, 10000);
+
+  test('Mission 9 diagnoses a host-key failure before any integration transaction exists', async () => {
+    installFetchMock();
+    window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      completedMissions: [
+        'LEARN_THE_FLOW',
+        'APEX_BAD_AUTH',
+        'APEX_INVALID_JSON',
+        'APEX_INVALID_CONTRACT',
+        'DUPLICATE_SHIPMENT',
+        'X12_ENVELOPE_MISMATCH',
+        'STATUS_CALLBACK_MISSING',
+        'WRONG_X12_VERSION',
+      ],
+    }));
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn/mission/sftp-stops-working';
+    render(<App />);
+
+    expect(await screen.findByTestId('incident-mission-page')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Start Incident/i }));
+    expect(await screen.findByTestId('incident-workspace')).toHaveAttribute('data-scenario-key', 'SFTP_HOST_KEY_MISMATCH');
+
+    const transportPanel = screen.getByTestId('transport-boundary-panel');
+    expect(transportPanel).toHaveTextContent(/No integration transaction exists yet/i);
+    expect(transportPanel).toHaveTextContent(/SFTP_HOST_KEY_MISMATCH/i);
+    expect(transportPanel).toHaveTextContent(/Host-key verification failed/i);
+    expect(transportPanel).toHaveTextContent(/Transaction not created/i);
+    expect(within(transportPanel).getByRole('link', { name: /Open Midwest Partner Profile/i })).toHaveAttribute(
+      'href',
+      '#/learn/tools/partners?partnerCode=MWCX',
+    );
+
+    await userEvent.click(within(screen.getByTestId('evidence-source-transport')).getAllByText(/^Inspect/i)[0]);
+    await userEvent.click(within(screen.getByTestId('evidence-source-no-transaction')).getAllByText(/^Inspect/i)[0]);
+    expect(screen.getByTestId('evidence-source-transport')).toHaveTextContent(/TRANSPORT_BOUNDARY/i);
+    expect(screen.getByTestId('evidence-source-no-transaction')).toHaveTextContent(/transactionId/i);
+    expect(screen.getByTestId('evidence-source-no-transaction')).toHaveTextContent(/null/i);
+
+    await chooseIncidentOption(/Where did FreightBridge evidence last look healthy/i, /SSH host identity check/i);
+    await chooseIncidentOption(/What is the most accurate FreightBridge diagnosis/i, /host-key fingerprint did not match/i);
+    await chooseIncidentOption(/What should you do next/i, /run SFTP readiness before replaying any business message/i);
+    await userEvent.click(screen.getByRole('button', { name: /Verify configured Midwest SFTP trust and readiness/i }));
+
+    const verification = await screen.findByTestId('verification-panel');
+    expect(verification).toHaveTextContent(/SFTP_CONNECTIVITY_VERIFIED/i);
+    expect(verification).toHaveTextContent(/Connection Verified/i);
+    expect(verification).toHaveTextContent(/YES/i);
+    expect(verification).toHaveTextContent(/Host-Key Pinning/i);
+    expect(verification).toHaveTextContent(/VERIFIED/i);
+    expect(verification).toHaveTextContent(/Transaction Created/i);
+    expect(verification).toHaveTextContent(/NO/i);
+    expect(verification).toHaveTextContent(/Message Replay Attempted/i);
+    expect(verification).toHaveTextContent(/\/inbound: READY/i);
+    expect(verification).toHaveTextContent(/\/outbound: READY/i);
+    expect(verification).toHaveTextContent(/\/archive: READY/i);
+    expect(verification).toHaveTextContent(/\/error: READY/i);
+    expect(screen.queryByTestId('recovery-correlation')).not.toBeInTheDocument();
+
+    await userEvent.type(
+      screen.getByLabelText(/Write Mike/i),
+      'Mike, the failure stopped at SFTP host-key verification before any transaction existed. The trusted configured connection and required directories now verify ready, and no business replay was needed.',
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
+    expect(await screen.findByTestId('incident-debrief')).toHaveTextContent(/host-key mismatch/i);
+    expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('SFTP_STOPS_WORKING');
+
+    await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
+    expect(await screen.findByTestId('mission-10-card')).toHaveTextContent(/Locked/i);
   }, 10000);
 
   test('searches transactions and opens detail with retry action', async () => {

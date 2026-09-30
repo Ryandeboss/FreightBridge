@@ -22,6 +22,7 @@ export const DUPLICATE_SHIPMENT_MISSION_ID = 'DUPLICATE_SHIPMENT';
 export const X12_ENVELOPE_MISMATCH_MISSION_ID = 'X12_ENVELOPE_MISMATCH';
 export const STATUS_CALLBACK_MISSING_MISSION_ID = 'STATUS_CALLBACK_MISSING';
 export const WRONG_X12_VERSION_MISSION_ID = 'WRONG_X12_VERSION';
+export const SFTP_STOPS_WORKING_MISSION_ID = 'SFTP_STOPS_WORKING';
 export const PLANNED_MISSION_COUNT = 10;
 
 export const trainingMissions: TrainingMission[] = [
@@ -98,13 +99,13 @@ export const trainingMissions: TrainingMission[] = [
     unlocksAfter: STATUS_CALLBACK_MISSING_MISSION_ID,
   },
   {
-    id: 'SFTP_STOPS_WORKING',
+    id: SFTP_STOPS_WORKING_MISSION_ID,
     slug: 'sftp-stops-working',
     title: 'Mission 9 - Midwest SFTP Suddenly Stops Working',
     difficulty: 'ADVANCED',
-    summary: 'Locked roadmap placeholder for SFTP readiness and delivery failures.',
-    implemented: false,
-    unlocksAfter: 'WRONG_X12_VERSION',
+    summary: 'Diagnose an SFTP trust failure that stops the connection before FreightBridge creates an integration transaction.',
+    implemented: true,
+    unlocksAfter: WRONG_X12_VERSION_MISSION_ID,
   },
   {
     id: 'PRODUCTION_INCIDENT',
@@ -1323,6 +1324,142 @@ export const incidentMissions: IncidentMissionDefinition[] = [
       { id: 'concept', label: 'Hint 3 - Technical concept', body: 'A message can be structurally valid X12 and still be incompatible with the active trading-partner profile.' },
     ],
   },
+  {
+    id: SFTP_STOPS_WORKING_MISSION_ID,
+    slug: 'sftp-stops-working',
+    missionNumber: 9,
+    title: 'Mission 9 - Midwest SFTP Suddenly Stops Working',
+    shortTitle: 'Pre-transaction SFTP host-key failure',
+    scenarioKey: 'SFTP_HOST_KEY_MISMATCH',
+    symptom: 'FreightBridge cannot establish a trusted Midwest SFTP session, and no file-level integration transaction appears in the console.',
+    briefing: {
+      kind: 'manager',
+      from: 'Mike',
+      role: 'Integration Manager',
+      body:
+        'This time, do not start by searching for a failed transaction. The connection may be dying before FreightBridge creates one. Prove whether the failure is at the transport trust boundary, then verify connectivity without replaying a business message.',
+    },
+    partnerMessage: {
+      kind: 'partner',
+      from: 'Midwest EDI Support',
+      role: 'External Partner Message',
+      body:
+        'Our SFTP endpoint is online, but FreightBridge is not completing the connection. Please verify your side of the trust and connectivity setup before asking us to resend any files.',
+    },
+    evidencePoints: [
+      {
+        id: 'configuration',
+        checkpoint: 'FreightBridge SFTP configuration loaded',
+        status: 'SUCCEEDED',
+        source: 'FreightBridge Transport Configuration',
+        observed: 'The controlled drill uses the real endpoint settings while temporarily substituting an invalid expected host-key fingerprint.',
+        meaning: 'The failure is intentionally isolated to endpoint identity verification without changing production configuration.',
+      },
+      {
+        id: 'host-key',
+        checkpoint: 'SSH host-key verification',
+        status: 'FAILED',
+        source: 'FreightBridge SFTP Client',
+        observed: 'The presented server key does not match the temporarily expected fingerprint used by the drill.',
+        meaning: 'FreightBridge stops the connection before authentication, directory access, or message processing.',
+      },
+      {
+        id: 'authentication',
+        checkpoint: 'SFTP authentication and session',
+        status: 'NOT_REACHED',
+        source: 'FreightBridge SFTP Client',
+        observed: 'Authentication is not treated as the failure because host identity trust already failed first.',
+        meaning: 'Do not diagnose credentials when the trust boundary has not passed.',
+      },
+      {
+        id: 'transaction',
+        checkpoint: 'Integration transaction creation',
+        status: 'NOT_REACHED',
+        source: 'FreightBridge Operations',
+        observed: 'No integration transaction, business identifier, or persisted message error is created for the failed host-key probe.',
+        meaning: 'Transaction Search and Error Detail are the wrong primary evidence sources for this pre-ingestion failure.',
+      },
+    ],
+    evidenceSources: [
+      {
+        id: 'transport',
+        title: 'Transport Boundary Observation',
+        source: 'Controlled SFTP Probe',
+        summary: 'Confirm the exact failure class and where the connection stopped.',
+        inspectedLabel: 'Inspect transport observation',
+        details: [
+          'The error code is SFTP_HOST_KEY_MISMATCH.',
+          'The category is TRANSPORT_ERROR.',
+          'The stage is TRANSPORT_BOUNDARY.',
+          'The failure happens before a business document is ingested.',
+        ],
+        rawFrom: 'observedFailure',
+      },
+      {
+        id: 'no-transaction',
+        title: 'No Transaction Evidence',
+        source: 'FreightBridge Failure Drill Result',
+        summary: 'Verify that the host-key failure did not create transaction or business-message evidence.',
+        inspectedLabel: 'Inspect pre-transaction evidence',
+        details: [
+          'transactionId is null.',
+          'businessIdentifier is null.',
+          'No related transaction IDs are produced by the drill.',
+          'This is expected for a connection failure before ingestion.',
+        ],
+        rawFrom: 'failureDrill',
+      },
+      {
+        id: 'readiness',
+        title: 'Recovery Readiness Target',
+        source: 'Midwest SFTP Readiness',
+        summary: 'Understand what must be healthy before any message replay is appropriate.',
+        inspectedLabel: 'Inspect readiness target',
+        details: [
+          'Host-key pinning must verify against the real configured fingerprint.',
+          'The SFTP session must open successfully.',
+          '/inbound, /outbound, /archive, and /error must all be reachable.',
+          'No business message needs to be replayed just to prove transport readiness.',
+        ],
+        rawFrom: 'steps',
+      },
+    ],
+    requiredEvidenceSourceIds: ['transport', 'no-transaction'],
+    lastHealthyOptions: [
+      { id: 'host-contact', label: 'FreightBridge reached the SSH host identity check, but trust verification failed there', explanation: 'Correct. The connection did not progress into authentication or SFTP file operations.' },
+      { id: 'file-arrival', label: 'A Midwest EDI file reached FreightBridge and then failed parsing', explanation: 'No business file was ingested in this incident.' },
+      { id: 'mapping', label: 'A parsed transaction reached Midwest mapping', explanation: 'Mapping is far downstream of this transport-boundary failure.' },
+    ],
+    correctLastHealthyId: 'host-contact',
+    diagnosisOptions: [
+      { id: 'host-key', label: 'FreightBridge rejected the SFTP server identity because the expected host-key fingerprint did not match, so no integration transaction was created', explanation: 'Correct. This is a transport trust failure before message ingestion.' },
+      { id: 'credentials', label: 'The SFTP username or private key was rejected after authentication started', explanation: 'Authentication is not reached when host-key verification fails first.' },
+      { id: 'x12', label: 'The Midwest X12 message used an unsupported version', explanation: 'No X12 message is ingested in this incident.' },
+    ],
+    correctDiagnosisId: 'host-key',
+    planOptions: [
+      { id: 'verify-trust', label: 'Verify the endpoint and expected host-key fingerprint, restore trusted configuration, then run SFTP readiness before replaying any business message', explanation: 'Correct. Re-establish transport trust first and prove connectivity safely.' },
+      { id: 'disable-check', label: 'Disable host-key verification so the SFTP connection can continue', explanation: 'Host-key pinning protects endpoint identity and should not be bypassed.' },
+      { id: 'replay-now', label: 'Immediately resend the last 214 and see whether it works', explanation: 'Do not replay business traffic until the transport trust boundary is healthy.' },
+    ],
+    correctPlanId: 'verify-trust',
+    remediationLabel: 'Verify configured Midwest SFTP trust and readiness',
+    recoveryMode: 'INCIDENT_VERIFICATION',
+    verification: 'Recovery must verify the real configured host key, open the SFTP session, confirm all four required directories, and prove that no message replay or integration transaction was needed.',
+    statusPrompt: 'Write Mike an update covering the transport-boundary failure, absence of a transaction, host-key verification, readiness proof, and why no business replay was required.',
+    debrief: [
+      'Some integration failures happen before an integration transaction exists.',
+      'A host-key mismatch is an endpoint identity/trust failure, not an X12, mapping, or business-validation failure.',
+      'When transactionId and businessIdentifier are absent, do not invent transaction-level evidence.',
+      'Recovery is proven by trusted SFTP connectivity and directory readiness; replaying a business message is a separate decision.',
+    ],
+    hints: [
+      { id: 'boundary', label: 'Hint 1 - Start before the transaction queue', body: 'Look at the transport boundary before searching transaction or error records.' },
+      { id: 'identity', label: 'Hint 2 - Separate identity from credentials', body: 'SSH host-key verification proves server identity and happens before normal SFTP authentication/file work.' },
+      { id: 'recovery', label: 'Hint 3 - Verify without replay', body: 'A successful trusted connection plus required-directory checks can prove transport recovery without sending business data.' },
+    ],
+  },
+
 ];
 
 export function findIncidentMissionBySlug(slug: string | undefined): IncidentMissionDefinition | undefined {
