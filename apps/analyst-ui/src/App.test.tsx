@@ -3159,7 +3159,7 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
     expect(screen.queryByText(/MISSION COMPLETE/i)).not.toBeInTheDocument();
   });
 
-  test('Mission 2 uses the real bad-auth drill and unlocks Mission 3 after verified recovery', async () => {
+  test('Mission 2 proves the reusable Console Code Answer workstation and unlocks Mission 3 after recovery', async () => {
     const fetchMock = installFetchMock();
     window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({ version: 1, completedMissions: ['LEARN_THE_FLOW'] }));
     window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
@@ -3168,22 +3168,42 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
 
     expect(await screen.findByTestId('incident-mission-page')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Apex Can't Get a Load Through/i })).toBeInTheDocument();
-    await completeIncidentMission({
-      lastHealthy: /Inbound request was received by FreightBridge/i,
-      diagnosis: /failed FreightBridge authentication/i,
-      plan: /valid training authentication/i,
-      recoveryButton: /Retry with valid training authentication/i,
-    });
+    await userEvent.click(screen.getByRole('button', { name: /Start Incident/i }));
 
+    const workstation = await screen.findByTestId('lab-workstation');
+    expect(within(workstation).getByRole('tab', { name: /Console/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('workstation-console')).toHaveTextContent(/Partner authentication/i);
+    expect(screen.getByTestId('workstation-console')).toHaveTextContent(/NOT REACHED/i);
     expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/AUTHENTICATION_ERROR/i);
-    expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/AUTHENTICATION/i);
-    expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/NOT REACHED/i);
-    expect(screen.getByTestId('incident-workspace')).toHaveAttribute('data-scenario-key', 'APEX_BAD_AUTH');
-    expect(screen.queryByRole('heading', { name: 'APEX_BAD_AUTH' })).not.toBeInTheDocument();
-    expect(screen.getByTestId('verification-panel')).toHaveTextContent(/MATCHED - same incident load/i);
-    expect(screen.getByTestId('incident-summary')).toBeInTheDocument();
     expect(screen.getByTestId('incident-workspace')).not.toHaveTextContent(token);
+
+    await userEvent.click(screen.getByRole('button', { name: /View Raw Message/i }));
+    expect(screen.getByTestId('workstation-raw-message')).toHaveTextContent(/REDACTED/i);
+
+    await userEvent.click(within(workstation).getByRole('tab', { name: /Code/i }));
+    expect(screen.getByTestId('workstation-code')).toHaveTextContent(/Partner Contracts\/apex_contract\.json/i);
+    expect(screen.getByTestId('workstation-code-content')).toHaveTextContent(/valid environment credential/i);
+    await userEvent.click(screen.getByRole('button', { name: /Validation\/inbound_pipeline\.ts/i }));
+    expect(screen.getByTestId('workstation-code-content')).toHaveTextContent(/authenticatePartner/i);
+    await userEvent.click(screen.getByRole('button', { name: /Mappings\/apex_to_canonical\.ts/i }));
+    expect(screen.getByTestId('workstation-code-content')).toHaveTextContent(/Mapping is reached only after authentication/i);
+
+    await userEvent.click(within(workstation).getByRole('tab', { name: /Answer/i }));
+    await userEvent.click(screen.getByRole('radio', { name: /Midwest rejected the tender/i }));
+    await userEvent.click(screen.getByRole('radio', { name: /Manually create the Midwest 204/i }));
+    expect(screen.getByTestId('workstation-answer')).toHaveTextContent(/Evidence hint/i);
+
+    await userEvent.click(screen.getByRole('radio', { name: /failed FreightBridge authentication/i }));
+    await userEvent.click(screen.getByRole('radio', { name: /valid training authentication/i }));
+    expect(screen.getByTestId('workstation-answer')).toHaveTextContent(/Diagnosis confirmed/i);
+    await userEvent.click(screen.getByRole('button', { name: /Apply Fix & Run Again/i }));
+
+    expect(await screen.findByTestId('verification-panel')).toHaveTextContent(/SUCCEEDED/i);
+    expect(screen.getByTestId('verification-panel')).toHaveTextContent(/same incident load/i);
+    await userEvent.click(screen.getByRole('button', { name: /Complete Lab/i }));
+    expect(screen.getByTestId('incident-summary')).toBeInTheDocument();
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('APEX_BAD_AUTH');
+
     await waitFor(() => {
       const calls = fetchMock.mock.calls
         .filter(([input, init]) => String(input).endsWith('/api/lab/runs') && init?.method === 'POST')
