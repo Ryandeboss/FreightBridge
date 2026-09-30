@@ -1,79 +1,101 @@
 # Five-Minute Demo Script
 
-Do not include credentials in the demo. Enter the operations token privately before the walkthrough.
+Do not show credentials. Enter the operations token privately before the walkthrough. For the cleanest portfolio demo, use a browser profile where the Training Mode path is already completed so the Ops Desk opens in the polished 10/10 review state.
 
-## 0:00-0:30 - Problem And Architecture
+## 0:00-0:45 — Training Desk And Product Framing
 
-Click: open the repository README and show the architecture diagram.
+Click: open FreightBridge at `#/learn`.
 
-Say: "FreightBridge is a synthetic integration layer between Apex REST/JSON and Midwest X12/SFTP. The goal is to show how modern API traffic, legacy EDI files, canonical mapping, acknowledgments, observability, and testing fit together."
+Say: "FreightBridge is a synthetic logistics integration platform and analyst-training environment. Apex sends REST/JSON, Midwest exchanges X12 over SFTP, and FreightBridge translates through a canonical shipment model while preserving operational evidence."
 
-Proves: the project has a clear integration problem and a current architecture.
+Show:
 
-## 0:30-1:15 - Integration Lab Happy Path
+- 10 / 10 Training Complete state.
+- Apex → FreightBridge → Midwest relationship.
+- zero pending training incidents.
+- compact analyst tools and Advanced Console link.
 
-Click: Analyst Console -> Integration Lab -> Happy Paths -> Full Shipment Lifecycle.
+Proves: the project is both an integration system and a support/learning workflow, not just a collection of APIs.
 
-Say: "The lab creates a safe synthetic run so I can demonstrate the full lifecycle without hand-building every request."
+## 0:45-1:30 — Healthy Flow
 
-Proves: the demo is repeatable and uses the real deployed workflow.
+Click: review the guided healthy flow, preferably Part 4.
 
-## 1:15-2:00 - 204 / 997 / 990 / 214 Path
+Say: "The guided path starts with an Apex JSON tender, creates canonical state, generates the Midwest 204, distinguishes the 997 technical acknowledgment from the 990 business decision, then normalizes 214 shipment events and forwards status to Apex."
 
-Click: open the Lab run detail and inspect step summaries, especially the Midwest 204 preview and return documents.
+Call out:
 
-Say: "The 204 is the load tender. The 997 is only a technical acknowledgment. The 990 is the business tender decision. The 214 events move the shipment through pickup, in transit, arrived, and delivered."
+- `204` load tender.
+- `997` technical acknowledgment.
+- `990` business tender response.
+- `214` shipment status.
+- `AF → PICKED_UP`, `X6 → IN_TRANSIT`, `X1 → ARRIVED`, `D1 → DELIVERED`.
 
-Proves: real EDI semantics, not just file passing.
+Proves: the training is grounded in the real end-to-end implementation.
 
-## 2:00-2:45 - Business Trace And Timeline
+## 1:30-2:30 — Final Shift Incident
 
-Click: Business Trace for the generated load id. Open a related Transaction Detail.
+Click: Mission 10 — Production Incident.
 
-Say: "A support analyst can follow one business shipment across JSON requests, X12 files, SFTP movement, mappings, logs, and errors."
+Say: "The final shift removes most of the earlier hand-holding. This 214 reaches FreightBridge with valid transport, X12 controls, 004010 profile, and AF status, but the B10 shipment reference is wrong."
 
-Proves: operations observability and correlation.
+Show:
 
-## 2:45-3:30 - Unsupported 214 Status Failure Drill
+- Case Correlation.
+- Raw 214 evidence.
+- persisted `SHIPMENT_NOT_FOUND` / `BUSINESS_VALIDATION` classification.
+- corrected recovery with the intended shipment reference.
+- Apex-facing `PICKED_UP` evidence.
 
-Click: Integration Lab -> Failure Drills -> unsupported 214 status.
+Proves: the learner can distinguish technical validity from business correlation and verify recovery from observable evidence.
 
-Say: "This creates an expected mapping failure: X12 parsing succeeds, envelope validation succeeds, but the Midwest business profile rejects the unsupported AT7 code."
+## 2:30-3:15 — Compact Analyst Tools
 
-Proves: layer-specific diagnosis.
+Click: Transaction Search → Business Trace → Processing Log or Error Detail.
 
-## 3:30-4:15 - Failure Detail
+Say: "Training Mode keeps investigation inside the same workstation. I can search a load, follow its transaction chain, inspect processing logs, mapping metadata, partner profiles, and safe payload evidence without exposing secrets."
 
-Click: Failure Queue -> open the new failure.
+Proves: analyst usability and observability are first-class parts of the application.
 
-Say: "The failure captures code, category, stage, retryability, correlation, and related transaction context. Parsing failure, contract validation, mapping failure, and auth failure are intentionally classified differently."
+## 3:15-4:00 — Replay And Event Sequencing
 
-Proves: safe troubleshooting workflow.
+Click: Replay & Sequence Clinic.
 
-## 4:15-4:45 - Partners And Mappings
+Say: "FreightBridge treats three things differently: a duplicate business submission, an exact X12 replay, and a late event. Exact replay is auditable but skips duplicate side effects. A late ARRIVED event is retained in history but does not regress a DELIVERED shipment when its occurred time is older."
 
-Click: Partners -> MWCX, then Mappings -> `CANONICAL_TO_MWCX_204`.
+Proves: idempotency, replay, and event chronology are modeled deliberately.
 
-Say: "Trading partner identity and mapping versions are explicit. Runtime transactions store mapping audit metadata so later changes are traceable."
+## 4:00-4:35 — Advanced Console
 
-Proves: versioned configuration and audit.
+Click: Open Advanced Console.
 
-## 4:45-5:00 - Testing Story
+Show one or two of:
 
-Click: GitHub Actions CI run.
+- Business Trace.
+- Transaction Detail processing timeline.
+- Failure Detail.
+- Mapping profile/version.
+- Partner profile.
+- Integration Lab.
 
-Say: "Normal CI runs contract tests, X12 regression, coverage gates, frontend tests, docs validation, and an ephemeral PostgreSQL migration chain. Deployed regression is manual because it mutates shared synthetic data."
+Say: "The same APIs support a full technical console for deeper operations and configuration work. Training Mode is a guided layer over real system behavior, not a separate mock application."
 
-Proves: correctness is defended at multiple boundaries.
+## 4:35-5:00 — Testing And Boundaries
+
+Click: GitHub Actions.
+
+Say: "CI covers frontend quality, API suites, partner simulators, documentation, the migration chain, and acceptance-harness tests. The deployed services are synthetic portfolio infrastructure; I am not claiming real customer traffic or full X12-standard coverage."
+
+Proves: the project has explicit quality gates and honest product boundaries.
 
 ## Fallback
 
-If a free hosted service is cold-starting or unavailable, continue with:
+If a hosted free-tier service is cold-starting, continue with:
 
-- README architecture and sequence diagrams.
-- Sample payloads under [sample-data](../../sample-data/).
-- Evidence index links in [evidence.md](evidence.md).
-- GitHub Actions CI evidence.
-- Real screenshots if previously captured safely.
+- the Training Desk / completed roadmap;
+- README architecture and lifecycle diagrams;
+- [evidence index](evidence.md);
+- [screenshot plan](screenshots/README.md);
+- green GitHub Actions evidence.
 
-Do not disable security or expose credentials to keep the demo moving.
+Do not disable security or expose credentials to keep a demo moving.
