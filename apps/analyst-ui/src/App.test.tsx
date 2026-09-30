@@ -3459,6 +3459,132 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
     expect(screen.getByTestId('replay-sequence-completion')).toHaveTextContent(/Advanced practice complete/i);
   }, 15000);
 
+  test('keeps Mission 10 gated until replay and sequence practice is complete', async () => {
+    installFetchMock();
+    window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      completedMissions: [
+        'LEARN_THE_FLOW', 'APEX_BAD_AUTH', 'APEX_INVALID_JSON', 'APEX_INVALID_CONTRACT',
+        'DUPLICATE_SHIPMENT', 'X12_ENVELOPE_MISMATCH', 'STATUS_CALLBACK_MISSING',
+        'WRONG_X12_VERSION', 'SFTP_STOPS_WORKING',
+      ],
+    }));
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+
+    window.location.hash = '#/learn/mission/production-incident';
+    render(<App />);
+
+    expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
+    expect(screen.getByTestId('mission-10-card')).toHaveTextContent(/Locked/i);
+    expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Replay & Sequence Clinic/i);
+  });
+
+  test('opens Mission 10 after advanced replay and sequence practice', async () => {
+    installFetchMock();
+    window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      completedMissions: [
+        'LEARN_THE_FLOW', 'APEX_BAD_AUTH', 'APEX_INVALID_JSON', 'APEX_INVALID_CONTRACT',
+        'DUPLICATE_SHIPMENT', 'X12_ENVELOPE_MISMATCH', 'STATUS_CALLBACK_MISSING',
+        'WRONG_X12_VERSION', 'SFTP_STOPS_WORKING',
+      ],
+    }));
+    window.localStorage.setItem('freightbridge.replaySequencePracticeComplete', 'true');
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn';
+    render(<App />);
+
+    expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
+    expect(screen.getByTestId('mission-10-card')).toHaveTextContent(/Open Mission/i);
+    expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Mission 10 - Production Incident/i);
+    expect(screen.getByRole('link', { name: /Start Current Mission/i })).toHaveAttribute(
+      'href',
+      '#/learn/mission/production-incident',
+    );
+  });
+
+  test('Mission 10 completes the final shift by correcting the 214 shipment reference', async () => {
+    installFetchMock();
+    window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      completedMissions: [
+        'LEARN_THE_FLOW', 'APEX_BAD_AUTH', 'APEX_INVALID_JSON', 'APEX_INVALID_CONTRACT',
+        'DUPLICATE_SHIPMENT', 'X12_ENVELOPE_MISMATCH', 'STATUS_CALLBACK_MISSING',
+        'WRONG_X12_VERSION', 'SFTP_STOPS_WORKING',
+      ],
+    }));
+    window.localStorage.setItem('freightbridge.replaySequencePracticeComplete', 'true');
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn/mission/production-incident';
+    render(<App />);
+
+    expect(await screen.findByTestId('incident-mission-page')).toBeInTheDocument();
+    expect(screen.getByText(/Mission 10 - Final Shift Incident/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Start Incident/i }));
+
+    const workspace = await screen.findByTestId('incident-workspace');
+    expect(workspace).toHaveAttribute('data-scenario-key', 'X12_214_UNKNOWN_SHIPMENT');
+    expect(screen.queryByRole('heading', { name: /Evidence Checkpoints/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId('healthy-baseline-comparison')).toHaveTextContent(/Independent Investigation/i);
+    expect(screen.getByTestId('healthy-baseline-comparison')).toHaveTextContent(/No checkpoint map or failure classifier/i);
+    expect(screen.getByTestId('incident-analyst-toolbox')).toBeInTheDocument();
+
+    await userEvent.click(within(screen.getByTestId('evidence-source-case-correlation')).getAllByText(/^Inspect/i)[0]);
+    await userEvent.click(within(screen.getByTestId('evidence-source-raw-214')).getAllByText(/^Inspect/i)[0]);
+    await userEvent.click(within(screen.getByTestId('evidence-source-error')).getAllByText(/^Inspect/i)[0]);
+
+    expect(screen.getByTestId('evidence-source-case-correlation')).toHaveTextContent(/LABFINAL900/i);
+    expect(screen.getByTestId('evidence-source-case-correlation')).toHaveTextContent(/UNKNOWNADADADAD/i);
+    expect(screen.getByTestId('evidence-source-raw-214')).toHaveTextContent(/004010/i);
+    expect(screen.getByTestId('evidence-source-raw-214')).toHaveTextContent(/AT7\*AF/i);
+    expect(screen.getByTestId('evidence-source-error')).toHaveTextContent(/SHIPMENT_NOT_FOUND/i);
+    expect(screen.getByTestId('evidence-source-error')).toHaveTextContent(/BUSINESS_VALIDATION/i);
+
+    await chooseIncidentOption(
+      /Where did FreightBridge evidence last look healthy/i,
+      /passed X12 parsing and Midwest mapping/i,
+    );
+    await chooseIncidentOption(
+      /What is the most accurate FreightBridge diagnosis/i,
+      /B10 shipment reference does not match the intended canonical shipment/i,
+    );
+    await chooseIncidentOption(
+      /What should you do next/i,
+      /correct the B10 reference/i,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /Correct the shipment reference and verify recovery/i }));
+
+    const verification = await screen.findByTestId('verification-panel');
+    expect(verification).toHaveTextContent(/CORRECTED_214_REFERENCE/i);
+    expect(verification).toHaveTextContent(/Corrected Shipment Reference/i);
+    expect(verification).toHaveTextContent(/LABFINAL900/i);
+    expect(verification).toHaveTextContent(/Corrected ISA12/i);
+    expect(verification).toHaveTextContent(/00401/i);
+    expect(verification).toHaveTextContent(/Corrected GS08/i);
+    expect(verification).toHaveTextContent(/004010/i);
+    expect(verification).toHaveTextContent(/Corrected AT7-01/i);
+    expect(verification).toHaveTextContent(/AF/i);
+    expect(verification).toHaveTextContent(/PICKED_UP/i);
+    expect(verification).toHaveTextContent(/Apex-Facing Evidence/i);
+    expect(verification).toHaveTextContent(/PRESENT/i);
+
+    await userEvent.type(
+      screen.getByLabelText(/Send Mike a concise production-style incident update/i),
+      'Mike, Midwest sent a valid 004010 AF 214, but B10 referenced UNKNOWNADADADAD instead of LABFINAL900. FreightBridge failed at business validation; the corrected reference processed and Apex now shows PICKED_UP.',
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
+
+    expect(await screen.findByTestId('incident-debrief')).toHaveTextContent(/MISSION COMPLETE/i);
+    expect(screen.getByTestId('incident-debrief')).toHaveTextContent(/wrong shipment reference/i);
+    expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('PRODUCTION_INCIDENT');
+
+    await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
+    expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
+    expect(screen.getByTestId('mission-10-card')).toHaveTextContent(/Complete/i);
+    expect(screen.getByText('10 / 10')).toBeInTheDocument();
+  }, 15000);
+
   test('searches transactions and opens detail with retry action', async () => {
     const fetchMock = installFetchMock();
     window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
