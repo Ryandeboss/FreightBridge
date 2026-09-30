@@ -1,6 +1,6 @@
 # FreightBridge Training Mode
 
-Training Mode turns FreightBridge into a guided workplace simulation for a new FreightBridge Integration Support Analyst. The default authenticated experience is `#/learn`; the original technical workspace remains available as the Advanced Console.
+Training Mode turns FreightBridge into a guided workplace simulation for a new FreightBridge Integration Support Analyst. The default authenticated experience is `#/learn`, a deliberately minimal three-company entry screen. New learners choose **Begin Your Journey** and enter orientation; returning learners choose **Continue Training** to open the workstation at `#/learn/desk`. The original technical workspace remains available as the Advanced Console.
 
 ## What The Learner Does
 
@@ -85,6 +85,8 @@ Advanced incidents use server-backed recovery evidence. Examples include:
 The UI does not claim partner-side facts FreightBridge cannot observe.
 
 ## Training Progress
+
+The M41 journey-start state is browser-local as well; this milestone does not introduce learner accounts yet.
 
 Mission progress is stored in browser `localStorage` under:
 
