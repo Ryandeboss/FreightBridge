@@ -210,6 +210,71 @@ def test_x12_wrong_version_recovery_factory_restores_supported_profile() -> None
   assert mapped.status.value == 'PICKED_UP'
 
 
+def test_x12_unknown_shipment_factory_is_valid_through_mapping() -> None:
+  _, payload, metadata = ControlledX12FaultFactory().build_214(
+    fault_key='X12_214_UNKNOWN_SHIPMENT',
+    load_id='LABFAIL900',
+    run_id=RUN_ID,
+  )
+  interchange = parse_x12(payload)
+  validate_x12_envelopes(interchange)
+  mapped = map_midwest_214(interchange)
+
+  assert mapped.status.value == 'PICKED_UP'
+  assert mapped.shipment_number == metadata['receivedShipmentReference']
+  assert mapped.shipment_number != metadata['intendedShipmentReference']
+  assert str(metadata['receivedShipmentReference']).startswith('UNKNOWN')
+
+
+def test_x12_unknown_shipment_recovery_restores_intended_reference() -> None:
+  _, payload, metadata = ControlledX12FaultFactory().build_recovery_214(
+    scenario_key='X12_214_UNKNOWN_SHIPMENT',
+    load_id='LABFAIL900',
+    run_id=RUN_ID,
+  )
+  interchange = parse_x12(payload)
+  validate_x12_envelopes(interchange)
+  mapped = map_midwest_214(interchange)
+
+  assert metadata['correctedShipmentReference'] == 'LABFAIL900'
+  assert mapped.shipment_number == 'LABFAIL900'
+  assert mapped.status.value == 'PICKED_UP'
+
+
+def test_final_shift_baseline_creates_intended_canonical_shipment() -> None:
+  service = ControlledFailureDrillService()
+  captured: dict[str, object] = {}
+
+  class Result:
+    transaction_id = UUID(TRANSACTION_ID)
+
+    def response_body(self):
+      return {
+        'transactionId': TRANSACTION_ID,
+        'shipmentNumber': 'LABFAIL900',
+        'status': 'ACCEPTED_FOR_PROCESSING',
+      }
+
+  service._valid_apex_authorization = lambda: 'Bearer test-token'  # type: ignore[method-assign]
+
+  def fake_ingest_apex(**kwargs):
+    captured.update(kwargs)
+    return Result()
+
+  service._ingest_apex = fake_ingest_apex  # type: ignore[method-assign]
+
+  request, response = service.execute(
+    _run('X12_214_UNKNOWN_SHIPMENT'),
+    'CREATE_FINAL_SHIFT_BASELINE',
+  )
+
+  assert request['intendedShipmentReference'] == 'LABFAIL900'
+  assert response['drillOutcome'] == 'BASELINE_CREATED'
+  assert response['canonicalShipmentCreated'] is True
+  assert response['intendedShipmentReference'] == 'LABFAIL900'
+  assert captured['idempotency_key'] == f'lab-{RUN_ID}-final-shift-baseline'
+
+
 def test_sftp_host_key_drill_records_pre_ingestion_observation_without_transaction(monkeypatch) -> None:
   monkeypatch.setattr(
     'app.integrations.failure_drills.MidwestSftpConfig.from_settings',
