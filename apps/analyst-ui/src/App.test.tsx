@@ -2847,6 +2847,20 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
     expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/VALIDATION/i);
     expect(screen.getByRole('heading', { name: /^JSON parsing$/i }).closest('article')).toHaveTextContent(/SUCCEEDED/i);
     expect(screen.getByRole('heading', { name: /^Apex load contract validation$/i }).closest('article')).toHaveTextContent(/FAILED/i);
+    expect(screen.getByTestId('contract-mapping-classifier')).toHaveTextContent(/Contract validation vs\. mapping failure/i);
+    expect(screen.getByTestId('contract-failure-card')).toHaveClass('active');
+    expect(screen.getByTestId('failure-boundary-verdict')).toHaveTextContent(/INVALID_APEX_LOAD/i);
+    expect(screen.getByTestId('failure-boundary-verdict')).toHaveTextContent(/VALIDATION/i);
+    const mission4Tools = screen.getByTestId('incident-analyst-toolbox');
+    expect(within(mission4Tools).getByRole('link', { name: /Payload Viewer/i })).toHaveAttribute(
+      'href',
+      '#/learn/tools/payload?transactionId=' + transactionId,
+    );
+    expect(within(mission4Tools).getByRole('link', { name: /Error Detail/i })).toHaveAttribute(
+      'href',
+      '#/learn/tools/errors?errorId=' + errorId,
+    );
+    expect(within(mission4Tools).queryByRole('link', { name: /Mapping Viewer/i })).not.toBeInTheDocument();
     await userEvent.click(screen.getByText(/Hint 2 - Inspect safe payload preview/i));
     expect(screen.getByText(/pickup.postalCode as REMOVED/i)).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText(/Notes for this mission/i), 'Parsing passed but contract validation failed.');
@@ -2944,7 +2958,16 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
     await userEvent.click(within(screen.getByTestId('evidence-source-raw-x12')).getAllByText(/^Inspect/i)[0]);
     await userEvent.click(within(screen.getByTestId('evidence-source-mapping')).getAllByText(/^Inspect/i)[0]);
     expect(screen.getByTestId('evidence-source-raw-x12')).toHaveTextContent(/AT7\*ZZ/i);
-    expect(screen.getByTestId('evidence-source-mapping')).toHaveTextContent(/AF, IT, AR, and D1/i);
+    expect(screen.getByTestId('evidence-source-mapping')).toHaveTextContent(/AF, X6, X1, and D1/i);
+    expect(screen.getByTestId('mapping-failure-card')).toHaveClass('active');
+    expect(screen.getByTestId('failure-boundary-verdict')).toHaveTextContent(/UNSUPPORTED_AT7_CODE/i);
+    expect(screen.getByTestId('failure-boundary-verdict')).toHaveTextContent(/MAPPING/i);
+    const mission7Tools = screen.getByTestId('incident-analyst-toolbox');
+    expect(within(mission7Tools).getByRole('link', { name: /Mapping Viewer/i })).toHaveAttribute('href', '#/learn/tools/mappings');
+    expect(within(mission7Tools).getByRole('link', { name: /Processing Log/i })).toHaveAttribute(
+      'href',
+      '#/learn/tools/logs?transactionId=' + transactionId,
+    );
     await chooseIncidentOption(/Where did FreightBridge evidence last look healthy/i, /passed X12 parsing/i);
     await chooseIncidentOption(/What is the most accurate FreightBridge diagnosis/i, /unsupported status code ZZ/i);
     await chooseIncidentOption(/What should you do next/i, /supported AT7 value/i);
