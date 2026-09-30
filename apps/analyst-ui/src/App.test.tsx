@@ -2519,7 +2519,7 @@ test('teaches the healthy flow as five clean animated scenes without calling the
   expect(scene1).toHaveTextContent(/"loadId": "LOAD500"/i);
   expect(scene1).toHaveTextContent(/"commodityDescription": "Packaged auto parts"/i);
   expect(scene1).toHaveTextContent(/"scheduledDateTime": "2026-10-02T18:00:00Z"/i);
-  expect(scene1).toHaveTextContent(/LOAD500.*Apex's ID for this load/i);
+  expect(scene1).toHaveTextContent(/LOAD500.*load ID Apex assigned/i);
   expect(scene1).toHaveTextContent(/What this request means/i);
   expect(scene1).toHaveTextContent(/has not become X12 yet/i);
 
