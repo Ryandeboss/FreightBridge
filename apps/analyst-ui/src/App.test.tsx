@@ -1613,6 +1613,24 @@ function installFetchMock(options: {
         injectedFault: 'ISA12 set to 00501 and GS08 set to 005010.',
       },
       {
+        scenarioKey: 'X12_214_UNKNOWN_SHIPMENT',
+        name: '214 Unknown Shipment Reference',
+        description: 'Create a legitimate baseline shipment, then send a valid 214 with an unknown B10 shipment reference.',
+        stepCount: 2,
+        kind: 'FAILURE_DRILL',
+        layer: 'Business correlation',
+        expectedFailure: {
+          errorCode: 'SHIPMENT_NOT_FOUND',
+          category: 'BUSINESS_VALIDATION_ERROR',
+          stage: 'BUSINESS_VALIDATION',
+          retryable: false,
+          documentType: '214',
+          transport: 'SFTP',
+        },
+        guidance: 'Compare the mapped B10 shipment reference with the intended canonical shipment.',
+        injectedFault: 'B10 shipment reference changed while controls, version, and AT7 remain valid.',
+      },
+      {
         scenarioKey: 'SFTP_HOST_KEY_MISMATCH',
         name: 'SFTP Host-Key Mismatch',
         description: 'Probe SFTP with a temporary invalid expected host-key fingerprint.',
@@ -1938,6 +1956,25 @@ function installFetchMock(options: {
           normalizedShipmentStatus: 'PICKED_UP',
           apexFacingEvidence: true,
           correctedX12: 'ISA*00*          *00*          *ZZ*MWCX           *ZZ*FREIGHTBRIDGE  *260924*1510*U*00401*000000998*0*T*:~GS*QM*MWCX*FREIGHTBRIDGE*20260924*1510*998*X*004010~ST*214*9876~AT7*AF****20260924*1510*UT~SE*7*9876~GE*1*998~IEA*1*000000998~',
+        };
+      } else if (scenarioKey === 'X12_214_UNKNOWN_SHIPMENT') {
+        recovery = {
+          status: 'SUCCEEDED',
+          recoveryKind: 'CORRECTED_214_REFERENCE',
+          sameBusinessIdentifier: true,
+          correctedSt02: '7788',
+          correctedSe02: '7788',
+          controlCorrelation: 'MATCHED',
+          correctedAt7: 'AF',
+          correctedIsa12: '00401',
+          correctedGs08: '004010',
+          correctedShipmentReference: 'LABFINAL900',
+          profileCompatibility: 'SUPPORTED',
+          parseStatus: 'SUCCEEDED',
+          mappingStatus: 'SUCCEEDED',
+          normalizedShipmentStatus: 'PICKED_UP',
+          apexFacingEvidence: true,
+          correctedX12: 'ISA*00*          *00*          *ZZ*MWCX           *ZZ*FREIGHTBRIDGE  *260924*1510*U*00401*000000778*0*T*:~GS*QM*MWCX*FREIGHTBRIDGE*20260924*1510*778*X*004010~ST*214*7788~B10*MWCFINAL*LABFINAL900*MWCX~AT7*AF****20260924*1510*UT~MS1*Aurora*IL~SE*7*7788~GE*1*778~IEA*1*000000778~',
         };
       } else if (scenarioKey === 'SFTP_HOST_KEY_MISMATCH') {
         recovery = {
