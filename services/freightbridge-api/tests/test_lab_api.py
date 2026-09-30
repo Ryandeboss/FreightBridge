@@ -246,8 +246,32 @@ def test_final_shift_recovery_uses_existing_canonical_baseline_without_redispatc
     'scenario_key': 'X12_214_UNKNOWN_SHIPMENT',
     'business_identifier': 'LABFINAL900',
     'input_snapshot': {
-      **lab_run()['input_snapshot'],
       'loadId': 'LABFINAL900',
+      'bolNumber': 'BOLFINAL900',
+      'purchaseOrderNumber': 'POFINAL900',
+      'customerReference': 'CUSTFINAL',
+      'equipmentType': 'VAN_53',
+      'weightLbs': 42000,
+      'pieces': 22,
+      'commodityDescription': 'Final Shift Freight',
+      'pickup': {
+        'facilityName': 'ABC Factory',
+        'address1': '200 Industrial Rd',
+        'city': 'Aurora',
+        'state': 'IL',
+        'postalCode': '60505',
+        'scheduledDateTime': '2026-09-25T15:00:00+00:00',
+      },
+      'delivery': {
+        'facilityName': 'XYZ Warehouse',
+        'address1': '900 Commerce St',
+        'city': 'Detroit',
+        'state': 'MI',
+        'postalCode': '48201',
+        'scheduledDateTime': '2026-09-26T15:00:00+00:00',
+      },
+      'createdAt': '2026-09-24T15:00:00+00:00',
+      'updatedAt': '2026-09-24T15:00:00+00:00',
     },
     'result_summary': {
       'failureDrill': {
