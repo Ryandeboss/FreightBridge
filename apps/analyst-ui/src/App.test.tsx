@@ -3182,6 +3182,8 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
 
     await userEvent.click(within(workstation).getByRole('tab', { name: /Code/i }));
     expect(screen.getByTestId('workstation-code')).toHaveTextContent(/Partner Contracts\/apex_contract\.json/i);
+    expect(screen.getByTestId('workstation-code-content')).toHaveTextContent(/valid environment credential/i);
+    await userEvent.click(screen.getByRole('button', { name: /Validation\/inbound_pipeline\.ts/i }));
     expect(screen.getByTestId('workstation-code-content')).toHaveTextContent(/authenticatePartner/i);
     await userEvent.click(screen.getByRole('button', { name: /Mappings\/apex_to_canonical\.ts/i }));
     expect(screen.getByTestId('workstation-code-content')).toHaveTextContent(/Mapping is reached only after authentication/i);
