@@ -3556,6 +3556,16 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
     expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
     expect(screen.getByTestId('mission-10-card')).toHaveTextContent(/Complete/i);
     expect(screen.getByText('10 / 10')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Training complete/i })).toBeInTheDocument();
+    expect(screen.getByTestId('training-complete-summary')).toHaveTextContent(/10 \/ 10 missions complete/i);
+    expect(screen.getByTestId('training-complete-summary')).toHaveTextContent(/Trace/i);
+    expect(screen.getByTestId('training-complete-summary')).toHaveTextContent(/Diagnose/i);
+    expect(screen.getByTestId('training-complete-summary')).toHaveTextContent(/Verify/i);
+    expect(screen.getByTestId('training-complete-inbox')).toHaveTextContent(/No training incidents waiting/i);
+    expect(screen.getByTestId('ops-inbox').querySelector('.ops-count-badge')).toHaveTextContent('0');
+    expect(screen.getByTestId('ops-current-focus')).toHaveTextContent(/Training path finished/i);
+    expect(screen.getByTestId('ops-desk-shell').querySelector('.ops-nav-count')).toHaveTextContent('0');
+    expect(screen.getByRole('link', { name: /^Open Advanced Console$/i })).toHaveAttribute('href', '#/dashboard');
   }, 15000);
 
   test('searches transactions and opens detail with retry action', async () => {
