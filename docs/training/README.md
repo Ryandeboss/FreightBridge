@@ -48,6 +48,16 @@ The persistent learner shell is course-oriented rather than tool-oriented. It co
 
 Investigation capabilities still reuse the same FreightBridge operations/configuration APIs, but learner-facing tool links are no longer exposed in the permanent sidebar or Training Home. Transaction evidence, raw payloads, processing logs, errors, partner rules, and mapping information are intended to appear only when a lesson or lab gives the learner a reason to use them. The Advanced Console continues to expose the full technical workspace.
 
+## Lab Workstation
+
+Milestone 45 introduces the reusable incident workstation used by later lab redesigns. Its fixed top navigation is **Console | Code | Answer**:
+
+- **Console** presents FreightBridge-observable integration checkpoints in execution order, stops the visible sequence at the failure, and lets the learner inspect sanitized raw-message evidence or processing details.
+- **Code** presents a stable IDE-like file tree for mapping/validation logic, partner contracts, and reference rules. The first guided implementation is read-only.
+- **Answer** captures root-cause and remediation choices, gives evidence-oriented feedback, and exposes **Apply Fix & Run Again** only after the diagnosis is correct. Recovery must then be proven by a successful same-load run.
+
+Mission 2 (Apex authentication failure) is the first real scenario migrated to this workstation. It uses the existing server-backed `APEX_BAD_AUTH` drill and `FULL_SHIPMENT_LIFECYCLE` recovery rather than a mocked UI-only incident. Missions 3–10 remain on the prior incident UI until their later migration milestone.
+
 ## Failure Drills
 
 The training incidents use real server-backed Integration Lab drills. Important scenario keys include:
@@ -100,12 +110,13 @@ After Mission 10, the Training Desk switches to a **10 / 10 Training Complete** 
 5. Confirm Orientation hands off to EDI & Protocol Basics, the sidebar shows Lesson 1 through Lesson 7, and the learner must correctly distinguish SFTP/X12, ST/SE, 997/990, and shipment correlation before continuing.
 6. Complete the bootcamp and verify the Healthy Integration module unlocks only afterward for new progress, while older downstream progress remains recognized.
 7. Complete the four-part guided healthy flow and verify 997 is technical acknowledgment while 990 is the business tender decision.
-8. Complete Missions 1–9 using the real controlled failure drills.
-9. Complete the Replay & Sequence Clinic and verify exact replay side effects are skipped while late event history does not regress `DELIVERED`.
-10. Confirm Mission 10 unlocks only after advanced practice.
-11. Complete Mission 10 by diagnosing `SHIPMENT_NOT_FOUND` at business validation and correcting the B10 shipment reference.
-12. Return to the Training Desk and confirm the completed state shows **10 / 10**, inbox count **0**, and **No training incidents waiting**.
-13. Confirm the curriculum sidebar can collapse, Mike's persistent right panel is gone, and Transactions / Business Trace / Errors / Mappings / Partners do not appear as permanent learner navigation.
-14. Open the Advanced Console and confirm the full operations/configuration workspace remains available.
+8. Open Mission 2 and confirm the reusable **Console | Code | Answer** workstation appears only after the incident starts. Inspect the failed authentication checkpoint, a sanitized raw message, and the read-only Apex contract/pipeline files; submit the correct diagnosis and recovery, then use **Apply Fix & Run Again** to prove a same-load healthy lifecycle.
+9. Complete Missions 3–9 using the real controlled failure drills.
+10. Complete the Replay & Sequence Clinic and verify exact replay side effects are skipped while late event history does not regress `DELIVERED`.
+11. Confirm Mission 10 unlocks only after advanced practice.
+12. Complete Mission 10 by diagnosing `SHIPMENT_NOT_FOUND` at business validation and correcting the B10 shipment reference.
+13. Return to the Training Desk and confirm the completed state shows **10 / 10**, inbox count **0**, and **No training incidents waiting**.
+14. Confirm the curriculum sidebar can collapse, Mike's persistent right panel is gone, and Transactions / Business Trace / Errors / Mappings / Partners do not appear as permanent learner navigation.
+15. Open the Advanced Console and confirm the full operations/configuration workspace remains available.
 
 See [FreightBridge employee POV](freightbridge-employee-pov.md), [Healthy integration baseline](healthy-integration-baseline.md), and [Incident game loop](incident-game-loop.md) for the underlying training model.

@@ -2,6 +2,7 @@ import { AlertTriangle, ArrowLeft, CheckCircle2, ExternalLink, FileJson2, ListTr
 import { useMemo, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
+import { ApexBadAuthWorkstation } from './ApexBadAuthWorkstationPage';
 import { createLabRun, recoverLabRun, runNextLabStep, type LabRun } from '../api/lab';
 import { useOperationsSession } from '../auth/OperationsSession';
 import {
@@ -15,6 +16,7 @@ import {
   ReplayButton,
 } from '../components/training/TrainingComponents';
 import {
+  APEX_BAD_AUTH_MISSION_ID,
   findIncidentMissionBySlug,
   missionPhases,
   PRODUCTION_INCIDENT_MISSION_ID,
@@ -47,6 +49,10 @@ export function IncidentMissionPage() {
 
   if (!roadmapPrerequisiteSatisfied || !finalShiftPrerequisiteSatisfied) {
     return <Navigate to="/learn/desk" replace />;
+  }
+
+  if (mission.id === APEX_BAD_AUTH_MISSION_ID) {
+    return <ApexBadAuthWorkstation mission={mission} />;
   }
 
   return <IncidentMission mission={mission} />;
