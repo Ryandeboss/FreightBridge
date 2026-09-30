@@ -584,6 +584,18 @@ function ConsoleView({
         {(mission.scenarioKey === 'APEX_INVALID_CONTRACT' || mission.scenarioKey === 'X12_214_UNSUPPORTED_STATUS') && (
           <ContextualToolbox mission={mission} run={run} observed={observed} />
         )}
+
+        <section className="guided-console-support">
+          <div className="guided-answer-hints">
+            {mission.hints.map((hint) => (
+              <details key={hint.id}>
+                <summary>{hint.label}</summary>
+                <p>{hint.body}</p>
+              </details>
+            ))}
+          </div>
+          <AnalystNotes storageKey={'freightbridge.trainingNotes.' + mission.id} />
+        </section>
       </section>
 
       <aside className="workstation-inspector">
@@ -717,7 +729,6 @@ function CodeView({
             </details>
           ))}
         </details>
-        <AnalystNotes storageKey={'freightbridge.trainingNotes.' + mission.id} />
       </aside>
     </div>
   );
