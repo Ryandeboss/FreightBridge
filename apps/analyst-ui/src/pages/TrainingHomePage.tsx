@@ -48,6 +48,7 @@ export function TrainingHomePage() {
   const downstreamProgress = healthyPart1Complete || completedCount > 0;
   const bootcampComplete = isEdiBootcampComplete() || downstreamProgress;
   const orientationComplete = orientationStoredComplete || bootcampComplete;
+  const healthyJourneyComplete = healthyPart4Complete || completedCount > 0;
   const healthyPath = healthyWalkthroughNextPath();
   const healthyTitle = !healthyPart1Complete
     ? 'Healthy Flow Part 1'
@@ -122,7 +123,7 @@ export function TrainingHomePage() {
                   </Link>
                 )}
                 {bootcampComplete && (
-                  <Link className={healthyPart4Complete ? 'secondary-button' : 'primary-button'} to={healthyPath}>
+                  <Link className={healthyJourneyComplete ? 'secondary-button' : 'primary-button'} to={healthyPath}>
                     <Workflow size={16} />
                     {healthyAction}
                   </Link>
@@ -132,7 +133,7 @@ export function TrainingHomePage() {
                     Advanced Replay & Sequence Practice<ArrowRight size={16} />
                   </Link>
                 ) : (
-                  <Link className={bootcampComplete && healthyPart4Complete ? 'primary-button' : 'secondary-button'} to={`/learn/mission/${currentMission.slug}`}>
+                  <Link className={bootcampComplete && healthyJourneyComplete ? 'primary-button' : 'secondary-button'} to={`/learn/mission/${currentMission.slug}`}>
                     {currentMissionComplete ? 'Review Current Mission' : 'Start Current Mission'}<ArrowRight size={16} />
                   </Link>
                 )}
@@ -200,7 +201,7 @@ export function TrainingHomePage() {
                 <span><small>Completed</small><strong>First-Day Orientation</strong><span>The three-company shipment story is complete.</span></span>
               </Link>
             </>
-          ) : !healthyPart4Complete ? (
+          ) : !healthyJourneyComplete ? (
             <>
               <Link className="ops-inbox-item active" to={healthyPath}>
                 <span className="ops-inbox-icon"><Workflow size={18} /></span>
