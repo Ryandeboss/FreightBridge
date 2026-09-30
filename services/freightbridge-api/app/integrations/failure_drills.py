@@ -187,6 +187,19 @@ DRILL_DEFINITIONS: dict[str, FailureDrillDefinition] = {
     'ISA12 set to 00501 and GS08 set to 005010.',
     (FailureDrillStepDefinition('INJECT_X12_214_WRONG_VERSION', 'Inject wrong 214 version', '214', 'SFTP', 'X12'),),
   ),
+  'X12_214_UNKNOWN_SHIPMENT': FailureDrillDefinition(
+    'X12_214_UNKNOWN_SHIPMENT',
+    '214 Unknown Shipment Reference',
+    'Create a legitimate Apex/FreightBridge shipment, then upload a structurally valid 214 whose B10 shipment reference points to a different unknown load.',
+    'Business correlation',
+    ExpectedFailure('SHIPMENT_NOT_FOUND', 'BUSINESS_VALIDATION_ERROR', 'BUSINESS_VALIDATION', False, '214', 'SFTP'),
+    'Transport, parsing, and mapping all succeeded. Compare the mapped B10 shipment reference with the known canonical shipment before changing X12 or mapping rules.',
+    'B10 shipment reference changed to a synthetic unknown load while controls, version, and AT7 remain valid.',
+    (
+      FailureDrillStepDefinition('CREATE_FINAL_SHIFT_BASELINE', 'Create final-shift baseline shipment', 'APEX_LOAD_TENDER', 'REST', 'JSON'),
+      FailureDrillStepDefinition('INJECT_X12_214_UNKNOWN_SHIPMENT', 'Inject 214 with unknown shipment reference', '214', 'SFTP', 'X12'),
+    ),
+  ),
   'SFTP_HOST_KEY_MISMATCH': FailureDrillDefinition(
     'SFTP_HOST_KEY_MISMATCH',
     'SFTP Host-Key Mismatch',
@@ -225,6 +238,10 @@ class ControlledX12FaultFactory:
     elif fault_key == 'X12_214_WRONG_VERSION':
       x12 = x12.replace('*00401*', '*00501*', 1).replace('*004010~', '*005010~', 1)
       mutation = 'ISA12 00501 / GS08 005010'
+    elif fault_key == 'X12_214_UNKNOWN_SHIPMENT':
+      unknown_reference = f'UNKNOWN{run_id.hex[:8].upper()}'
+      x12 = x12.replace(f'*{load_id}*MWCX~', f'*{unknown_reference}*MWCX~', 1)
+      mutation = f'B10 shipment reference {unknown_reference} instead of {load_id}'
     else:
       raise ValueError(f'Unsupported X12 fault key: {fault_key}')
     filename = f'MWCX_FREIGHTBRIDGE_214_FAULT_{short}.edi'
@@ -234,6 +251,12 @@ class ControlledX12FaultFactory:
       'groupControlNumber': group,
       'transactionControlNumber': transaction,
       'injectedFault': mutation,
+      'intendedShipmentReference': load_id,
+      'receivedShipmentReference': (
+        f'UNKNOWN{run_id.hex[:8].upper()}'
+        if fault_key == 'X12_214_UNKNOWN_SHIPMENT'
+        else load_id
+      ),
       'x12Preview': x12,
     }
     return filename, x12.encode('utf-8'), metadata
@@ -245,7 +268,7 @@ class ControlledX12FaultFactory:
     load_id: str,
     run_id: UUID,
   ) -> tuple[str, bytes, dict[str, object]]:
-    if scenario_key not in ('X12_214_CONTROL_MISMATCH', 'X12_214_UNSUPPORTED_STATUS', 'X12_214_WRONG_VERSION'):
+    if scenario_key not in ('X12_214_CONTROL_MISMATCH', 'X12_214_UNSUPPORTED_STATUS', 'X12_214_WRONG_VERSION', 'X12_214_UNKNOWN_SHIPMENT'):
       raise ValueError(f'Unsupported controlled recovery scenario: {scenario_key}')
     short = run_id.hex[:8].upper()
     numeric = (int(run_id.hex[:8], 16) + 37) % 999999999 or 1
@@ -272,6 +295,7 @@ class ControlledX12FaultFactory:
       'isa12': '00401',
       'gs08': '004010',
       'correctedFrom': scenario_key,
+      'correctedShipmentReference': load_id,
       'x12Preview': x12,
     }
     return filename, x12.encode('utf-8'), metadata
@@ -317,6 +341,8 @@ class ControlledFailureDrillService:
     definition = DRILL_DEFINITIONS[str(run['scenario_key'])]
     if step_key == 'CREATE_DUPLICATE_BASELINE':
       return self._create_duplicate_baseline(run, definition)
+    if step_key == 'CREATE_FINAL_SHIFT_BASELINE':
+      return self._create_final_shift_baseline(run, definition)
     if definition.scenario_key.startswith('APEX_'):
       return self._execute_apex_failure(run, definition)
     if definition.scenario_key.startswith('X12_'):
@@ -330,7 +356,7 @@ class ControlledFailureDrillService:
     scenario_key = str(run['scenario_key'])
     if scenario_key == 'APEX_DUPLICATE_SHIPMENT':
       return self._recover_duplicate_shipment(run)
-    if scenario_key in ('X12_214_CONTROL_MISMATCH', 'X12_214_UNSUPPORTED_STATUS', 'X12_214_WRONG_VERSION'):
+    if scenario_key in ('X12_214_CONTROL_MISMATCH', 'X12_214_UNSUPPORTED_STATUS', 'X12_214_WRONG_VERSION', 'X12_214_UNKNOWN_SHIPMENT'):
       return self._recover_x12_214(run)
     if scenario_key == 'SFTP_HOST_KEY_MISMATCH':
       return self._recover_sftp_connectivity(run)
@@ -477,6 +503,8 @@ class ControlledFailureDrillService:
         if scenario_key == 'X12_214_CONTROL_MISMATCH'
         else 'CORRECTED_214_VERSION'
         if scenario_key == 'X12_214_WRONG_VERSION'
+        else 'CORRECTED_214_REFERENCE'
+        if scenario_key == 'X12_214_UNKNOWN_SHIPMENT'
         else 'CORRECTED_214_STATUS'
       ),
       'sameBusinessIdentifier': transaction.get('businessIdentifier') == load_id,
@@ -495,6 +523,7 @@ class ControlledFailureDrillService:
       'correctedAt7': metadata['statusCode'],
       'correctedIsa12': metadata['isa12'],
       'correctedGs08': metadata['gs08'],
+      'correctedShipmentReference': metadata['correctedShipmentReference'],
       'profileCompatibility': 'SUPPORTED',
       'parseStatus': 'SUCCEEDED',
       'mappingStatus': 'SUCCEEDED',
@@ -596,6 +625,28 @@ class ControlledFailureDrillService:
     })
     request = self._safe_request(definition, payload_preview=payload)
     request['safeReplayKey'] = replay_key
+    return request, response
+
+  def _create_final_shift_baseline(self, run: dict[str, object], definition: FailureDrillDefinition) -> tuple[dict[str, object], dict[str, object]]:
+    load_id = str(run['business_identifier'])
+    payload = self._apex_payload(dict(run['input_snapshot']))
+    baseline_key = f"lab-{run['id']}-final-shift-baseline"
+    result = self._ingest_apex(
+      raw_body=json.dumps(payload).encode('utf-8'),
+      authorization_header=self._valid_apex_authorization(),
+      correlation_id=resolve_correlation_id(f"lab-{run['id']}-final-shift-baseline"),
+      idempotency_key=baseline_key,
+    )
+    response = result.response_body()
+    response.update({
+      'drillOutcome': 'BASELINE_CREATED',
+      'intendedShipmentReference': load_id,
+      'canonicalShipmentCreated': True,
+      'guidance': definition.guidance,
+      '_relatedTransactionIds': [str(result.transaction_id)],
+    })
+    request = self._safe_request(definition, payload_preview=payload)
+    request['intendedShipmentReference'] = load_id
     return request, response
 
   def _execute_x12_failure(self, run: dict[str, object], definition: FailureDrillDefinition) -> tuple[dict[str, object], dict[str, object]]:
