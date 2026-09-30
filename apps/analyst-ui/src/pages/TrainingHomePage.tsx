@@ -46,12 +46,12 @@ export function TrainingHomePage() {
   const orientationComplete = orientationStoredComplete || bootcampComplete;
   const healthyJourneyComplete = healthyPart4Complete || completedCount > 0;
   const healthyPath = healthyWalkthroughNextPath();
-  const healthyTitle = healthyJourneyComplete ? 'Review Healthy Integration Lab' : 'Healthy Integration Lab';
+  const healthyTitle = healthyJourneyComplete ? 'Review Healthy Integration Lesson' : 'Healthy Integration Lesson';
   const healthyAction = healthyJourneyComplete
-    ? 'Review Healthy Integration Lab'
+    ? 'Review Healthy Integration Lesson'
     : healthyPart1Complete
-      ? 'Resume Healthy Integration Lab'
-      : 'Start Healthy Integration Lab';
+      ? 'Resume Healthy Integration Lesson'
+      : 'Start Healthy Integration Lesson';
   const finalMission = trainingMissions.find((mission) => mission.id === PRODUCTION_INCIDENT_MISSION_ID) ?? trainingMissions[trainingMissions.length - 1]!;
   const currentMission = trainingMissions.find(
     (mission) => mission.implemented && isMissionUnlocked(mission.id, progress) && !hasCompletedMission(progress, mission.id),
@@ -198,7 +198,7 @@ export function TrainingHomePage() {
                 <span>
                   <small>{healthyPart1Complete ? 'Resume baseline' : 'Next'}</small>
                   <strong>{healthyTitle}</strong>
-                  <span>Use the Console, Code, and Answer workstation to follow one healthy shipment from Apex REST/JSON through 204, 997, 990, and 214 delivery evidence.</span>                </span>
+                  <span>Follow one clean animated shipment story from Apex JSON through FreightBridge, the 204, 997/990, and 214 status updates before opening any troubleshooting tools.</span>                </span>
                 <ArrowRight size={16} />
               </Link>
               <Link className="ops-inbox-item muted" to="/learn/orientation">
@@ -286,9 +286,9 @@ export function TrainingHomePage() {
       {bootcampComplete && (
         <article className="panel healthy-home-card" data-testid="healthy-home-card">
           <div>
-            <p className="eyebrow">Module 03 · Healthy baseline</p>
-            <h2>Healthy Integration Lab</h2>
-            <p>Learn the same Console, Code, and Answer workstation you will use for incidents by following a successful Apex → FreightBridge → Midwest shipment first.</p>
+            <p className="eyebrow">Module 03 · Healthy integration</p>
+            <h2>Healthy Integration Lesson</h2>
+            <p>Learn the normal message flow through five minimal animated scenes. No debugging tools or live Lab run are needed yet.</p>
           </div>
           <Link className={healthyJourneyComplete ? 'secondary-button' : 'primary-button'} to={healthyPath}>
             <Workflow size={16} />

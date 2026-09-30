@@ -41,6 +41,7 @@ import {
   loadEdiBootcampState,
 } from '../../training/ediBootcamp';
 import { isReplaySequencePracticeComplete } from '../../training/advancedPractice';
+import { HEALTHY_LESSON_SCENE_COUNT, loadHealthyLessonState } from '../../training/healthyLesson';
 import { hasCompletedMission, loadTrainingProgress } from '../../training/progress';
 
 const SIDEBAR_STORAGE_KEY = 'freightbridge.curriculumSidebarCollapsed';
@@ -60,6 +61,7 @@ const ADVANCED_MISSION_IDS = [
 export type TrainingOutletContext = {
   setOrientationScene: (scene: number) => void;
   setBootcampLesson: (lesson: number) => void;
+  setHealthyScene: (scene: number) => void;
 };
 
 function missionPath(missionId: string): string {
@@ -82,6 +84,7 @@ export function TrainingShell() {
   const location = useLocation();
   const [orientationScene, setOrientationScene] = useState(1);
   const [bootcampLesson, setBootcampLesson] = useState(() => loadEdiBootcampState().lesson);
+  const [healthyScene, setHealthyScene] = useState(() => loadHealthyLessonState().scene);
   const [collapsed, setCollapsed] = useState(
     () => typeof window !== 'undefined' && window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === 'true',
   );
@@ -118,7 +121,10 @@ export function TrainingShell() {
   const bootcampCompletedUnits = bootcampComplete
     ? EDI_BOOTCAMP_LESSON_COUNT
     : Math.max(0, Math.min(EDI_BOOTCAMP_LESSON_COUNT - 1, bootcampLesson - 1));
-  const healthyCompletedUnits = guidedHasProgress ? 5 : rawHealthyCompletedUnits;
+  const healthySceneCompletedUnits = Math.max(0, Math.min(HEALTHY_LESSON_SCENE_COUNT - 1, healthyScene - 1));
+  const healthyCompletedUnits = healthyMissionComplete || guidedHasProgress
+    ? 5
+    : Math.max(rawHealthyCompletedUnits, healthySceneCompletedUnits);
   const healthyComplete = healthyCompletedUnits >= 5;
   const guidedCompleted = advancedHasProgress ? GUIDED_MISSION_IDS.length : rawGuidedCompleted;
   const guidedComplete = guidedCompleted === GUIDED_MISSION_IDS.length;
@@ -167,7 +173,7 @@ export function TrainingShell() {
       to: healthyModulePath,
       unlocked: bootcampComplete || healthyCompletedUnits > 0,
       progress: percent(healthyCompletedUnits, 5),
-      meta: healthyComplete ? 'Complete' : 'Healthy baseline lab',
+      meta: healthyComplete ? 'Complete' : `Scene ${Math.min(healthyScene, HEALTHY_LESSON_SCENE_COUNT)} of ${HEALTHY_LESSON_SCENE_COUNT}`,
     },
     {
       id: 'guided',
@@ -326,7 +332,7 @@ export function TrainingShell() {
       </header>
 
       <main className="course-main">
-        <Outlet context={{ setOrientationScene, setBootcampLesson }} />
+        <Outlet context={{ setOrientationScene, setBootcampLesson, setHealthyScene }} />
       </main>
     </div>
   );

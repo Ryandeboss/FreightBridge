@@ -2492,11 +2492,11 @@ test('teaches the EDI and protocol bootcamp, gates checks, and unlocks the healt
   await userEvent.click(screen.getByRole('button', { name: /Start Healthy Integration/i }));
   expect(JSON.parse(String(window.localStorage.getItem('freightbridge.ediProtocolBootcamp'))).complete).toBe(true);
   await waitFor(() => expect(window.location.hash).toBe('#/learn/healthy/workstation'));
-  expect(await screen.findByTestId('healthy-workstation-page')).toBeInTheDocument();
+  expect(await screen.findByTestId('healthy-lesson-page')).toBeInTheDocument();
 });
 
 
-test('runs the healthy integration baseline through the Console Code Answer workstation and unlocks Mission 2', async () => {
+test('teaches the healthy flow as five clean animated scenes without calling the Lab API', async () => {
   const fetchMock = installFetchMock();
   window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
   window.localStorage.setItem('freightbridge.firstDayOrientationComplete', 'true');
@@ -2504,49 +2504,56 @@ test('runs the healthy integration baseline through the Console Code Answer work
   window.location.hash = '#/learn/healthy/workstation';
   render(<App />);
 
-  expect(await screen.findByTestId('healthy-workstation-page')).toBeInTheDocument();
-  expect(screen.getByRole('heading', { name: /Learn the workstation on a shipment that works/i })).toBeInTheDocument();
-  await userEvent.click(screen.getByRole('button', { name: /Start Healthy Lab/i }));
+  expect(await screen.findByTestId('healthy-lesson-page')).toBeInTheDocument();
+  expect(screen.queryByTestId('lab-workstation')).not.toBeInTheDocument();
+  expect(screen.queryByRole('tab', { name: /Console/i })).not.toBeInTheDocument();
 
-  const workstation = await screen.findByTestId('lab-workstation');
-  expect(within(workstation).getByRole('tab', { name: /Console/i })).toHaveAttribute('aria-selected', 'true');
-  expect(screen.getByTestId('healthy-workstation-console')).toHaveTextContent(/Apex REST tender received/i);
-  expect(screen.getByTestId('healthy-workstation-console')).toHaveTextContent(/997 technical acknowledgment received/i);
-  expect(screen.getByTestId('healthy-workstation-console')).toHaveTextContent(/990 tender response accepted/i);
-  expect(screen.getByTestId('healthy-workstation-console')).toHaveTextContent(/DELIVERED 214 processed/i);
+  const curriculum = screen.getByTestId('curriculum-sidebar');
+  expect(within(curriculum).getByTestId('curriculum-module-healthy')).toHaveTextContent(/Scene 1 of 5/i);
 
-  await userEvent.click(screen.getByRole('button', { name: /Run Next Checkpoint/i }));
-  await waitFor(() => expect(screen.getByTestId('healthy-workstation-console')).toHaveTextContent(/No failure introduced/i));
-  expect(screen.getByTestId('healthy-log-997')).toHaveTextContent(/SUCCEEDED/i);
-  expect(screen.getByTestId('healthy-log-990')).toHaveTextContent(/SUCCEEDED/i);
-  expect(screen.getByTestId('healthy-log-214-delivered')).toHaveTextContent(/SUCCEEDED/i);
+  const scene1 = screen.getByTestId('healthy-scene-apex-tender');
+  expect(scene1).toHaveTextContent(/Apex has a load that needs to be shipped/i);
+  expect(scene1).toHaveTextContent(/Supplier system/i);
+  expect(scene1).toHaveTextContent(/Integration platform/i);
+  expect(scene1).toHaveTextContent(/POST \/api\/integrations\/apex\/load-tenders/i);
+  expect(scene1).toHaveTextContent(/"loadId": "LOAD500"/i);
+  expect(scene1).toHaveTextContent(/not the X12 204 yet/i);
 
-  await userEvent.click(screen.getByRole('button', { name: /View Raw Message/i }));
-  expect(screen.getByTestId('healthy-raw-message')).toHaveTextContent(/FreightBridge-visible evidence/i);
+  await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
+  const scene2 = screen.getByTestId('healthy-scene-canonical');
+  expect(scene2).toHaveTextContent(/canonical shipment/i);
+  expect(scene2).toHaveTextContent(/shipmentNumber: LOAD500/i);
+  expect(within(curriculum).getByTestId('curriculum-module-healthy')).toHaveTextContent(/Scene 2 of 5/i);
 
-  await userEvent.click(within(workstation).getByRole('tab', { name: /Code/i }));
-  expect(screen.getByTestId('healthy-workstation-code')).toHaveTextContent(/Mappings\/canonical_to_midwest_204\.ts/i);
-  await userEvent.click(screen.getByRole('button', { name: /Mappings\/midwest_214_status_map\.ts/i }));
-  expect(screen.getByTestId('healthy-code-content')).toHaveTextContent(/X6: 'IN_TRANSIT'/i);
+  await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
+  const scene3 = screen.getByTestId('healthy-scene-204');
+  expect(scene3).toHaveTextContent(/creates the X12 204 load tender/i);
+  expect(scene3).toHaveTextContent(/ST\*204\*0001~/i);
+  expect(scene3).toHaveTextContent(/B2\*\*MWCX\*\*LOAD500/i);
 
-  await userEvent.click(within(workstation).getByRole('tab', { name: /Answer/i }));
-  await userEvent.click(screen.getByRole('radio', { name: /successful SFTP delivery means the carrier accepted it/i }));
-  expect(screen.getByTestId('healthy-workstation-answer')).toHaveTextContent(/Evidence hint/i);
-  await userEvent.click(screen.getByRole('radio', { name: /proves file delivery, not the carrier business decision/i }));
-  await userEvent.click(screen.getByRole('radio', { name: /990 Tender Response/i }));
-  await userEvent.click(screen.getByRole('radio', { name: /^IN_TRANSIT$/i }));
-  expect(screen.getByTestId('healthy-workstation-answer')).toHaveTextContent(/Healthy baseline confirmed/i);
+  await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
+  const scene4 = screen.getByTestId('healthy-scene-997-990');
+  expect(scene4).toHaveTextContent(/997 ≠ carrier acceptance/i);
+  expect(scene4).toHaveTextContent(/990 is the business tender decision/i);
 
-  await userEvent.click(screen.getByRole('button', { name: /Complete Healthy Lab/i }));
-  expect(screen.getByTestId('healthy-workstation-complete')).toHaveTextContent(/Mission 1 is recorded as complete/i);
-  const healthy = JSON.parse(String(window.localStorage.getItem('freightbridge.healthyWalkthrough'))) as Record<string, unknown>;
-  expect(healthy.part4Complete).toBe(true);
+  await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
+  const scene5 = screen.getByTestId('healthy-scene-214');
+  expect(scene5).toHaveTextContent(/AF → PICKED_UP/i);
+  expect(scene5).toHaveTextContent(/X6 → IN_TRANSIT/i);
+  expect(scene5).toHaveTextContent(/X1 → ARRIVED/i);
+  expect(scene5).toHaveTextContent(/D1 → DELIVERED/i);
+
+  const labCreateCalls = fetchMock.mock.calls.filter(
+    ([input, init]) => String(input).endsWith('/api/lab/runs') && init?.method === 'POST',
+  );
+  expect(labCreateCalls).toHaveLength(0);
+
+  await userEvent.click(screen.getByRole('button', { name: /Finish Healthy Flow/i }));
   expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('LEARN_THE_FLOW');
-
-  const createCalls = fetchMock.mock.calls
-    .filter(([input, init]) => String(input).endsWith('/api/lab/runs') && init?.method === 'POST')
-    .map(([, init]) => JSON.parse(String(init?.body)).scenarioKey);
-  expect(createCalls).toContain('FULL_SHIPMENT_LIFECYCLE');
+  expect(JSON.parse(String(window.localStorage.getItem('freightbridge.healthyLesson'))).complete).toBe(true);
+  expect(within(curriculum).getByTestId('curriculum-module-healthy')).toHaveTextContent(/Complete/i);
+  expect(within(curriculum).getByTestId('curriculum-module-guided')).not.toHaveAttribute('aria-disabled', 'true');
+  expect(screen.getByRole('link', { name: /Start Troubleshooting/i })).toHaveAttribute('href', '#/learn/mission/apex-bad-auth');
 });
 
 test('guides a real Apex tender through inbound processing and saves the run for Part 2', async () => {
@@ -2670,9 +2677,9 @@ test('Training Desk keeps partial legacy healthy progress on the unified worksta
   const { rerender } = render(<App />);
 
   expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
-  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Integration Lab/i);
-  expect(within(screen.getByTestId('healthy-home-card')).getByRole('link', { name: /Resume Healthy Integration Lab/i })).toHaveAttribute('href', '#/learn/healthy/workstation');
-  expect(screen.getByTestId('healthy-home-card')).toHaveTextContent(/Console, Code, and Answer/i);
+  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Integration Lesson/i);
+  expect(within(screen.getByTestId('healthy-home-card')).getByRole('link', { name: /Resume Healthy Integration Lesson/i })).toHaveAttribute('href', '#/learn/healthy/workstation');
+  expect(screen.getByTestId('healthy-home-card')).toHaveTextContent(/five minimal animated scenes/i);
 
   window.localStorage.setItem('freightbridge.healthyWalkthrough', JSON.stringify({
     runId: labRun.id,
@@ -2684,8 +2691,8 @@ test('Training Desk keeps partial legacy healthy progress on the unified worksta
   }));
   rerender(<App />);
 
-  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Integration Lab/i);
-  expect(within(screen.getByTestId('healthy-home-card')).getByRole('link', { name: /Resume Healthy Integration Lab/i })).toHaveAttribute('href', '#/learn/healthy/workstation');
+  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Integration Lesson/i);
+  expect(within(screen.getByTestId('healthy-home-card')).getByRole('link', { name: /Resume Healthy Integration Lesson/i })).toHaveAttribute('href', '#/learn/healthy/workstation');
 });
 
 
@@ -2801,9 +2808,9 @@ test('Training Desk keeps later partial legacy healthy progress on the unified w
   const { rerender } = render(<App />);
 
   expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
-  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Integration Lab/i);
-  expect(within(screen.getByTestId('healthy-home-card')).getByRole('link', { name: /Resume Healthy Integration Lab/i })).toHaveAttribute('href', '#/learn/healthy/workstation');
-  expect(screen.getByTestId('healthy-home-card')).toHaveTextContent(/Healthy Integration Lab/i);
+  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Integration Lesson/i);
+  expect(within(screen.getByTestId('healthy-home-card')).getByRole('link', { name: /Resume Healthy Integration Lesson/i })).toHaveAttribute('href', '#/learn/healthy/workstation');
+  expect(screen.getByTestId('healthy-home-card')).toHaveTextContent(/Healthy Integration Lesson/i);
 
   window.localStorage.setItem('freightbridge.healthyWalkthrough', JSON.stringify({
     runId: labRun.id,
@@ -2817,8 +2824,8 @@ test('Training Desk keeps later partial legacy healthy progress on the unified w
   }));
   rerender(<App />);
 
-  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Integration Lab/i);
-  expect(within(screen.getByTestId('healthy-home-card')).getByRole('link', { name: /Resume Healthy Integration Lab/i })).toHaveAttribute('href', '#/learn/healthy/workstation');
+  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Integration Lesson/i);
+  expect(within(screen.getByTestId('healthy-home-card')).getByRole('link', { name: /Resume Healthy Integration Lesson/i })).toHaveAttribute('href', '#/learn/healthy/workstation');
 });
 
 
@@ -2938,9 +2945,9 @@ test('Training Desk routes healthy progress into the unified workstation and pre
   const { rerender } = render(<App />);
 
   expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
-  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Integration Lab/i);
-  expect(within(screen.getByTestId('healthy-home-card')).getByRole('link', { name: /Resume Healthy Integration Lab/i })).toHaveAttribute('href', '#/learn/healthy/workstation');
-  expect(screen.getByTestId('healthy-home-card')).toHaveTextContent(/Console, Code, and Answer/i);
+  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Integration Lesson/i);
+  expect(within(screen.getByTestId('healthy-home-card')).getByRole('link', { name: /Resume Healthy Integration Lesson/i })).toHaveAttribute('href', '#/learn/healthy/workstation');
+  expect(screen.getByTestId('healthy-home-card')).toHaveTextContent(/five minimal animated scenes/i);
 
   window.localStorage.setItem('freightbridge.healthyWalkthrough', JSON.stringify({
     runId: labRun.id,
@@ -2957,7 +2964,7 @@ test('Training Desk routes healthy progress into the unified workstation and pre
   rerender(<App />);
 
   expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Mission 1 - Your First Shift/i);
-  expect(within(screen.getByTestId('healthy-home-card')).getByRole('link', { name: /Review Healthy Integration Lab/i })).toHaveAttribute('href', '#/learn/healthy/workstation');
+  expect(within(screen.getByTestId('healthy-home-card')).getByRole('link', { name: /Review Healthy Integration Lesson/i })).toHaveAttribute('href', '#/learn/healthy/workstation');
 });
 
 
