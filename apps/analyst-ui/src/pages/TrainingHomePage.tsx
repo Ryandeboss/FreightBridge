@@ -35,7 +35,7 @@ import { hasCompletedMission, loadTrainingProgress } from '../training/progress'
 export function TrainingHomePage() {
   const progress = loadTrainingProgress();
   const completedCount = progress.completedMissions.length;
-  const orientationComplete = isFirstDayOrientationComplete();
+  const orientationStoredComplete = isFirstDayOrientationComplete();
   const mission9Complete = hasCompletedMission(progress, SFTP_STOPS_WORKING_MISSION_ID);
   const replaySequenceComplete = isReplaySequencePracticeComplete();
   const trainingComplete =
@@ -45,7 +45,9 @@ export function TrainingHomePage() {
   const healthyPart2Complete = isHealthyMapping204Complete();
   const healthyPart3Complete = isHealthy997990Complete();
   const healthyPart4Complete = isHealthyShipmentStatusComplete();
-  const bootcampComplete = isEdiBootcampComplete() || healthyPart1Complete || completedCount > 0;
+  const downstreamProgress = healthyPart1Complete || completedCount > 0;
+  const bootcampComplete = isEdiBootcampComplete() || downstreamProgress;
+  const orientationComplete = orientationStoredComplete || bootcampComplete;
   const healthyPath = healthyWalkthroughNextPath();
   const healthyTitle = !healthyPart1Complete
     ? 'Healthy Flow Part 1'
