@@ -126,11 +126,7 @@ export function TrainingShell() {
   const advancedComplete = advancedCompletedUnits >= 3;
 
   const healthyPath = healthyWalkthroughNextPath();
-  const healthyModulePath = healthyParts < 4
-    ? healthyPath
-    : healthyMissionComplete
-      ? missionPath(LEARN_THE_FLOW_MISSION_ID)
-      : missionPath(LEARN_THE_FLOW_MISSION_ID);
+  const healthyModulePath = healthyPath;
   const guidedPath = firstIncompleteMissionPath(GUIDED_MISSION_IDS, completed);
   const advancedPath = advancedMissionCompleted < ADVANCED_MISSION_IDS.length
     ? firstIncompleteMissionPath(ADVANCED_MISSION_IDS, completed)
@@ -171,7 +167,7 @@ export function TrainingShell() {
       to: healthyModulePath,
       unlocked: bootcampComplete || healthyCompletedUnits > 0,
       progress: percent(healthyCompletedUnits, 5),
-      meta: healthyComplete ? 'Complete' : `${healthyCompletedUnits} of 5 lessons`,
+      meta: healthyComplete ? 'Complete' : 'Healthy baseline lab',
     },
     {
       id: 'guided',
