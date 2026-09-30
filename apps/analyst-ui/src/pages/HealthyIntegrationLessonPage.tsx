@@ -249,7 +249,7 @@ function TenderArrivalScene() {
       testId="healthy-scene-apex-tender"
       eyebrow="A shipment begins"
       title="Apex has a load that needs to be shipped."
-      narration="Its supplier system sends the complete load record to FreightBridge as JSON over HTTPS."
+      narration="Apex sends the complete load record to FreightBridge as JSON over HTTPS."
       explanationTitle="What this request means"
       explanation={
         <>
@@ -262,7 +262,7 @@ function TenderArrivalScene() {
       lines={apexJson}
     >
       <NetworkPair
-        left={<ServerNode name="Apex" caption="Supplier system" icon={<Server size={34} />} />}
+        left={<ServerNode name="Apex" caption="Broker / 3PL system" icon={<Server size={34} />} />}
         right={<ServerNode name="FreightBridge" caption="Integration platform" icon={<Server size={34} />} accent />}
         packet="JSON"
       />
