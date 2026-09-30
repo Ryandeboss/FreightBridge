@@ -1224,6 +1224,63 @@ const completedHostKeyMismatchLabRun = makeCompletedFailureLabRun({
   preTransaction: true,
 });
 
+const finalShiftFailedReference = 'UNKNOWNADADADAD';
+const finalShiftBaseRun = makeCompletedFailureLabRun({
+  id: 'adadadad-adad-4dad-8dad-adadadadadad',
+  scenarioKey: 'X12_214_UNKNOWN_SHIPMENT',
+  businessIdentifier: 'LABFINAL900',
+  stepKey: 'INJECT_X12_214_UNKNOWN_SHIPMENT',
+  displayName: 'Inject 214 with unknown shipment reference',
+  name: '214 Unknown Shipment Reference',
+  errorCode: 'SHIPMENT_NOT_FOUND',
+  category: 'BUSINESS_VALIDATION_ERROR',
+  stage: 'BUSINESS_VALIDATION',
+  safeMessage: 'Canonical shipment was not found.',
+  guidance: 'Compare the mapped B10 shipment reference with the known canonical shipment.',
+  injectedFault: 'B10 shipment reference changed to a synthetic unknown load while controls, version, and AT7 remain valid.',
+  payloadPreview: {
+    x12: 'ISA*00*          *00*          *ZZ*MWCX           *ZZ*FREIGHTBRIDGE  *260924*1500*U*00401*000000777*0*T*:~GS*QM*MWCX*FREIGHTBRIDGE*20260924*1500*777*X*004010~ST*214*7777~B10*MWCFINAL*UNKNOWNADADADAD*MWCX~AT7*AF****20260924*1500*UT~MS1*Aurora*IL~SE*7*7777~GE*1*777~IEA*1*000000777~',
+  },
+  observedBusinessIdentifierOverride: finalShiftFailedReference,
+  x12Fault: {
+    intendedShipmentReference: 'LABFINAL900',
+    receivedShipmentReference: finalShiftFailedReference,
+    interchangeControlNumber: '000000777',
+    groupControlNumber: '777',
+    transactionControlNumber: '7777',
+    injectedFault: 'B10 shipment reference UNKNOWNADADADAD instead of LABFINAL900',
+  },
+});
+
+const completedFinalShiftLabRun = {
+  ...finalShiftBaseRun,
+  steps: [
+    {
+      ...finalShiftBaseRun.steps[0],
+      id: 'adadadad-adad-4dad-8dad-adadadadadad-baseline',
+      stepKey: 'CREATE_FINAL_SHIFT_BASELINE',
+      sequence: 1,
+      displayName: 'Create final-shift baseline shipment',
+      transport: 'REST',
+      messageFormat: 'JSON',
+      documentType: 'APEX_LOAD_TENDER',
+      status: 'SUCCEEDED',
+      responseSummary: {
+        drillOutcome: 'BASELINE_CREATED',
+        intendedShipmentReference: 'LABFINAL900',
+        canonicalShipmentCreated: true,
+      },
+    },
+    {
+      ...finalShiftBaseRun.steps[0],
+      id: 'adadadad-adad-4dad-8dad-adadadadadad-failure',
+      sequence: 2,
+      status: 'SUCCEEDED',
+    },
+  ],
+};
+
+
 const failureRunsByScenario: Record<string, ReturnType<typeof makeCompletedFailureLabRun>> = {
   APEX_BAD_AUTH: completedBadAuthLabRun,
   APEX_INVALID_JSON: completedInvalidJsonLabRun,
@@ -1232,6 +1289,7 @@ const failureRunsByScenario: Record<string, ReturnType<typeof makeCompletedFailu
   X12_214_CONTROL_MISMATCH: completedControlMismatchLabRun,
   X12_214_UNSUPPORTED_STATUS: completedUnsupportedStatusLabRun,
   X12_214_WRONG_VERSION: completedWrongVersionLabRun,
+  X12_214_UNKNOWN_SHIPMENT: completedFinalShiftLabRun,
   SFTP_HOST_KEY_MISMATCH: completedHostKeyMismatchLabRun,
 };
 
@@ -1253,6 +1311,8 @@ function makeCompletedFailureLabRun({
   stepDocumentTypeOverride,
   transportOverride,
   messageFormatOverride,
+  observedBusinessIdentifierOverride,
+  x12Fault,
   preTransaction = false,
 }: {
   id: string;
@@ -1272,15 +1332,19 @@ function makeCompletedFailureLabRun({
   stepDocumentTypeOverride?: string;
   transportOverride?: string;
   messageFormatOverride?: string;
+  observedBusinessIdentifierOverride?: string | null;
+  x12Fault?: Record<string, unknown>;
   preTransaction?: boolean;
 }) {
   const documentType = documentTypeOverride !== undefined
     ? documentTypeOverride
     : scenarioKey.startsWith('X12_') ? '214' : 'APEX_LOAD_TENDER';
   const transport = transportOverride ?? (scenarioKey.startsWith('X12_') ? 'SFTP' : 'REST');
-  const observedBusinessIdentifier = preTransaction
-    ? null
-    : stage === 'AUTHENTICATION' || stage === 'PARSING' ? null : businessIdentifier;
+  const observedBusinessIdentifier = observedBusinessIdentifierOverride !== undefined
+    ? observedBusinessIdentifierOverride
+    : preTransaction
+      ? null
+      : stage === 'AUTHENTICATION' || stage === 'PARSING' ? null : businessIdentifier;
   return {
     ...completedFailureLabRun,
     id,
@@ -1318,6 +1382,7 @@ function makeCompletedFailureLabRun({
         guidance,
         injectedFault,
         payloadPreview,
+        ...(x12Fault ? { x12Fault } : {}),
         transactionStatusExplanation: 'The drill succeeded because the expected integration failure was correctly produced and recorded.',
       },
     },
