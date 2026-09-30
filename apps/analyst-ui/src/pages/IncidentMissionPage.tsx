@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { ApexBadAuthWorkstation } from './ApexBadAuthWorkstationPage';
+import { GuidedIncidentWorkstation } from './GuidedIncidentWorkstationPage';
 import { createLabRun, recoverLabRun, runNextLabStep, type LabRun } from '../api/lab';
 import { useOperationsSession } from '../auth/OperationsSession';
 import {
@@ -53,6 +54,10 @@ export function IncidentMissionPage() {
 
   if (mission.id === APEX_BAD_AUTH_MISSION_ID) {
     return <ApexBadAuthWorkstation mission={mission} />;
+  }
+
+  if (mission.missionNumber >= 3 && mission.missionNumber <= 7) {
+    return <GuidedIncidentWorkstation mission={mission} />;
   }
 
   return <IncidentMission mission={mission} />;
