@@ -414,6 +414,7 @@ class IntegrationLabService:
       'X12_214_CONTROL_MISMATCH',
       'X12_214_UNSUPPORTED_STATUS',
       'X12_214_WRONG_VERSION',
+      'X12_214_UNKNOWN_SHIPMENT',
       'SFTP_HOST_KEY_MISMATCH',
     }
     if scenario_key not in supported:
