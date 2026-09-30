@@ -252,7 +252,7 @@ def test_final_shift_recovery_uses_existing_canonical_baseline_without_redispatc
     'result_summary': {
       'failureDrill': {
         'observed': {
-          'transactionId': TRANSACTION_ID,
+          'transactionId': '77777777-7777-4777-8777-777777777777',
           'businessIdentifier': 'UNKNOWNFINAL',
         }
       }
