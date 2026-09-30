@@ -164,7 +164,7 @@ export function LearnTheFlowMissionPage() {
 
   return (
     <section className="training-stack" data-testid="learn-the-flow-mission-page">
-      <Link className="secondary-button training-back-link" to="/learn">
+      <Link className="secondary-button training-back-link" to="/learn/desk">
         <ArrowLeft size={16} />
         Training Desk
       </Link>
@@ -326,7 +326,7 @@ export function LearnTheFlowMissionPage() {
                 <h3>MISSION COMPLETE - Your First Shift</h3>
                 <p>That is your healthy baseline for future FreightBridge incidents.</p>
                 <div className="lab-actions">
-                  <Link className="primary-button" to="/learn">Return to Training Desk</Link>
+                  <Link className="primary-button" to="/learn/desk">Return to Training Desk</Link>
                   <ReplayButton onReplay={startMission} disabled={isWorking} />
                 </div>
               </>
