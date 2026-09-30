@@ -182,6 +182,9 @@ def test_lab_failure_drill_scenarios_are_server_declared_with_expected_metadata(
   assert scenarios['X12_214_CONTROL_MISMATCH']['expected_failure']['errorCode'] == 'CONTROL_NUMBER_MISMATCH'
   assert scenarios['X12_214_UNSUPPORTED_STATUS']['expected_failure']['errorCode'] == 'UNSUPPORTED_AT7_CODE'
   assert scenarios['X12_214_WRONG_VERSION']['expected_failure']['errorCode'] == 'UNSUPPORTED_X12_VERSION'
+  assert scenarios['X12_214_UNKNOWN_SHIPMENT']['expected_failure']['errorCode'] == 'SHIPMENT_NOT_FOUND'
+  assert scenarios['X12_214_UNKNOWN_SHIPMENT']['expected_failure']['stage'] == 'BUSINESS_VALIDATION'
+  assert scenarios['X12_214_UNKNOWN_SHIPMENT']['step_count'] == 2
   assert scenarios['SFTP_HOST_KEY_MISMATCH']['expected_failure']['stage'] == 'TRANSPORT_BOUNDARY'
   assert scenarios['REPLAY_SEQUENCE_PRACTICE']['kind'] == 'HAPPY_PATH'
   assert scenarios['REPLAY_SEQUENCE_PRACTICE']['step_count'] == 13
@@ -235,6 +238,80 @@ def test_lab_sftp_host_key_recovery_accepts_pre_transaction_connectivity_proof()
   assert recovery['connectionVerified'] is True
   assert recovery['transactionCreated'] is False
   assert recovery['messageReplayAttempted'] is False
+
+
+def test_final_shift_recovery_uses_existing_canonical_baseline_without_redispatch() -> None:
+  run = {
+    **lab_run(status='SUCCEEDED', step_status='SUCCEEDED'),
+    'scenario_key': 'X12_214_UNKNOWN_SHIPMENT',
+    'business_identifier': 'LABFINAL900',
+    'input_snapshot': {
+      **lab_run()['input_snapshot'],
+      'loadId': 'LABFINAL900',
+    },
+    'result_summary': {
+      'failureDrill': {
+        'observed': {
+          'transactionId': TRANSACTION_ID,
+          'businessIdentifier': 'UNKNOWNFINAL',
+        }
+      }
+    },
+  }
+
+  class FakeRepository:
+    def __init__(self) -> None:
+      self.run = run
+
+    def get_run(self, run_id: UUID):
+      return self.run
+
+    def update_run_summary(self, run_id: UUID, result_summary: dict[str, object], *, status: str) -> None:
+      self.run = {**self.run, 'result_summary': result_summary, 'status': status}
+
+  class FakeApex:
+    def get(self, path: str) -> dict[str, object]:
+      assert path == '/v1/loads/LABFINAL900/shipment-statuses'
+      return {
+        'currentStatus': 'PICKED_UP',
+        'events': [{'status': 'PICKED_UP', 'occurredAt': '2026-09-25T15:00:00Z'}],
+      }
+
+    def post(self, path: str, payload=None, *, headers=None):
+      raise AssertionError('Final-shift recovery must not redispatch the already-created canonical baseline.')
+
+  class FakeRecoveryService:
+    def recover(self, candidate: dict[str, object]) -> dict[str, object]:
+      assert candidate['scenario_key'] == 'X12_214_UNKNOWN_SHIPMENT'
+      return {
+        'status': 'SUCCEEDED',
+        'recoveryKind': 'CORRECTED_214_REFERENCE',
+        'sameBusinessIdentifier': True,
+        'correctedShipmentReference': 'LABFINAL900',
+        'correctedIsa12': '00401',
+        'correctedGs08': '004010',
+        'correctedAt7': 'AF',
+        'parseStatus': 'SUCCEEDED',
+        'mappingStatus': 'SUCCEEDED',
+        'apexFacingEvidence': True,
+      }
+
+  repository = FakeRepository()
+  service = IntegrationLabService(repository=repository)  # type: ignore[arg-type]
+  service.apex = FakeApex()  # type: ignore[assignment]
+  service.failure_drills = FakeRecoveryService()  # type: ignore[assignment]
+  created: list[str] = []
+  service._create_apex_load = lambda load_id, payload: created.append(load_id) or {'status': 'CREATED'}  # type: ignore[method-assign]
+
+  recovered = service.recover_run(RUN_ID)
+
+  recovery = recovered['result_summary']['recovery']
+  assert created == ['LABFINAL900']
+  assert recovery['baselineDispatchStatus'] == 'CANONICAL_BASELINE_ALREADY_EXISTS'
+  assert recovery['correctedShipmentReference'] == 'LABFINAL900'
+  assert recovery['normalizedShipmentStatus'] == 'PICKED_UP'
+  assert recovery['apexStatusEventCount'] == 1
+  assert recovery['apexFacingEvidence'] is True
 
 
 def test_lab_create_request_accepts_predefined_failure_drills_only() -> None:
