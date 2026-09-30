@@ -60,11 +60,7 @@ export function isHealthyShipmentStatusComplete(): boolean {
 }
 
 export function healthyWalkthroughNextPath(): string {
-  const saved = loadHealthyWalkthroughState();
-  if (!saved?.part1Complete) return '/learn/healthy/apex-tender';
-  if (!saved.part2Complete) return '/learn/healthy/mapping-204';
-  if (!saved.part3Complete) return '/learn/healthy/acknowledgments';
-  return '/learn/healthy/shipment-status';
+  return '/learn/healthy/workstation';
 }
 
 export function saveHealthyApexTenderProgress(runId: string, loadId: string): void {
