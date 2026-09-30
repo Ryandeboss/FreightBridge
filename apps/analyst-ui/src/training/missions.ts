@@ -1114,7 +1114,7 @@ export const incidentMissions: IncidentMissionDefinition[] = [
         summary: 'Compare ZZ with the supported FreightBridge status mapping.',
         inspectedLabel: 'Inspect mapping evidence',
         details: [
-          'Supported status codes include AF, IT, AR, and D1 in the training profile.',
+          'Supported status codes include AF, X6, X1, and D1 in the active Midwest training profile.',
           'ZZ is not currently mapped to a canonical FreightBridge shipment status.',
           'Mapping failure prevents a normalized Apex-facing status update.',
         ],
@@ -1148,7 +1148,7 @@ export const incidentMissions: IncidentMissionDefinition[] = [
     ],
     correctDiagnosisId: 'unsupported',
     planOptions: [
-      { id: 'correct-status', label: 'Confirm supported Midwest 214 status mapping and reprocess a corrected supported AT7 value', explanation: 'Correct. Use a mapped status such as AF, IT, AR, or D1.' },
+      { id: 'correct-status', label: 'Confirm supported Midwest 214 status mapping and reprocess a corrected supported AT7 value', explanation: 'Correct. Use a mapped status such as AF, X6, X1, or D1.' },
       { id: 'forward-zz', label: 'Forward ZZ directly to Apex as a raw status', explanation: 'FreightBridge should not emit unsupported unmapped statuses.' },
       { id: 'ask-new-204', label: 'Ask FreightBridge to generate another 204 tender', explanation: 'The tender phase is unrelated to this status-mapping failure.' },
     ],
