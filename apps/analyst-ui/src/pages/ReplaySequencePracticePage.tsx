@@ -20,12 +20,6 @@ import {
 import { SFTP_STOPS_WORKING_MISSION_ID } from '../training/missions';
 import { hasCompletedMission, loadTrainingProgress } from '../training/progress';
 
-const keySteps = [
-  'FREIGHTBRIDGE_RECEIVE_214_DELIVERED',
-  'FREIGHTBRIDGE_RECEIVE_214_REPLAY',
-  'FREIGHTBRIDGE_RECEIVE_214_LATE_ARRIVED',
-] as const;
-
 const checks = [
   {
     id: 'duplicate',
