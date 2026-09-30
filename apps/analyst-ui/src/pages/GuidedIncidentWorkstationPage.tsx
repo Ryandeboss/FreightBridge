@@ -561,6 +561,14 @@ function ConsoleView({
 
         {mission.evidenceSources && (
           <div className="guided-evidence-sources">
+            {(mission.requiredEvidenceSourceIds?.length ?? 0) > 0
+              && !(mission.requiredEvidenceSourceIds ?? []).every((id) => inspectedEvidenceIds.includes(id))
+              && (
+                <div className="workstation-answer-hint" data-testid="diagnosis-gate">
+                  <AlertTriangle size={18} />
+                  <p>Inspect the required evidence in Console before choosing the root cause.</p>
+                </div>
+              )}
             <div className="workstation-pane-heading">
               <div><span>Guided evidence</span><strong>Open the sources the mission asks you to compare</strong></div>
             </div>
@@ -659,14 +667,14 @@ function EvidenceSource({
 }) {
   return (
     <article className={'guided-evidence-source ' + (inspected ? 'inspected' : '')} data-testid={'evidence-source-' + source.id}>
+      <button className="secondary-button" type="button" onClick={onInspect}>
+        {inspected ? 'Inspected' : source.inspectedLabel}
+      </button>
       <div>
         <span>{source.source}</span>
         <strong>{source.title}</strong>
         <p>{source.summary}</p>
       </div>
-      <button className="secondary-button" type="button" onClick={onInspect}>
-        {inspected ? 'Inspected' : source.inspectedLabel}
-      </button>
       {inspected && (
         <div className="guided-evidence-detail">
           {source.details.map((detail) => <p key={detail}>{detail}</p>)}
