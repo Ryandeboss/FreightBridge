@@ -2491,10 +2491,63 @@ test('teaches the EDI and protocol bootcamp, gates checks, and unlocks the healt
   expect(screen.getByTestId('bootcamp-ready')).toHaveTextContent(/Healthy Integration/i);
   await userEvent.click(screen.getByRole('button', { name: /Start Healthy Integration/i }));
   expect(JSON.parse(String(window.localStorage.getItem('freightbridge.ediProtocolBootcamp'))).complete).toBe(true);
-  await waitFor(() => expect(window.location.hash).toBe('#/learn/healthy/apex-tender'));
-  expect(await screen.findByTestId('healthy-apex-tender-page')).toBeInTheDocument();
+  await waitFor(() => expect(window.location.hash).toBe('#/learn/healthy/workstation'));
+  expect(await screen.findByTestId('healthy-workstation-page')).toBeInTheDocument();
 });
 
+
+test('runs the healthy integration baseline through the Console Code Answer workstation and unlocks Mission 2', async () => {
+  const fetchMock = installFetchMock();
+  window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+  window.localStorage.setItem('freightbridge.firstDayOrientationComplete', 'true');
+  window.localStorage.setItem('freightbridge.ediProtocolBootcamp', JSON.stringify({ lesson: 7, complete: true }));
+  window.location.hash = '#/learn/healthy/workstation';
+  render(<App />);
+
+  expect(await screen.findByTestId('healthy-workstation-page')).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: /Learn the workstation on a shipment that works/i })).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: /Start Healthy Lab/i }));
+
+  const workstation = await screen.findByTestId('lab-workstation');
+  expect(within(workstation).getByRole('tab', { name: /Console/i })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByTestId('healthy-workstation-console')).toHaveTextContent(/Apex REST tender received/i);
+  expect(screen.getByTestId('healthy-workstation-console')).toHaveTextContent(/997 technical acknowledgment received/i);
+  expect(screen.getByTestId('healthy-workstation-console')).toHaveTextContent(/990 tender response accepted/i);
+  expect(screen.getByTestId('healthy-workstation-console')).toHaveTextContent(/DELIVERED 214 processed/i);
+
+  await userEvent.click(screen.getByRole('button', { name: /Run Next Checkpoint/i }));
+  await waitFor(() => expect(screen.getByTestId('healthy-workstation-console')).toHaveTextContent(/No failure introduced/i));
+  expect(screen.getByTestId('healthy-log-997')).toHaveTextContent(/SUCCEEDED/i);
+  expect(screen.getByTestId('healthy-log-990')).toHaveTextContent(/SUCCEEDED/i);
+  expect(screen.getByTestId('healthy-log-214-delivered')).toHaveTextContent(/SUCCEEDED/i);
+
+  await userEvent.click(screen.getByRole('button', { name: /View Raw Message/i }));
+  expect(screen.getByTestId('healthy-raw-message')).toHaveTextContent(/FreightBridge-visible evidence/i);
+
+  await userEvent.click(within(workstation).getByRole('tab', { name: /Code/i }));
+  expect(screen.getByTestId('healthy-workstation-code')).toHaveTextContent(/Mappings\/canonical_to_midwest_204\.ts/i);
+  await userEvent.click(screen.getByRole('button', { name: /Mappings\/midwest_214_status_map\.ts/i }));
+  expect(screen.getByTestId('healthy-code-content')).toHaveTextContent(/X6: 'IN_TRANSIT'/i);
+
+  await userEvent.click(within(workstation).getByRole('tab', { name: /Answer/i }));
+  await userEvent.click(screen.getByRole('radio', { name: /successful SFTP delivery means the carrier accepted it/i }));
+  expect(screen.getByTestId('healthy-workstation-answer')).toHaveTextContent(/Evidence hint/i);
+  await userEvent.click(screen.getByRole('radio', { name: /proves file delivery, not the carrier business decision/i }));
+  await userEvent.click(screen.getByRole('radio', { name: /990 Tender Response/i }));
+  await userEvent.click(screen.getByRole('radio', { name: /^IN_TRANSIT$/i }));
+  expect(screen.getByTestId('healthy-workstation-answer')).toHaveTextContent(/Healthy baseline confirmed/i);
+
+  await userEvent.click(screen.getByRole('button', { name: /Complete Healthy Lab/i }));
+  expect(screen.getByTestId('healthy-workstation-complete')).toHaveTextContent(/Mission 1 is recorded as complete/i);
+  const healthy = JSON.parse(String(window.localStorage.getItem('freightbridge.healthyWalkthrough'))) as Record<string, unknown>;
+  expect(healthy.part4Complete).toBe(true);
+  expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('LEARN_THE_FLOW');
+
+  const createCalls = fetchMock.mock.calls
+    .filter(([input, init]) => String(input).endsWith('/api/lab/runs') && init?.method === 'POST')
+    .map(([, init]) => JSON.parse(String(init?.body)).scenarioKey);
+  expect(createCalls).toContain('FULL_SHIPMENT_LIFECYCLE');
+});
 
 test('guides a real Apex tender through inbound processing and saves the run for Part 2', async () => {
   installFetchMock();
@@ -2867,7 +2920,7 @@ test('continues the exact saved run through all four 214 statuses and saves Part
   expect(calledPaths.filter((path) => path.endsWith('/api/lab/runs'))).toHaveLength(0);
 });
 
-test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part 4', async () => {
+test('Training Desk routes healthy progress into the unified workstation and preserves later mission progression', async () => {
   installFetchMock();
   window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
   window.localStorage.setItem('freightbridge.firstDayOrientationComplete', 'true');
@@ -2885,9 +2938,9 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
   const { rerender } = render(<App />);
 
   expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
-  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Flow Part 4/i);
-  expect(screen.getByRole('link', { name: /Continue Healthy Walkthrough/i })).toHaveAttribute('href', '#/learn/healthy/shipment-status');
-  expect(screen.getByTestId('healthy-home-card')).toHaveTextContent(/Part 4/i);
+  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Integration Lab/i);
+  expect(screen.getByRole('link', { name: /Resume Healthy Integration Lab/i })).toHaveAttribute('href', '#/learn/healthy/workstation');
+  expect(screen.getByTestId('healthy-home-card')).toHaveTextContent(/Console, Code, and Answer/i);
 
   window.localStorage.setItem('freightbridge.healthyWalkthrough', JSON.stringify({
     runId: labRun.id,
@@ -2904,7 +2957,7 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
   rerender(<App />);
 
   expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Mission 1 - Your First Shift/i);
-  expect(screen.getByRole('link', { name: /Review Healthy Walkthrough/i })).toHaveAttribute('href', '#/learn/healthy/shipment-status');
+  expect(screen.getByRole('link', { name: /Review Healthy Integration Lab/i })).toHaveAttribute('href', '#/learn/healthy/workstation');
 });
 
 
