@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, CheckCircle2, ExternalLink, Play, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, ExternalLink, FileJson2, ListTree, Network, Play, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
@@ -66,6 +66,7 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
   const failureDrill = useMemo(() => readRecord(incidentRun?.resultSummary.failureDrill), [incidentRun]);
   const observed = readRecord(failureDrill?.observed);
   const expected = readRecord(failureDrill?.expected);
+  const isContractOrMappingMission = mission.scenarioKey === 'APEX_INVALID_CONTRACT' || mission.scenarioKey === 'X12_214_UNSUPPORTED_STATUS';
   const recoveryEvidence = useMemo(
     () => readRecord(recoveryRun?.resultSummary.recovery),
     [recoveryRun],
@@ -334,6 +335,13 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
               <pre className="lab-preview">{JSON.stringify(failureDrill?.payloadPreview ?? incidentRun.resultSummary, null, 2)}</pre>
             </details>
           </article>
+
+          {isContractOrMappingMission && (
+            <>
+              <FailureBoundaryClassifier mission={mission} observed={observed} />
+              <IncidentAnalystToolbox mission={mission} run={incidentRun} observed={observed} />
+            </>
+          )}
 
           <article className="panel">
             <div className="panel-header">
@@ -620,6 +628,144 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
     </section>
   );
 }
+
+
+function FailureBoundaryClassifier({
+  mission,
+  observed,
+}: {
+  mission: IncidentMissionDefinition;
+  observed: Record<string, unknown> | null;
+}) {
+  const contractIncident = mission.scenarioKey === 'APEX_INVALID_CONTRACT';
+  const observedStage = String(observed?.stage ?? 'Unknown');
+  const observedCode = String(observed?.errorCode ?? 'Unknown');
+
+  return (
+    <article className="panel failure-boundary-classifier" data-testid="contract-mapping-classifier">
+      <div className="panel-header">
+        <div>
+          <p className="eyebrow">Milestone 35 · Failure Classifier</p>
+          <h2>Contract validation vs. mapping failure</h2>
+        </div>
+        <span className="badge badge-danger">{observedStage}</span>
+      </div>
+      <p className="muted-text">
+        Both incidents can contain syntactically readable data. The analyst distinguishes them by proving how far FreightBridge progressed before the first failed checkpoint.
+      </p>
+
+      <div className="failure-boundary-grid">
+        <article className={contractIncident ? 'active' : ''} data-testid="contract-failure-card">
+          <span className="failure-boundary-kind">Inbound contract</span>
+          <h3>Readable JSON, invalid Apex load</h3>
+          <ol>
+            <li className="complete">Request received</li>
+            <li className="complete">Authentication succeeded</li>
+            <li className="complete">JSON parsing succeeded</li>
+            <li className="failed">Apex contract validation failed</li>
+            <li className="not-reached">Canonical shipment / mapping not reached</li>
+          </ol>
+          <p><strong>Typical evidence:</strong> required field/type rule, validation-stage error, no downstream mapping attempt.</p>
+        </article>
+
+        <article className={!contractIncident ? 'active' : ''} data-testid="mapping-failure-card">
+          <span className="failure-boundary-kind">Partner mapping</span>
+          <h3>Readable X12, unsupported partner meaning</h3>
+          <ol>
+            <li className="complete">214 file received</li>
+            <li className="complete">X12 parsing succeeded</li>
+            <li className="failed">Midwest status mapping failed</li>
+            <li className="not-reached">Canonical shipment event not created</li>
+            <li className="not-reached">Apex-facing status update not reached</li>
+          </ol>
+          <p><strong>Typical evidence:</strong> valid transaction structure, unsupported AT7-01 value, mapping-stage error.</p>
+        </article>
+      </div>
+
+      <div className="failure-boundary-verdict" data-testid="failure-boundary-verdict">
+        <strong>This incident:</strong>
+        <span>
+          {contractIncident
+            ? 'FreightBridge parsed the Apex JSON, then rejected it at the inbound business contract boundary.'
+            : 'FreightBridge parsed the Midwest 214, then rejected the unsupported status at the partner mapping boundary.'}
+        </span>
+        <small>{observedCode} · {observedStage}</small>
+      </div>
+    </article>
+  );
+}
+
+function IncidentAnalystToolbox({
+  mission,
+  run,
+  observed,
+}: {
+  mission: IncidentMissionDefinition;
+  run: LabRun;
+  observed: Record<string, unknown> | null;
+}) {
+  const transactionId = stringOrNull(observed?.transactionId);
+  const errorId = stringOrNull(observed?.errorId);
+  const businessId = stringOrNull(observed?.businessIdentifier) ?? run.businessIdentifier;
+  const mappingIncident = mission.scenarioKey === 'X12_214_UNSUPPORTED_STATUS';
+
+  return (
+    <article className="panel incident-toolbox" data-testid="incident-analyst-toolbox">
+      <div className="panel-header">
+        <div>
+          <p className="eyebrow">Use Your Analyst Toolset</p>
+          <h2>Prove the stop point from FreightBridge evidence</h2>
+        </div>
+      </div>
+      <p className="muted-text">
+        These links open the compact read-only tools inside the Ops Desk. The incident drill supplies the real FreightBridge transaction and error identifiers when they exist.
+      </p>
+      <div className="incident-tool-links">
+        {businessId && (
+          <Link to={toolHref('trace', { businessId })}>
+            <Network size={16} />
+            <span><strong>Business Trace</strong><small>See how far this load progressed</small></span>
+          </Link>
+        )}
+        {transactionId && (
+          <>
+            <Link to={toolHref('payload', { transactionId })}>
+              <FileJson2 size={16} />
+              <span><strong>Payload Viewer</strong><small>Inspect safe message metadata and controls</small></span>
+            </Link>
+            <Link to={toolHref('logs', { transactionId })}>
+              <ListTree size={16} />
+              <span><strong>Processing Log</strong><small>Find the last successful checkpoint</small></span>
+            </Link>
+          </>
+        )}
+        {errorId && (
+          <Link to={toolHref('errors', { errorId })}>
+            <AlertTriangle size={16} />
+            <span><strong>Error Detail</strong><small>Verify stage, category, and error code</small></span>
+          </Link>
+        )}
+        {mappingIncident && (
+          <Link to="/learn/tools/mappings">
+            <SlidersHorizontal size={16} />
+            <span><strong>Mapping Viewer</strong><small>Compare the active Midwest profile with AT7-01</small></span>
+          </Link>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function toolHref(tool: string, values: Record<string, string>): string {
+  const params = new URLSearchParams();
+  Object.entries(values).forEach(([key, value]) => params.set(key, value));
+  return `/learn/tools/${tool}?${params.toString()}`;
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
 
 function ChoicePanel({
   testId,

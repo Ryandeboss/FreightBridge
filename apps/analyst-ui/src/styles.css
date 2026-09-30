@@ -2272,3 +2272,27 @@ input:disabled {
 @media(max-width:900px){.analyst-tool-grid{grid-template-columns:1fr}.analyst-tools-header{display:grid}.compact-definitions{grid-template-columns:1fr 1fr}}
 @media(max-width:680px){.compact-tool-search{grid-template-columns:1fr}.compact-tool-search .primary-button{justify-content:center}.compact-definitions,.compact-metrics{grid-template-columns:1fr}.compact-processing-timeline li{grid-template-columns:1fr}.compact-processing-timeline li>span{grid-row:auto}.analyst-context-strip{position:static}}
 
+/* Milestone 35: contract-validation vs mapping-failure classifier */
+.failure-boundary-classifier{display:grid;gap:1rem}
+.failure-boundary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.9rem}
+.failure-boundary-grid>article{display:grid;gap:.55rem;padding:.9rem;border:1px solid #dce4e8;border-radius:10px;background:#fbfcfd}
+.failure-boundary-grid>article.active{border-color:#d39a69;background:#fff8f1;box-shadow:0 0 0 1px rgba(211,154,105,.12)}
+.failure-boundary-kind{color:#6a7a83;font-size:.68rem;font-weight:900;letter-spacing:.05em;text-transform:uppercase}
+.failure-boundary-grid h3{margin:0;font-size:1rem}
+.failure-boundary-grid ol{display:grid;gap:.35rem;margin:.1rem 0;padding-left:1.35rem}
+.failure-boundary-grid li{color:#5e6f78;font-size:.8rem;line-height:1.35}
+.failure-boundary-grid li.complete{color:#2d6557}
+.failure-boundary-grid li.failed{color:#9c3e2e;font-weight:850}
+.failure-boundary-grid li.not-reached{color:#7e858a}
+.failure-boundary-grid p{margin:0;color:#596b74;font-size:.8rem;line-height:1.45}
+.failure-boundary-verdict{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:.55rem;align-items:center;padding:.75rem .85rem;border-left:4px solid #a85039;border-radius:7px;background:#fff6f2}
+.failure-boundary-verdict span{color:#4f626c;line-height:1.45}
+.failure-boundary-verdict small{color:#7c584e;font-weight:850}
+.incident-toolbox{display:grid;gap:.8rem}
+.incident-tool-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.55rem}
+.incident-tool-links>a{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.55rem;align-items:start;padding:.7rem;border:1px solid #dbe4e8;border-radius:8px;color:#344851;background:#fafcfd}
+.incident-tool-links>a:hover{text-decoration:none;border-color:#9fc8ca;background:#f1f8f8}
+.incident-tool-links>a>span{display:grid;gap:.15rem}
+.incident-tool-links small{color:#6c7b83;line-height:1.35}
+@media(max-width:760px){.failure-boundary-grid,.incident-tool-links{grid-template-columns:1fr}.failure-boundary-verdict{grid-template-columns:1fr}}
+
