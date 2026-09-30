@@ -2364,6 +2364,25 @@ describe('Analyst Console', () => {
     expect(screen.getByTestId('ops-desk-shell')).toBeInTheDocument();
   });
 
+  test('Module 04 always enters at its first guided lab even when later progress exists', async () => {
+    installFetchMock();
+    window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      completedMissions: ['LEARN_THE_FLOW', 'APEX_BAD_AUTH'],
+    }));
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn/desk';
+    render(<App />);
+
+    expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
+    const guidedModule = screen.getByTestId('curriculum-module-guided');
+    expect(guidedModule).toHaveAttribute('href', '#/learn/mission/apex-bad-auth');
+
+    await userEvent.click(guidedModule);
+    await waitFor(() => expect(window.location.hash).toBe('#/learn/mission/apex-bad-auth'));
+    expect(await screen.findByRole('heading', { name: /Apex Can't Get a Load Through/i })).toBeInTheDocument();
+  });
+
   test('renders Training Home and navigates to the Advanced Console', async () => {
     installFetchMock();
     window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
@@ -3383,6 +3402,7 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(await screen.findByTestId('verification-panel')).toHaveTextContent(/SUCCEEDED/i);
     expect(screen.getByTestId('verification-panel')).toHaveTextContent(/TRAINING_VERIFICATION/i);
     expect(screen.getByTestId('training-verification-note')).toHaveTextContent(/no second Apex load is created/i);
+    expect(screen.getByRole('button', { name: /Retry with contract-valid payload/i })).not.toHaveTextContent(/Running recovery/i);
     const mission4CreateCalls = fetchMock.mock.calls
       .filter(([input, init]) => String(input).endsWith('/api/lab/runs') && init?.method === 'POST')
       .map(([, init]) => JSON.parse(String(init?.body)).scenarioKey);

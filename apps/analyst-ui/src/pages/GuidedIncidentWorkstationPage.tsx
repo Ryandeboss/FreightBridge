@@ -323,15 +323,20 @@ export function GuidedIncidentWorkstation({ mission }: { mission: IncidentMissio
 
   async function applyFixAndRunAgain() {
     if (!incidentRun || !lastHealthyCorrect || !diagnosisCorrect || !planCorrect || !requiredEvidenceInspected) return;
-    if (mission.missionNumber >= 5 && !token) return;
+
+    if (mission.missionNumber < 5) {
+      setError(null);
+      setRecoveryRun(buildTrainingRecoveryRun(incidentRun));
+      return;
+    }
+
+    if (!token) return;
     setWorking(true);
     setError(null);
     setRecoveryRun(null);
 
     try {
-      const nextRun = mission.missionNumber >= 5
-        ? await recoverLabRun(token as string, incidentRun.id)
-        : buildTrainingRecoveryRun(incidentRun);
+      const nextRun = await recoverLabRun(token, incidentRun.id);
       setRecoveryRun(nextRun);
       if (!recoveryVerified(mission, incidentRun, nextRun, readRecord(nextRun.resultSummary.recovery))) {
         setError('The retry did not produce the recovery evidence required for this incident.');

@@ -133,7 +133,7 @@ export function TrainingShell() {
 
   const healthyPath = healthyWalkthroughNextPath();
   const healthyModulePath = healthyPath;
-  const guidedPath = firstIncompleteMissionPath(GUIDED_MISSION_IDS, completed);
+  const guidedPath = missionPath(APEX_BAD_AUTH_MISSION_ID);
   const advancedPath = advancedMissionCompleted < ADVANCED_MISSION_IDS.length
     ? firstIncompleteMissionPath(ADVANCED_MISSION_IDS, completed)
     : '/learn/practice/replay-sequence';
