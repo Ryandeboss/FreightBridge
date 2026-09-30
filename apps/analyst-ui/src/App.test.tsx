@@ -3400,12 +3400,15 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(await screen.findByTestId('incident-workspace')).toHaveAttribute('data-scenario-key', 'APEX_DUPLICATE_SHIPMENT');
     expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/Duplicate Protection/i);
     expect(screen.getByTestId('diagnosis-gate')).toHaveTextContent(/Inspect the required evidence/i);
+    const mission5Workstation = screen.getByTestId('lab-workstation');
+    await userEvent.click(within(mission5Workstation).getByRole('tab', { name: /Answer/i }));
     await chooseIncidentOption(/Where did FreightBridge evidence last look healthy/i, /Original shipment was established/i);
     expect(within(screen.getByTestId('diagnosis-panel')).getByRole('radio', { name: /same shipment was resent/i })).toBeDisabled();
 
+    await userEvent.click(within(mission5Workstation).getByRole('tab', { name: /Console/i }));
     await userEvent.click(within(screen.getByTestId('evidence-source-transaction')).getAllByText(/^Inspect/i)[0]);
     await userEvent.click(within(screen.getByTestId('evidence-source-idempotency')).getAllByText(/^Inspect/i)[0]);
-    await userEvent.click(within(screen.getByTestId('lab-workstation')).getByRole('tab', { name: /Answer/i }));
+    await userEvent.click(within(mission5Workstation).getByRole('tab', { name: /Answer/i }));
     await chooseIncidentOption(/What is the most accurate FreightBridge diagnosis/i, /same shipment was resent without an idempotency key/i);
     await chooseIncidentOption(/What should you do next/i, /safe replay/i);
     await userEvent.click(screen.getByRole('button', { name: /Verify safe replay protection/i }));
