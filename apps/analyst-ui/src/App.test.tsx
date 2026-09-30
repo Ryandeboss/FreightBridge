@@ -4058,8 +4058,12 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
     window.location.hash = '#/dashboard';
     render(<App />);
 
-    expect(await screen.findByText(/session expired or the token was rejected/i)).toBeInTheDocument();
+    expect(await screen.findByTestId('journey-entry-page')).toBeInTheDocument();
     expect(window.sessionStorage.getItem(OPERATIONS_TOKEN_STORAGE_KEY)).toBeNull();
+
+    await userEvent.click(screen.getByRole('link', { name: /Begin Your Journey|Continue Training/i }));
+    expect(await screen.findByTestId('journey-access-page')).toBeInTheDocument();
+    expect(screen.getByText(/session expired or the token was rejected/i)).toBeInTheDocument();
   });
 
   test('does not rely on a Vite operations bearer token variable', () => {
