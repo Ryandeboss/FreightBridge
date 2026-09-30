@@ -1252,34 +1252,7 @@ const finalShiftBaseRun = makeCompletedFailureLabRun({
   },
 });
 
-const completedFinalShiftLabRun = {
-  ...finalShiftBaseRun,
-  steps: [
-    {
-      ...finalShiftBaseRun.steps[0],
-      id: 'adadadad-adad-4dad-8dad-adadadadadad-baseline',
-      stepKey: 'CREATE_FINAL_SHIFT_BASELINE',
-      sequence: 1,
-      displayName: 'Create final-shift baseline shipment',
-      transport: 'REST',
-      messageFormat: 'JSON',
-      documentType: 'APEX_LOAD_TENDER',
-      status: 'SUCCEEDED',
-      responseSummary: {
-        drillOutcome: 'BASELINE_CREATED',
-        intendedShipmentReference: 'LABFINAL900',
-        canonicalShipmentCreated: true,
-      },
-    },
-    {
-      ...finalShiftBaseRun.steps[0],
-      id: 'adadadad-adad-4dad-8dad-adadadadadad-failure',
-      sequence: 2,
-      status: 'SUCCEEDED',
-    },
-  ],
-};
-
+const completedFinalShiftLabRun = finalShiftBaseRun;
 
 const failureRunsByScenario: Record<string, ReturnType<typeof makeCompletedFailureLabRun>> = {
   APEX_BAD_AUTH: completedBadAuthLabRun,
