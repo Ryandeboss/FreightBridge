@@ -23,6 +23,7 @@ export const X12_ENVELOPE_MISMATCH_MISSION_ID = 'X12_ENVELOPE_MISMATCH';
 export const STATUS_CALLBACK_MISSING_MISSION_ID = 'STATUS_CALLBACK_MISSING';
 export const WRONG_X12_VERSION_MISSION_ID = 'WRONG_X12_VERSION';
 export const SFTP_STOPS_WORKING_MISSION_ID = 'SFTP_STOPS_WORKING';
+export const PRODUCTION_INCIDENT_MISSION_ID = 'PRODUCTION_INCIDENT';
 export const PLANNED_MISSION_COUNT = 10;
 
 export const trainingMissions: TrainingMission[] = [
@@ -108,13 +109,13 @@ export const trainingMissions: TrainingMission[] = [
     unlocksAfter: WRONG_X12_VERSION_MISSION_ID,
   },
   {
-    id: 'PRODUCTION_INCIDENT',
+    id: PRODUCTION_INCIDENT_MISSION_ID,
     slug: 'production-incident',
     title: 'Mission 10 - Production Incident',
     difficulty: 'FINAL SHIFT',
-    summary: 'Locked final-shift scenario placeholder. No incident is implemented yet.',
-    implemented: false,
-    unlocksAfter: 'SFTP_STOPS_WORKING',
+    summary: 'Investigate a valid Midwest 214 that reaches business validation but references the wrong shipment, then prove a corrected recovery.',
+    implemented: true,
+    unlocksAfter: SFTP_STOPS_WORKING_MISSION_ID,
   },
 ];
 
@@ -1458,6 +1459,104 @@ export const incidentMissions: IncidentMissionDefinition[] = [
       { id: 'identity', label: 'Hint 2 - Separate identity from credentials', body: 'SSH host-key verification proves server identity and happens before normal SFTP authentication/file work.' },
       { id: 'recovery', label: 'Hint 3 - Verify without replay', body: 'A successful trusted connection plus required-directory checks can prove transport recovery without sending business data.' },
     ],
+  },
+
+  {
+    id: PRODUCTION_INCIDENT_MISSION_ID,
+    slug: 'production-incident',
+    missionNumber: 10,
+    title: 'Mission 10 - Production Incident',
+    shortTitle: 'Final shift: valid 214, wrong shipment reference',
+    scenarioKey: 'X12_214_UNKNOWN_SHIPMENT',
+    symptom: 'Midwest says a valid pickup 214 was sent successfully, but Apex has no shipment update. FreightBridge has a failed 214 transaction that made it past parsing and mapping.',
+    briefing: {
+      kind: 'manager',
+      from: 'Mike',
+      role: 'Integration Manager',
+      body:
+        'Final shift. I am not giving you a failure classifier or checkpoint map this time. Start with the partner complaint, use the FreightBridge tools, identify the last healthy stage, explain the root cause, choose a safe recovery, and prove the customer-facing outcome.',
+    },
+    partnerMessage: {
+      kind: 'partner',
+      from: 'Midwest EDI Support',
+      role: 'External Partner Message',
+      body:
+        'We sent a pickup 214 using the agreed 004010 profile and valid status code. Our file left our side successfully. Apex says they still have no status update.',
+    },
+    evidencePoints: [],
+    evidenceSources: [
+      {
+        id: 'case-correlation',
+        title: 'Case Correlation',
+        source: 'FreightBridge Transaction / Business Trace',
+        summary: 'Establish the intended shipment and compare it with the failed 214 transaction.',
+        inspectedLabel: 'Inspect case correlation',
+        details: [
+          'A legitimate Apex/FreightBridge baseline shipment exists for this final-shift run.',
+          'The failed 214 transaction carries a business identifier derived from B10.',
+          'Do not assume those two identifiers are the same.',
+        ],
+        rawFrom: 'failureDrill',
+      },
+      {
+        id: 'raw-214',
+        title: 'Raw 214 Evidence',
+        source: 'FreightBridge Payload Evidence',
+        summary: 'Inspect the message itself before changing transport, X12 controls, or mapping rules.',
+        inspectedLabel: 'Inspect raw 214',
+        details: [
+          'ISA12 / GS08 use the supported 00401 / 004010 profile.',
+          'ST02 and SE02 are internally consistent.',
+          'AT7-01 is AF, a supported PICKED_UP status.',
+          'B10 carries the shipment reference FreightBridge uses for canonical correlation.',
+        ],
+        rawFrom: 'payloadPreview',
+      },
+      {
+        id: 'error',
+        title: 'Persisted Failure Evidence',
+        source: 'FreightBridge Error Detail',
+        summary: 'Use the persisted classification to identify the first failing processing stage.',
+        inspectedLabel: 'Inspect persisted failure',
+        details: [
+          'The error code is SHIPMENT_NOT_FOUND.',
+          'The category is BUSINESS_VALIDATION_ERROR.',
+          'The stage is BUSINESS_VALIDATION.',
+          'Parsing and mapping completed before this failure.',
+        ],
+        rawFrom: 'observedFailure',
+      },
+    ],
+    requiredEvidenceSourceIds: ['case-correlation', 'raw-214', 'error'],
+    lastHealthyOptions: [
+      { id: 'mapping', label: 'The 214 had already passed X12 parsing and Midwest mapping; business correlation was next', explanation: 'Correct. The first failed checkpoint is canonical shipment lookup during business validation.' },
+      { id: 'parsing', label: 'The last healthy point was only X12 parsing', explanation: 'Parsing succeeded, but mapping also succeeded before the failure.' },
+      { id: 'transport', label: 'The last healthy point was SFTP transport', explanation: 'Transport succeeded much earlier; persisted evidence shows parsing and mapping also completed.' },
+    ],
+    correctLastHealthyId: 'mapping',
+    diagnosisOptions: [
+      { id: 'reference', label: 'The 214 is technically valid, but its B10 shipment reference does not match the intended canonical shipment, so FreightBridge cannot persist the event', explanation: 'Correct. This is business correlation/validation, not transport, syntax, profile, or AT7 mapping.' },
+      { id: 'status', label: 'AF is not a supported Midwest status code', explanation: 'AF is the supported PICKED_UP status in the active profile.' },
+      { id: 'version', label: 'The partner used the wrong X12 version', explanation: 'The message uses the supported 00401 / 004010 profile.' },
+    ],
+    correctDiagnosisId: 'reference',
+    planOptions: [
+      { id: 'correct-reference', label: 'Confirm the intended FreightBridge shipment, correct the B10 reference, resend with fresh X12 controls, and verify the Apex-facing pickup event', explanation: 'Correct. Fix the business correlation error without weakening validation or fabricating a shipment.' },
+      { id: 'create-missing', label: 'Create a new canonical shipment matching the bad B10 value so the 214 will pass', explanation: 'Do not manufacture business records to make an incorrect partner reference succeed.' },
+      { id: 'bypass', label: 'Disable shipment lookup for 214 messages and forward the status directly to Apex', explanation: 'That would bypass the canonical business-validation boundary and can attach events to the wrong shipment.' },
+    ],
+    correctPlanId: 'correct-reference',
+    remediationLabel: 'Correct the shipment reference and verify recovery',
+    recoveryMode: 'INCIDENT_VERIFICATION',
+    verification: 'Recovery must use the intended final-shift shipment reference, preserve valid 004010/AF semantics, complete FreightBridge processing, and produce Apex-facing PICKED_UP evidence.',
+    statusPrompt: 'Send Mike a concise production-style incident update: partner claim, FreightBridge evidence, last healthy stage, root cause, corrective action, and verified customer-facing outcome.',
+    debrief: [
+      'A technically valid EDI message can still fail business validation after mapping.',
+      'B10 shipment correlation is business evidence; a valid AT7 status is not enough if the shipment reference is wrong.',
+      'The safest fix corrects the partner reference instead of weakening validation or inventing missing business data.',
+      'Final verification includes both successful FreightBridge processing and the Apex-facing shipment-status result.',
+    ],
+    hints: [],
   },
 
 ];
