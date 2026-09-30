@@ -6,6 +6,7 @@ import {
   Compass,
   Map,
   Network,
+  Repeat2,
   Route,
   Search,
   Workflow,
@@ -18,6 +19,7 @@ import {
   PLANNED_MISSION_COUNT,
   TRAINING_ROLE,
   trainingEntities,
+  SFTP_STOPS_WORKING_MISSION_ID,
   trainingMissions,
 } from '../training/missions';
 import {
@@ -27,6 +29,7 @@ import {
   isHealthyMapping204Complete,
   isHealthyShipmentStatusComplete,
 } from '../training/healthyWalkthrough';
+import { isReplaySequencePracticeComplete } from '../training/advancedPractice';
 import { isFirstDayOrientationComplete } from '../training/orientation';
 import { hasCompletedMission, loadTrainingProgress } from '../training/progress';
 
@@ -34,6 +37,8 @@ export function TrainingHomePage() {
   const progress = loadTrainingProgress();
   const completedCount = progress.completedMissions.length;
   const orientationComplete = isFirstDayOrientationComplete();
+  const mission9Complete = hasCompletedMission(progress, SFTP_STOPS_WORKING_MISSION_ID);
+  const replaySequenceComplete = isReplaySequencePracticeComplete();
   const healthyPart1Complete = isHealthyApexTenderComplete();
   const healthyPart2Complete = isHealthyMapping204Complete();
   const healthyPart3Complete = isHealthy997990Complete();
@@ -98,9 +103,15 @@ export function TrainingHomePage() {
                 {healthyAction}
               </Link>
             )}
-            <Link className={orientationComplete && healthyPart4Complete ? 'primary-button' : 'secondary-button'} to={`/learn/mission/${currentMission.slug}`}>
-              {currentMissionComplete ? 'Review Current Mission' : 'Start Current Mission'}<ArrowRight size={16} />
-            </Link>
+            {mission9Complete && !replaySequenceComplete ? (
+              <Link className="primary-button" to="/learn/practice/replay-sequence">
+                Advanced Replay & Sequence Practice<ArrowRight size={16} />
+              </Link>
+            ) : (
+              <Link className={orientationComplete && healthyPart4Complete ? 'primary-button' : 'secondary-button'} to={`/learn/mission/${currentMission.slug}`}>
+                {currentMissionComplete ? 'Review Current Mission' : 'Start Current Mission'}<ArrowRight size={16} />
+              </Link>
+            )}
             <Link className="secondary-button" to="/dashboard">Advanced Console</Link>
           </div>
         </article>
@@ -151,6 +162,18 @@ export function TrainingHomePage() {
               <Link className="ops-inbox-item muted" to="/learn/orientation">
                 <span className="ops-inbox-icon"><CheckCircle2 size={18} /></span>
                 <span><small>Completed Briefing</small><strong>First-Day Orientation</strong><span>Review the partner and protocol primer whenever you need it.</span></span>
+              </Link>
+            </>
+          ) : mission9Complete && !replaySequenceComplete ? (
+            <>
+              <Link className="ops-inbox-item active" to="/learn/practice/replay-sequence">
+                <span className="ops-inbox-icon"><Repeat2 size={18} /></span>
+                <span><small>Advanced Practice</small><strong>Replay & Sequence Clinic</strong><span>Prove the difference between duplicate business attempts, exact X12 replay, and late shipment events before the final shift.</span></span>
+                <ArrowRight size={16} />
+              </Link>
+              <Link className="ops-inbox-item muted" to={`/learn/mission/${currentMission.slug}`}>
+                <span className="ops-inbox-icon"><CheckCircle2 size={18} /></span>
+                <span><small>Incident Queue</small><strong>Mission 9 complete</strong><span>Your final-shift prep is now the replay and sequencing clinic.</span></span>
               </Link>
             </>
           ) : (
@@ -231,6 +254,20 @@ export function TrainingHomePage() {
                   : healthyPart4Complete
                     ? 'Review Part 4'
                     : 'Start Part 4'}
+          </Link>
+        </article>
+      )}
+
+      {mission9Complete && (
+        <article className="panel healthy-home-card replay-practice-home-card" data-testid="replay-practice-home-card">
+          <div>
+            <p className="eyebrow">Advanced final-shift prep</p>
+            <h2>Replay & Sequence Clinic</h2>
+            <p>Use a real Lab run to distinguish duplicate business attempts, exact X12 replay suppression, and event-time chronology protection.</p>
+          </div>
+          <Link className={replaySequenceComplete ? 'secondary-button' : 'primary-button'} to="/learn/practice/replay-sequence">
+            <Repeat2 size={16} />
+            {replaySequenceComplete ? 'Review Advanced Practice' : 'Start Advanced Practice'}
           </Link>
         </article>
       )}

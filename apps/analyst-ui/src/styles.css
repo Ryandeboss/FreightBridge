@@ -2315,3 +2315,25 @@ input:disabled {
 .transport-boundary-flow span.failed{border-color:#e0b6aa;background:#fff5f2;color:#9b4433}
 @media(max-width:900px){.transport-boundary-flow{grid-template-columns:1fr}}
 
+/* Milestone 38: duplicate, replay, and sequence practice */
+.replay-sequence-page{display:grid;gap:1rem}
+.replay-concept-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.8rem}
+.replay-concept-grid article{display:grid;gap:.45rem;padding:.9rem;border:1px solid #dce4e8;border-radius:10px;background:#fbfcfd}
+.replay-concept-grid h2,.replay-concept-grid p{margin:0}
+.replay-concept-grid h2{font-size:1rem}
+.replay-concept-grid p{color:#60717a;font-size:.82rem;line-height:1.45}
+.replay-practice-run{display:grid;gap:.9rem}
+.replay-step-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.4rem}
+.replay-step-strip span{display:flex;align-items:center;gap:.4rem;padding:.5rem .6rem;border:1px solid #dfe6e9;border-radius:7px;color:#6a7981;background:#fafcfd;font-size:.72rem;line-height:1.3}
+.replay-step-strip span.complete{border-color:#bddbcc;background:#f2faf6;color:#2d6657}
+.replay-step-strip span.active{border-color:#9fc7ca;background:#f0f8f8;color:#155f64;font-weight:850}
+.replay-evidence-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.8rem}
+.replay-evidence-card{display:grid;gap:.7rem}
+.replay-evidence-card.complete{border-color:#bddbcc}
+.replay-evidence-card h2,.replay-evidence-card p{margin:0}
+.replay-evidence-card h2{font-size:1rem}
+.replay-evidence-card p{color:#62727a;font-size:.8rem;line-height:1.45}
+.replay-practice-home-card{border-left:4px solid #5c8f93}
+@media(max-width:950px){.replay-concept-grid,.replay-evidence-grid{grid-template-columns:1fr}.replay-step-strip{grid-template-columns:1fr 1fr}}
+@media(max-width:620px){.replay-step-strip{grid-template-columns:1fr}}
+

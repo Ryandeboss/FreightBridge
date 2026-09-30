@@ -880,6 +880,89 @@ function makeM33LabRun(succeededKeys: string[]) {
 
 const part3ReadyForM33LabRun = makeM33LabRun([]);
 
+
+const replayPracticeRunId = 'bcbcbcbc-bcbc-4bcb-8bcb-bcbcbcbcbcbc';
+const replayPracticeStepKeys = [
+  'CREATE_APEX_LOAD',
+  'DISPATCH_APEX_TENDER',
+  'DISPATCH_204_SFTP',
+  'MIDWEST_RECEIVE_204',
+  'CREATE_TENDER_DECISION',
+  'CREATE_214_DELIVERED',
+  'DISPATCH_214_DELIVERED',
+  'FREIGHTBRIDGE_RECEIVE_214_DELIVERED',
+  'REQUEUE_214_DELIVERED_REPLAY',
+  'FREIGHTBRIDGE_RECEIVE_214_REPLAY',
+  'CREATE_214_ARRIVED',
+  'DISPATCH_214_ARRIVED',
+  'FREIGHTBRIDGE_RECEIVE_214_LATE_ARRIVED',
+];
+
+function makeReplayPracticeRun(succeededCount: number) {
+  const displays: Record<string, string> = {
+    CREATE_APEX_LOAD: 'Create Apex practice load',
+    DISPATCH_APEX_TENDER: 'Dispatch Apex practice tender',
+    DISPATCH_204_SFTP: 'Dispatch Midwest practice 204',
+    MIDWEST_RECEIVE_204: 'Midwest receives practice 204',
+    CREATE_TENDER_DECISION: 'Accept practice tender',
+    CREATE_214_DELIVERED: 'Create DELIVERED event',
+    DISPATCH_214_DELIVERED: 'Dispatch DELIVERED 214',
+    FREIGHTBRIDGE_RECEIVE_214_DELIVERED: 'FreightBridge receives DELIVERED 214',
+    REQUEUE_214_DELIVERED_REPLAY: 'Requeue exact DELIVERED 214 bytes',
+    FREIGHTBRIDGE_RECEIVE_214_REPLAY: 'FreightBridge receives exact 214 replay',
+    CREATE_214_ARRIVED: 'Create late ARRIVED event',
+    DISPATCH_214_ARRIVED: 'Dispatch late ARRIVED 214',
+    FREIGHTBRIDGE_RECEIVE_214_LATE_ARRIVED: 'FreightBridge receives late ARRIVED 214',
+  };
+  const steps = replayPracticeStepKeys.map((stepKey, index) => {
+    const succeeded = index < succeededCount;
+    let responseSummary: Record<string, unknown> = {};
+    if (succeeded && stepKey === 'FREIGHTBRIDGE_RECEIVE_214_DELIVERED') {
+      responseSummary = { targetProcessed: { transactionId: 'tx-delivered', destinationPath: '/archive/delivered.edi' } };
+    }
+    if (succeeded && stepKey === 'FREIGHTBRIDGE_RECEIVE_214_REPLAY') {
+      responseSummary = {
+        status: 'REPLAY_ACCEPTED',
+        replayOfTransactionId: 'tx-delivered',
+        businessSideEffectsSkipped: true,
+        apexEventCountBefore: 1,
+        apexEventCountAfter: 1,
+      };
+    }
+    if (succeeded && stepKey === 'FREIGHTBRIDGE_RECEIVE_214_LATE_ARRIVED') {
+      responseSummary = {
+        lateEventStored: true,
+        currentStatusPreserved: true,
+        currentStatus: 'DELIVERED',
+        lateEventOccurredAt: '2026-10-01T16:00:00Z',
+        deliveredOccurredAt: '2026-10-02T00:00:00Z',
+      };
+    }
+    return {
+      ...labRun.steps[0],
+      id: replayPracticeRunId + '-' + String(index + 1),
+      runId: replayPracticeRunId,
+      stepKey,
+      sequence: index + 1,
+      displayName: displays[stepKey],
+      documentType: stepKey.includes('204') ? '204' : stepKey.includes('TENDER') ? '990' : stepKey.includes('APEX') ? 'APEX_LOAD_TENDER' : '214',
+      status: succeeded ? 'SUCCEEDED' : 'PENDING',
+      attemptCount: succeeded ? 1 : 0,
+      responseSummary,
+    };
+  });
+  return {
+    ...labRun,
+    id: replayPracticeRunId,
+    scenarioKey: 'REPLAY_SEQUENCE_PRACTICE',
+    businessIdentifier: 'LABREPLAY900',
+    status: succeededCount === replayPracticeStepKeys.length ? 'SUCCEEDED' : succeededCount > 0 ? 'RUNNING' : 'READY',
+    steps,
+  };
+}
+
+const pendingReplayPracticeRun = makeReplayPracticeRun(0);
+
 const completedFailureLabRun = {
   ...labRun,
   id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -1834,6 +1917,11 @@ function installFetchMock(options: {
           body.scenarioKey === 'FULL_SHIPMENT_LIFECYCLE'
           && body.commodityDescription === 'Recovered Training Freight';
 
+        if (body.scenarioKey === 'REPLAY_SEQUENCE_PRACTICE') {
+          currentLabRun = pendingReplayPracticeRun;
+          return jsonResponse(currentLabRun, 201);
+        }
+
         currentLabRun = failureRun
           ? pendingFailureRun(failureRun)
           : isIncidentRecovery
@@ -1864,6 +1952,17 @@ function installFetchMock(options: {
 
     if (path === `/api/lab/runs/${labRun.id}`) {
       return jsonResponse(currentLabRun);
+    }
+
+    if (path === '/api/lab/runs/' + replayPracticeRunId + '/run-next') {
+      const currentSucceeded = (currentLabRun.steps as Array<{ status: string }>).filter((step) => step.status === 'SUCCEEDED').length;
+      const nextRun = makeReplayPracticeRun(Math.min(currentSucceeded + 1, replayPracticeStepKeys.length));
+      currentLabRun = nextRun;
+      return jsonResponse({
+        run: nextRun,
+        step: nextRun.steps[Math.min(currentSucceeded, nextRun.steps.length - 1)],
+        alreadyCompleted: false,
+      });
     }
 
     if (path === `/api/lab/runs/${labRun.id}/run-next`) {
@@ -3217,6 +3316,46 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
     await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
     expect(await screen.findByTestId('mission-10-card')).toHaveTextContent(/Locked/i);
   }, 10000);
+
+  test('runs advanced replay and sequence practice after Mission 9', async () => {
+    installFetchMock();
+    window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      completedMissions: [
+        'LEARN_THE_FLOW', 'APEX_BAD_AUTH', 'APEX_INVALID_JSON', 'APEX_INVALID_CONTRACT',
+        'DUPLICATE_SHIPMENT', 'X12_ENVELOPE_MISMATCH', 'STATUS_CALLBACK_MISSING',
+        'WRONG_X12_VERSION', 'SFTP_STOPS_WORKING',
+      ],
+    }));
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn/practice/replay-sequence';
+    render(<App />);
+
+    expect(await screen.findByTestId('replay-sequence-practice-page')).toBeInTheDocument();
+    expect(screen.getByTestId('replay-concept-grid')).toHaveTextContent(/Duplicate business attempt/i);
+    expect(screen.getByTestId('replay-concept-grid')).toHaveTextContent(/Exact replay/i);
+    expect(screen.getByTestId('replay-concept-grid')).toHaveTextContent(/Late event/i);
+
+    await userEvent.click(screen.getByRole('button', { name: /Start Advanced Practice/i }));
+    for (let index = 0; index < replayPracticeStepKeys.length; index += 1) {
+      await userEvent.click(await screen.findByRole('button', { name: /Run Next Step/i }));
+    }
+
+    expect(screen.getByText(/REPLAY_ACCEPTED/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/^YES$/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/DELIVERED/i).length).toBeGreaterThan(0);
+
+    const checks = screen.getByTestId('replay-sequence-checks');
+    await userEvent.click(within(checks).getByRole('button', { name: /^Duplicate business attempt$/i }));
+    await userEvent.click(within(checks).getByRole('button', { name: /^Record the replay and skip business side effects$/i }));
+    await userEvent.click(within(checks).getByRole('button', { name: /^DELIVERED$/i }));
+
+    const completeButton = screen.getByRole('button', { name: /Complete Advanced Practice/i });
+    expect(completeButton).toBeEnabled();
+    await userEvent.click(completeButton);
+    expect(window.localStorage.getItem('freightbridge.replaySequencePracticeComplete')).toBe('true');
+    expect(screen.getByTestId('replay-sequence-completion')).toHaveTextContent(/Advanced practice complete/i);
+  }, 15000);
 
   test('searches transactions and opens detail with retry action', async () => {
     const fetchMock = installFetchMock();

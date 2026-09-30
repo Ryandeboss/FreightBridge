@@ -18,6 +18,7 @@ import { IncidentMissionPage } from './pages/IncidentMissionPage';
 import { LearnTheFlowMissionPage } from './pages/LearnTheFlowMissionPage';
 import { MappingDetailPage, MappingsPage } from './pages/MappingsPage';
 import { PartnerDetailPage, PartnersPage } from './pages/PartnersPage';
+import { ReplaySequencePracticePage } from './pages/ReplaySequencePracticePage';
 import { TrainingHomePage } from './pages/TrainingHomePage';
 import { TransactionDetailPage } from './pages/TransactionDetailPage';
 import { TransactionsPage } from './pages/TransactionsPage';
@@ -43,6 +44,7 @@ function AppRoutes() {
           <Route path="/learn/mission/learn-the-flow" element={<LearnTheFlowMissionPage />} />
           <Route path="/learn/mission/:missionSlug" element={<IncidentMissionPage />} />
           <Route path="/learn/tools/:tool" element={<AnalystToolsPage />} />
+          <Route path="/learn/practice/replay-sequence" element={<ReplaySequencePracticePage />} />
         </Route>
         <Route element={<AppShell />}>
           <Route path="/dashboard" element={<DashboardPage />} />
