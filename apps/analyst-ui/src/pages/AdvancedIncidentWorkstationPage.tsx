@@ -729,19 +729,21 @@ function ChoicePanel({
   return (
     <fieldset className="workstation-options" data-testid={testId}>
       <legend>{prompt}</legend>
-      {options.map((option) => (
-        <label key={option.id} className={selected === option.id ? 'selected' : ''}>
-          <input
-            type="radio"
-            name={testId}
-            value={option.id}
-            checked={selected === option.id}
-            disabled={disabled}
-            onChange={() => onSelect(option.id)}
-          />
-          <span>{option.label}</span>
-        </label>
-      ))}
+      <div role="radiogroup" aria-label={prompt}>
+        {options.map((option) => (
+          <label key={option.id} className={selected === option.id ? 'selected' : ''}>
+            <input
+              type="radio"
+              name={testId}
+              value={option.id}
+              checked={selected === option.id}
+              disabled={disabled}
+              onChange={() => onSelect(option.id)}
+            />
+            <span>{option.label}</span>
+          </label>
+        ))}
+      </div>
       {selectedOption && (
         <div className={'workstation-option-feedback ' + (selected === correctId ? 'correct' : 'incorrect')}>
           {selectedOption.explanation}
