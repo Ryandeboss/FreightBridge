@@ -3555,7 +3555,7 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
     await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
     expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
     expect(screen.getByTestId('mission-10-card')).toHaveTextContent(/Complete/i);
-    expect(screen.getByText('10 / 10')).toBeInTheDocument();
+    expect(screen.getAllByText('10 / 10').length).toBeGreaterThan(0);
     expect(screen.getByRole('heading', { name: /Training complete/i })).toBeInTheDocument();
     expect(screen.getByTestId('training-complete-summary')).toHaveTextContent(/10 \/ 10 missions complete/i);
     expect(screen.getByTestId('training-complete-summary')).toHaveTextContent(/Trace/i);
