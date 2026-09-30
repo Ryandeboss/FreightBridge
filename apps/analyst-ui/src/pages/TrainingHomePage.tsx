@@ -300,9 +300,9 @@ export function TrainingHomePage() {
       {mission9Complete && (
         <article className="panel healthy-home-card replay-practice-home-card" data-testid="replay-practice-home-card">
           <div>
-            <p className="eyebrow">Advanced final-shift prep</p>
-            <h2>Replay & Sequence Clinic</h2>
-            <p>Use a real Lab run to distinguish duplicate business attempts, exact X12 replay suppression, and event-time chronology protection.</p>
+            <p className="eyebrow">Module 05 · Advanced policy clinic</p>
+            <h2>Replay & Sequence Policy Lab</h2>
+            <p>Use the same Console, Code, and Answer workstation to inspect replay evidence, configure safe duplicate/replay/chronology policy, and prove the resulting behavior.</p>
           </div>
           <Link className={replaySequenceComplete ? 'secondary-button' : 'primary-button'} to="/learn/practice/replay-sequence">
             <Repeat2 size={16} />
