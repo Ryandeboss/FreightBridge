@@ -32,7 +32,7 @@ export function FirstDayOrientationPage() {
 
   function finishOrientation() {
     markFirstDayOrientationComplete();
-    navigate('/learn/healthy/apex-tender');
+    navigate('/learn/bootcamp');
   }
 
   return (
@@ -83,7 +83,7 @@ export function FirstDayOrientationPage() {
           </button>
         ) : (
           <button className="story-button story-button-primary" type="button" onClick={finishOrientation}>
-            Start the healthy shipment
+            Continue to EDI basics
             <ArrowRight size={17} />
           </button>
         )}

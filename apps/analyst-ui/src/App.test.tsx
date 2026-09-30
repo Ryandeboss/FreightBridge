@@ -2369,6 +2369,7 @@ describe('Analyst Console', () => {
     expect(screen.getByTestId('ops-current-focus')).toHaveTextContent(/Current Mission/i);
     const curriculum = screen.getByTestId('curriculum-sidebar');
     expect(curriculum).toHaveTextContent(/Orientation/i);
+    expect(curriculum).toHaveTextContent(/EDI & Protocol Basics/i);
     expect(curriculum).toHaveTextContent(/Healthy Integration/i);
     expect(curriculum).toHaveTextContent(/Guided Troubleshooting/i);
     expect(curriculum).toHaveTextContent(/Advanced Incidents/i);
@@ -2398,7 +2399,7 @@ describe('Analyst Console', () => {
   });
 
 
-test('runs the story orientation inside the curriculum shell and hands off to the healthy walkthrough', async () => {
+test('runs the story orientation inside the curriculum shell and hands off to the EDI bootcamp', async () => {
   installFetchMock();
   window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
   window.location.hash = '#/learn/orientation';
@@ -2440,11 +2441,58 @@ test('runs the story orientation inside the curriculum shell and hands off to th
   expect(screen.getByTestId('orientation-your-job')).toHaveTextContent(/Messages/i);
   expect(screen.getByTestId('orientation-your-job')).toHaveTextContent(/Mapping/i);
 
-  await userEvent.click(screen.getByRole('button', { name: /Start the healthy shipment/i }));
+  await userEvent.click(screen.getByRole('button', { name: /Continue to EDI basics/i }));
   expect(window.localStorage.getItem('freightbridge.firstDayOrientationComplete')).toBe('true');
+  await waitFor(() => expect(window.location.hash).toBe('#/learn/bootcamp'));
+  expect(await screen.findByTestId('edi-bootcamp-page')).toBeInTheDocument();
+  expect(screen.getByTestId('ops-desk-shell')).toBeInTheDocument();
+  expect(within(screen.getByTestId('curriculum-sidebar')).getByTestId('curriculum-module-bootcamp')).toHaveTextContent(/Lesson 1 of 7/i);
+});
+
+test('teaches the EDI and protocol bootcamp, gates checks, and unlocks the healthy flow', async () => {
+  installFetchMock();
+  window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+  window.localStorage.setItem('freightbridge.firstDayOrientationComplete', 'true');
+  window.location.hash = '#/learn/bootcamp';
+  render(<App />);
+
+  expect(await screen.findByTestId('edi-bootcamp-page')).toBeInTheDocument();
+  const curriculum = screen.getByTestId('curriculum-sidebar');
+  expect(screen.getByTestId('bootcamp-layers')).toHaveTextContent(/SFTP can move/i);
+  expect(within(curriculum).getByTestId('curriculum-module-bootcamp')).toHaveTextContent(/Lesson 1 of 7/i);
+  expect(screen.getByRole('button', { name: /Continue/i })).toBeDisabled();
+
+  await userEvent.click(screen.getByRole('radio', { name: /SFTP can move a file/i }));
+  await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
+  expect(screen.getByTestId('bootcamp-rest-json')).toHaveTextContent(/202 Accepted/i);
+  expect(screen.getByTestId('bootcamp-rest-json')).toHaveTextContent(/does not mean Midwest accepted/i);
+
+  await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
+  expect(screen.getByTestId('bootcamp-sftp-x12')).toHaveTextContent(/private internal servers/i);
+
+  await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
+  expect(screen.getByTestId('bootcamp-x12-envelope')).toHaveTextContent(/004010/i);
+  expect(screen.getByRole('button', { name: /Continue/i })).toBeDisabled();
+  await userEvent.click(screen.getByRole('radio', { name: /ST and SE/i }));
+  await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
+
+  expect(screen.getByTestId('bootcamp-transaction-sets')).toHaveTextContent(/997 does not mean the carrier accepted the load/i);
+  await userEvent.click(screen.getByRole('radio', { name: /^997$/i }));
+  expect(screen.getByText(/technical acknowledgment, not the carrier business decision/i)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Continue/i })).toBeDisabled();
+  await userEvent.click(screen.getByRole('radio', { name: /^990$/i }));
+  await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
+
+  expect(screen.getByTestId('bootcamp-correlation-mapping')).toHaveTextContent(/AF/i);
+  expect(screen.getByTestId('bootcamp-correlation-mapping')).toHaveTextContent(/PICKED_UP/i);
+  await userEvent.click(screen.getByRole('radio', { name: /correlate messages and events/i }));
+  await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
+
+  expect(screen.getByTestId('bootcamp-ready')).toHaveTextContent(/Healthy Integration/i);
+  await userEvent.click(screen.getByRole('button', { name: /Start Healthy Integration/i }));
+  expect(JSON.parse(String(window.localStorage.getItem('freightbridge.ediProtocolBootcamp'))).complete).toBe(true);
   await waitFor(() => expect(window.location.hash).toBe('#/learn/healthy/apex-tender'));
   expect(await screen.findByTestId('healthy-apex-tender-page')).toBeInTheDocument();
-  expect(screen.getByTestId('ops-desk-shell')).toBeInTheDocument();
 });
 
 
