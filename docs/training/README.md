@@ -58,7 +58,7 @@ Milestone 45 introduces the reusable incident workstation used by later lab rede
 
 Milestone 47 separates **lesson mode** from **lab mode**. Module 03 is now a low-clutter animated lesson with server icons, dotted message paths, a small narrated guide, and one hardcoded teaching document per scene. Each document expands to show every teaching line instead of clipping inside a fixed-height console, important lines include inline plain-English annotations, and a short explanation below the document describes what the learner should understand from it. Scene 1 explicitly teaches that Apex sends JSON into FreightBridge first; the X12 204 is only created later by FreightBridge for Midwest. Completing Scene 5 records Mission 1 and unlocks Guided Troubleshooting.
 
-The reusable **Console | Code | Answer** workstation is reserved for actual troubleshooting work. Mission 2 (Apex authentication failure) is the first real failure scenario using it, backed by the existing server-side `APEX_BAD_AUTH` drill and real recovery behavior. Missions 3–10 remain on the prior incident UI until their later migration milestone.
+The reusable **Console | Code | Answer** workstation is reserved for actual troubleshooting work. Milestone 48 completes the guided migration: Missions 2–7 now use the same workstation mental model. Mission 2 retains the authentication workstation introduced earlier; Missions 3–7 share a reusable guided workstation that renders each mission's real server-backed failure drill as an ordered Console, exposes only scenario-relevant read-only files in Code, and keeps Answer structured with last-healthy, diagnosis, remediation, hints, status reporting, and verified recovery. Missions 8–10 remain on the prior advanced/final incident UI for the later advanced-incidents milestones.
 
 ## Failure Drills
 
@@ -113,12 +113,13 @@ After Mission 10, the Training Desk switches to a **10 / 10 Training Complete** 
 6. Complete the bootcamp and verify the Healthy Integration module unlocks only afterward for new progress, while older downstream progress remains recognized.
 7. Open Module 03 and confirm it is a clean five-scene lesson rather than a lab: no Console / Code / Answer tabs, no Lab API run, a white-space-heavy layout, animated server/message paths, and a fully visible hardcoded teaching document. Confirm the document does not have an internal clipping/scroll region, important lines have inline `//` plain-English annotations, and explanatory text appears underneath the complete document. Scene 1 must show Apex as the supplier system sending REST/JSON to FreightBridge and explicitly say this is not the 204 yet.
 8. Continue through canonical normalization, the actual FreightBridge-generated X12 204 to Midwest, the 997-versus-990 distinction, and 214 status mapping. Finish Scene 5 and verify Mission 1 is recorded and Mission 2 unlocks. Open Mission 2 and confirm the reusable **Console | Code | Answer** workstation appears there for real troubleshooting.
-9. Complete Missions 3–9 using the real controlled failure drills.
-10. Complete the Replay & Sequence Clinic and verify exact replay side effects are skipped while late event history does not regress `DELIVERED`.
-11. Confirm Mission 10 unlocks only after advanced practice.
-12. Complete Mission 10 by diagnosing `SHIPMENT_NOT_FOUND` at business validation and correcting the B10 shipment reference.
-13. Return to the Training Desk and confirm the completed state shows **10 / 10**, inbox count **0**, and **No training incidents waiting**.
-14. Confirm the curriculum sidebar can collapse, Mike's persistent right panel is gone, and Transactions / Business Trace / Errors / Mappings / Partners do not appear as permanent learner navigation.
-15. Open the Advanced Console and confirm the full operations/configuration workspace remains available.
+9. Complete Missions 2–7 and confirm each guided incident uses **Console | Code | Answer**. Console must stop at the first failed checkpoint and expose FreightBridge-only raw/processing evidence; Code must show only scenario-relevant contract/validation/mapping/reference files; Answer must require evidence-backed last-healthy, diagnosis, remediation, and a verified same-load recovery. Confirm the progression covers malformed JSON, Apex contract validation, duplicate/idempotency protection, 214 ST02/SE02 mismatch, and unsupported AT7 mapping.
+10. Complete Missions 8–9 using the advanced incident UI.
+11. Complete the Replay & Sequence Clinic and verify exact replay side effects are skipped while late event history does not regress `DELIVERED`.
+12. Confirm Mission 10 unlocks only after advanced practice.
+13. Complete Mission 10 by diagnosing `SHIPMENT_NOT_FOUND` at business validation and correcting the B10 shipment reference.
+14. Return to the Training Desk and confirm the completed state shows **10 / 10**, inbox count **0**, and **No training incidents waiting**.
+15. Confirm the curriculum sidebar can collapse, Mike's persistent right panel is gone, and Transactions / Business Trace / Errors / Mappings / Partners do not appear as permanent learner navigation.
+16. Open the Advanced Console and confirm the full operations/configuration workspace remains available.
 
 See [FreightBridge employee POV](freightbridge-employee-pov.md), [Healthy integration baseline](healthy-integration-baseline.md), and [Incident game loop](incident-game-loop.md) for the underlying training model.
