@@ -12,7 +12,7 @@ import {
   SlidersHorizontal,
   Workflow,
 } from 'lucide-react';
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useOperationsSession } from '../../auth/OperationsSession';
 import { healthyWalkthroughNextPath } from '../../training/healthyWalkthrough';
 import { PLANNED_MISSION_COUNT, TRAINING_ROLE } from '../../training/missions';
@@ -24,6 +24,7 @@ function navClass({ isActive }: { isActive: boolean }) {
 
 export function TrainingShell() {
   const { lock } = useOperationsSession();
+  useLocation();
   const healthyPath = healthyWalkthroughNextPath();
   const completedMissions = loadTrainingProgress().completedMissions.length;
   const trainingComplete = completedMissions >= PLANNED_MISSION_COUNT;
