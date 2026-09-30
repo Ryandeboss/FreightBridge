@@ -17,8 +17,10 @@ import {
 import {
   findIncidentMissionBySlug,
   missionPhases,
+  PRODUCTION_INCIDENT_MISSION_ID,
   trainingMissions,
 } from '../training/missions';
+import { isReplaySequencePracticeComplete } from '../training/advancedPractice';
 import { completeMission, hasCompletedMission, loadTrainingProgress } from '../training/progress';
 import type { IncidentMissionDefinition, IncidentOption, IncidentStatus, MissionPhase } from '../training/types';
 
@@ -34,12 +36,16 @@ export function IncidentMissionPage() {
 
   const progress = loadTrainingProgress();
   const roadmapMission = trainingMissions.find((candidate) => candidate.id === mission.id);
-  const prerequisiteSatisfied =
+  const roadmapPrerequisiteSatisfied =
     !roadmapMission?.unlocksAfter ||
     hasCompletedMission(progress, roadmapMission.unlocksAfter) ||
     hasCompletedMission(progress, mission.id);
+  const finalShiftPrerequisiteSatisfied =
+    mission.id !== PRODUCTION_INCIDENT_MISSION_ID ||
+    isReplaySequencePracticeComplete() ||
+    hasCompletedMission(progress, mission.id);
 
-  if (!prerequisiteSatisfied) {
+  if (!roadmapPrerequisiteSatisfied || !finalShiftPrerequisiteSatisfied) {
     return <Navigate to="/learn" replace />;
   }
 
@@ -69,6 +75,7 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
   const isContractOrMappingMission = mission.scenarioKey === 'APEX_INVALID_CONTRACT' || mission.scenarioKey === 'X12_214_UNSUPPORTED_STATUS';
   const isProfileVersionMission = mission.scenarioKey === 'X12_214_WRONG_VERSION';
   const isTransportBoundaryMission = mission.scenarioKey === 'SFTP_HOST_KEY_MISMATCH';
+  const isFinalShift = mission.id === PRODUCTION_INCIDENT_MISSION_ID;
   const recoveryEvidence = useMemo(
     () => readRecord(recoveryRun?.resultSummary.recovery),
     [recoveryRun],
@@ -236,7 +243,7 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
       </Link>
 
       <MissionBriefing>
-        <p className="eyebrow">Mission {mission.missionNumber} - {mission.missionNumber >= 8 ? 'Advanced' : mission.missionNumber >= 5 ? 'Intermediate' : 'Beginner'} Incident</p>
+        <p className="eyebrow">Mission {mission.missionNumber} - {isFinalShift ? 'Final Shift' : mission.missionNumber >= 8 ? 'Advanced' : mission.missionNumber >= 5 ? 'Intermediate' : 'Beginner'} Incident</p>
         <h1>{mission.title.replace(/^Mission \d+ - /, '')}</h1>
         <p>{mission.symptom}</p>
         <MissionPhaseProgress phases={missionPhases} current={phase} />
@@ -296,14 +303,21 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
 
         <article className="panel" data-testid="healthy-baseline-comparison">
           <div className="panel-header">
-            <h2>Healthy Baseline Comparison</h2>
+            <h2>{isFinalShift ? 'Independent Investigation' : 'Healthy Baseline Comparison'}</h2>
           </div>
-          <p className="muted-text">
-            In Mission 1, a healthy flow reached authentication, parsing, validation, canonical shipment, 204, SFTP, 997, 990, 214, and Apex-facing update evidence.
-          </p>
-          <p>
-            This incident asks you to identify the first point where the real failure drill diverged from that baseline.
-          </p>
+          {isFinalShift ? (
+            <>
+              <p className="muted-text">No checkpoint map or failure classifier is provided on the final shift.</p>
+              <p>Use the same FreightBridge evidence model you learned earlier: establish what arrived, determine the last successful processing stage, correlate the business identifiers, then prove recovery.</p>
+            </>
+          ) : (
+            <>
+              <p className="muted-text">
+                In Mission 1, a healthy flow reached authentication, parsing, validation, canonical shipment, 204, SFTP, 997, 990, 214, and Apex-facing update evidence.
+              </p>
+              <p>This incident asks you to identify the first point where the real failure drill diverged from that baseline.</p>
+            </>
+          )}
         </article>
       </section>
 
@@ -368,26 +382,29 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
           {isTransportBoundaryMission && (
             <TransportBoundaryPanel observed={observed} />
           )}
+          {isFinalShift && (
+            <IncidentAnalystToolbox mission={mission} run={incidentRun} observed={observed} />
+          )}
 
-          <article className="panel">
-            <div className="panel-header">
-              <h2>Evidence Checkpoints</h2>
-            </div>
-            <div className="incident-evidence-grid">
-              {mission.evidencePoints.map((point) => (
-                <article key={point.id} className={`incident-evidence ${point.status.toLowerCase().replace('_', '-')}`}>
-                  <span className="incident-status">{labelForStatus(point.status)}</span>
-                  <h3>{point.checkpoint}</h3>
-                  <p className="eyebrow">{point.source}</p>
-                  <p>{point.observed}</p>
-                  <small>{point.meaning}</small>
-                </article>
-              ))}
-            </div>
-          </article>
+          {!isFinalShift && (
+            <article className="panel">
+              <div className="panel-header"><h2>Evidence Checkpoints</h2></div>
+              <div className="incident-evidence-grid">
+                {mission.evidencePoints.map((point) => (
+                  <article key={point.id} className={`incident-evidence ${point.status.toLowerCase().replace('_', '-')}`}>
+                    <span className="incident-status">{labelForStatus(point.status)}</span>
+                    <h3>{point.checkpoint}</h3>
+                    <p className="eyebrow">{point.source}</p>
+                    <p>{point.observed}</p>
+                    <small>{point.meaning}</small>
+                  </article>
+                ))}
+              </div>
+            </article>
+          )}
 
-          <section className="content-grid workstation-grid">
-            <HintPanel hints={mission.hints} />
+          <section className={isFinalShift ? 'workstation-grid final-shift-notes' : 'content-grid workstation-grid'}>
+            {!isFinalShift && <HintPanel hints={mission.hints} />}
             <AnalystNotes storageKey={`freightbridge.trainingNotes.${mission.id}`} />
           </section>
 
@@ -403,7 +420,9 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
                 </span>
               </div>
               <p className="muted-text">
-                Inspect at least two relevant FreightBridge evidence sources before making the final diagnosis.
+                {isFinalShift
+                  ? 'Inspect every required source and build the diagnosis from FreightBridge evidence. No final-shift hint path is provided.'
+                  : 'Inspect at least two relevant FreightBridge evidence sources before making the final diagnosis.'}
               </p>
               <div className="intermediate-evidence-grid">
                 {mission.evidenceSources.map((source) => {
@@ -586,6 +605,9 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
                     )}
                     {recoveryEvidence?.correctedGs08 && (
                       <div><dt>Corrected GS08</dt><dd>{String(recoveryEvidence.correctedGs08)}</dd></div>
+                    )}
+                    {recoveryEvidence?.correctedShipmentReference && (
+                      <div><dt>Corrected Shipment Reference</dt><dd>{String(recoveryEvidence.correctedShipmentReference)}</dd></div>
                     )}
                     {recoveryEvidence?.profileCompatibility && (
                       <div><dt>Profile Compatibility</dt><dd>{String(recoveryEvidence.profileCompatibility)}</dd></div>
@@ -842,7 +864,8 @@ function IncidentAnalystToolbox({
 }) {
   const transactionId = stringOrNull(observed?.transactionId);
   const errorId = stringOrNull(observed?.errorId);
-  const businessId = stringOrNull(observed?.businessIdentifier) ?? run.businessIdentifier;
+  const finalShift = mission.scenarioKey === 'X12_214_UNKNOWN_SHIPMENT';
+  const businessId = finalShift ? run.businessIdentifier : stringOrNull(observed?.businessIdentifier) ?? run.businessIdentifier;
   const mappingIncident = mission.scenarioKey === 'X12_214_UNSUPPORTED_STATUS' || mission.scenarioKey === 'X12_214_WRONG_VERSION';
 
   return (
