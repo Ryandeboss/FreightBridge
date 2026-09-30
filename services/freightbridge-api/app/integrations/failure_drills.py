@@ -341,9 +341,9 @@ class ControlledFailureDrillService:
 
 
   def _recover_sftp_connectivity(self, run: dict[str, object]) -> dict[str, object]:
-    config = MidwestSftpConfig.from_settings()
     directories = {}
     try:
+      config = MidwestSftpConfig.from_settings()
       with self.sftp_client_factory(config) as client:
         for directory in ('/inbound', OUTBOUND_DIR, ARCHIVE_DIR, ERROR_DIR):
           directories[directory.removeprefix('/')] = client.exists(directory)
