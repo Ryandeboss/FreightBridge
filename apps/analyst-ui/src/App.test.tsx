@@ -2513,7 +2513,7 @@ test('teaches the healthy flow as five clean animated scenes without calling the
 
   const scene1 = screen.getByTestId('healthy-scene-apex-tender');
   expect(scene1).toHaveTextContent(/Apex has a load that needs to be shipped/i);
-  expect(scene1).toHaveTextContent(/Supplier system/i);
+  expect(scene1).toHaveTextContent(/Broker \/ 3PL system/i);
   expect(scene1).toHaveTextContent(/Integration platform/i);
   expect(scene1).toHaveTextContent(/POST \/api\/integrations\/apex\/load-tenders/i);
   expect(scene1).toHaveTextContent(/"loadId": "LOAD500"/i);
