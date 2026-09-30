@@ -12,10 +12,11 @@ import {
   SlidersHorizontal,
   Workflow,
 } from 'lucide-react';
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useOperationsSession } from '../../auth/OperationsSession';
 import { healthyWalkthroughNextPath } from '../../training/healthyWalkthrough';
-import { TRAINING_ROLE } from '../../training/missions';
+import { PLANNED_MISSION_COUNT, TRAINING_ROLE } from '../../training/missions';
+import { loadTrainingProgress } from '../../training/progress';
 
 function navClass({ isActive }: { isActive: boolean }) {
   return `ops-nav-link ${isActive ? 'active' : ''}`;
@@ -23,7 +24,10 @@ function navClass({ isActive }: { isActive: boolean }) {
 
 export function TrainingShell() {
   const { lock } = useOperationsSession();
+  useLocation();
   const healthyPath = healthyWalkthroughNextPath();
+  const completedMissions = loadTrainingProgress().completedMissions.length;
+  const trainingComplete = completedMissions >= PLANNED_MISSION_COUNT;
 
   return (
     <div className="ops-desk-shell" data-testid="ops-desk-shell">
@@ -35,7 +39,7 @@ export function TrainingShell() {
 
         <div className="ops-shift-status" aria-label="Training shift status">
           <span className="ops-health-dot" aria-hidden="true" />
-          <div><strong>Training Shift</strong><small>Environment healthy · guided workspace</small></div>
+          <div><strong>{trainingComplete ? 'Training Complete' : 'Training Shift'}</strong><small>{trainingComplete ? '10 missions complete · review workspace' : 'Environment healthy · guided workspace'}</small></div>
         </div>
 
         <button className="icon-button" type="button" onClick={() => lock(null)} aria-label="Lock Console">
@@ -48,7 +52,7 @@ export function TrainingShell() {
           <div>
             <p className="ops-rail-label">Workspace</p>
             <NavLink className={navClass} end to="/learn">
-              <Inbox size={17} /><span>Inbox</span><span className="ops-nav-count">1</span>
+              <Inbox size={17} /><span>Inbox</span><span className="ops-nav-count">{trainingComplete ? 0 : 1}</span>
             </NavLink>
             <NavLink className={navClass} to="/learn/orientation">
               <Compass size={17} /><span>Orientation</span>

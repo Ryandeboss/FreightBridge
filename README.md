@@ -4,13 +4,13 @@
 
 FreightBridge is a synthetic logistics integration platform that translates between a modern REST/JSON broker and an X12 004010 carrier. It demonstrates canonical shipment mapping, SFTP transport, technical and business acknowledgments, idempotency, retry, transaction observability, partner configuration, an Analyst Console, and an Integration Lab for happy-path and controlled-failure demos.
 
-FreightBridge now has two authenticated experiences: Training Mode for guided, story-driven integration learning, and the Advanced Analyst Console for direct operational exploration. Training Mode opens on a FreightBridge Training Desk and Mission 1, "Your First Shift"; future troubleshooting missions are shown only as locked or coming-soon placeholders.
+FreightBridge has two authenticated experiences: Training Mode for guided, story-driven integration learning, and the Advanced Analyst Console for direct operational exploration. Training Mode opens on a FreightBridge Ops Desk with First-Day Orientation, a four-part healthy-flow walkthrough, Missions 1–10, compact analyst tools, an advanced replay/sequence clinic, and an independent final shift. After Mission 10, the desk moves into a 10 / 10 completion state for review and demos.
 
 This is a portfolio lab, not a production TMS. Apex Logistics and Midwest Carrier are fictional trading partners created for the project. The architecture and failure modes are modeled after real EDI/API integration work, but no real customer or partner data is involved.
 
-## MVP Status
+## Project Status
 
-FreightBridge's MVP scope is complete through Milestone 22 final deployed acceptance. The final gate verifies deployed readiness, runs the Milestone 20 happy-path and failure-drill regression pack, and rechecks postflight health without adding Phase 2 functionality.
+The core integration MVP was accepted through Milestone 22, and the analyst-training experience was subsequently completed through Milestone 40. The deployed project now includes the full integration workflow, Advanced Console, Integration Lab, completed 10-mission Training Mode, replay/sequence practice, and final demo/polish pass.
 
 ## What It Demonstrates
 
@@ -24,7 +24,8 @@ FreightBridge's MVP scope is complete through Milestone 22 final deployed accept
 - Versioned partner mapping profiles and runtime mapping audit metadata.
 - IntegrationTransaction, ProcessingLog, IntegrationError, business trace, and failure queue observability.
 - Analyst Console screens for dashboard, transactions, failures, trace, partners, mappings, and Integration Lab.
-- Training Mode role-playing a FreightBridge Integration Support Analyst, with the full Analyst Console available as Advanced Console.
+- Completed Training Mode for a FreightBridge Integration Support Analyst: orientation, guided healthy flow, Missions 1–10, compact tools, replay/sequence practice, and final-shift completion state.
+- Full Analyst Console remains available as Advanced Console for direct operational and configuration exploration.
 - Controlled failure injection for troubleshooting demos.
 - Automated regression testing with contract, X12, UI, real PostgreSQL, and deployed acceptance layers.
 

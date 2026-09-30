@@ -2337,3 +2337,16 @@ input:disabled {
 @media(max-width:950px){.replay-concept-grid,.replay-evidence-grid{grid-template-columns:1fr}.replay-step-strip{grid-template-columns:1fr 1fr}}
 @media(max-width:620px){.replay-step-strip{grid-template-columns:1fr}}
 
+/* Milestone 40: finished training / demo polish */
+.training-complete-card{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.9rem 1rem;align-items:start;border-color:#b9d9cf;background:linear-gradient(135deg,#f4fbf7,#fbfdfc)}
+.training-complete-card h2,.training-complete-card p{margin:0}
+.training-complete-card>div:nth-child(2){display:grid;gap:.35rem}
+.training-complete-icon{display:grid;place-items:center;width:2.65rem;height:2.65rem;border-radius:50%;background:#e2f3ea;color:#2f6a58}
+.training-complete-proof{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.55rem}
+.training-complete-proof span{display:grid;gap:.18rem;padding:.65rem .7rem;border:1px solid #d7e7df;border-radius:8px;background:rgba(255,255,255,.72)}
+.training-complete-proof strong{font-size:.82rem}
+.training-complete-proof small{color:#667982;line-height:1.4}
+.ops-inbox-item.complete{border-color:#b9d9cf;background:#f2faf6}
+.ops-inbox-item.complete .ops-inbox-icon{color:#2d6657;background:#e4f3eb}
+@media(max-width:760px){.training-complete-card{grid-template-columns:1fr}.training-complete-icon{width:2.35rem;height:2.35rem}.training-complete-proof{grid-column:auto;grid-template-columns:1fr}}
+
