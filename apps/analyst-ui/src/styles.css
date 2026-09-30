@@ -2581,3 +2581,411 @@ input:disabled {
   .journey-access-page{padding:1.5rem 1rem}
 }
 
+
+
+/* === Milestone 42: Story-Based Orientation Wizard === */
+.story-orientation-page {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: .9rem;
+  padding: 1.15rem clamp(1rem, 4vw, 3.5rem) 1.4rem;
+  color: #1d2a30;
+  background:
+    radial-gradient(circle at 50% -20%, rgba(18, 96, 100, .07), transparent 34rem),
+    #fff;
+}
+.story-orientation-topbar {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 1rem;
+}
+.story-orientation-exit {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  color: #65747c;
+  font-size: .78rem;
+}
+.story-orientation-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+}
+.story-orientation-brand > span {
+  width: 1.9rem;
+  height: 1.9rem;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: #fff;
+  background: #126064;
+}
+.story-orientation-brand strong { font-size: .92rem; }
+.story-orientation-brand small { color: #7a878d; font-size: .72rem; }
+.story-orientation-counter {
+  justify-self: end;
+  color: #7a878d;
+  font-size: .76rem;
+  font-weight: 800;
+}
+.story-orientation-progress {
+  width: min(780px, 72vw);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: .35rem;
+}
+.story-orientation-progress span {
+  height: .24rem;
+  border-radius: 999px;
+  background: #e5eaec;
+}
+.story-orientation-progress span.current { background: #126064; }
+.story-orientation-progress span.complete { background: #74aaa9; }
+.story-orientation-stage {
+  width: min(1180px, 100%);
+  min-height: 0;
+  margin: 0 auto;
+  display: grid;
+  place-items: center;
+}
+.story-scene {
+  width: 100%;
+  min-height: min(640px, calc(100vh - 11rem));
+  display: grid;
+  align-content: center;
+  gap: clamp(1.4rem, 3vh, 2.25rem);
+  padding: clamp(1rem, 2.5vw, 2.2rem);
+}
+.story-scene-intro {
+  width: min(760px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: .5rem;
+  text-align: center;
+}
+.story-scene-intro p,
+.story-scene-intro h1,
+.story-scene-intro span { margin: 0; }
+.story-scene-intro p {
+  color: #126064;
+  font-size: .72rem;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.story-scene-intro h1 {
+  font-size: clamp(2rem, 4vw, 3.4rem);
+  line-height: 1.03;
+  letter-spacing: -.04em;
+}
+.story-scene-intro span {
+  color: #65747c;
+  font-size: clamp(.95rem, 1.7vw, 1.08rem);
+  line-height: 1.6;
+}
+.story-company-flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 1rem;
+}
+.story-company-card {
+  min-height: 12.5rem;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: .5rem;
+  padding: 1.4rem;
+  border: 1px solid #e0e6e8;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(29, 42, 48, .05);
+  text-align: center;
+}
+.story-company-card.emphasis {
+  border-color: #9fc7c9;
+  background: #f5fbfb;
+  box-shadow: 0 16px 40px rgba(18, 96, 100, .1);
+}
+.story-company-card small { color: #77858c; font-size: .72rem; font-weight: 800; text-transform: uppercase; }
+.story-company-card strong { font-size: 1.05rem; }
+.story-company-card p { margin: 0; color: #66757c; font-size: .84rem; line-height: 1.45; }
+.story-icon {
+  width: 3.25rem;
+  height: 3.25rem;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  color: #126064;
+  background: #edf7f7;
+}
+.story-flow-arrow {
+  display: grid;
+  place-items: center;
+  gap: .25rem;
+  color: #829096;
+}
+.story-flow-arrow small { font-size: .68rem; font-weight: 800; }
+.story-tender-scene {
+  width: min(900px, 100%);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(10rem, .85fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 1rem;
+}
+.story-load-card,
+.story-destination-card {
+  min-height: 12rem;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: .45rem;
+  padding: 1.25rem;
+  border: 1px solid #dfe6e8;
+  border-radius: 18px;
+  text-align: center;
+  background: #fff;
+}
+.story-load-card small { color: #77858c; font-weight: 800; text-transform: uppercase; }
+.story-load-card > span:last-child,
+.story-destination-card > span:last-child { color: #66757c; }
+.story-motion-line {
+  position: relative;
+  min-height: 5rem;
+  display: grid;
+  place-items: center;
+  color: #126064;
+}
+.story-motion-line > span {
+  position: absolute;
+  width: 100%;
+  height: 2px;
+  background: #b9d5d6;
+}
+.story-motion-line > svg { position: relative; padding: .25rem; box-sizing: content-box; background: #fff; }
+.story-motion-line small {
+  position: absolute;
+  bottom: .1rem;
+  color: #77858c;
+  font-weight: 800;
+}
+.story-message-sequence {
+  width: min(900px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: .7rem;
+}
+.story-message-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .85rem;
+  padding: .9rem 1rem;
+  border: 1px solid #dce5e7;
+  border-radius: 14px;
+  background: #fff;
+}
+.story-message-row.left .story-message-arrow { transform: rotate(180deg); }
+.story-message-row.muted { background: #fafcfc; color: #627177; }
+.story-message-code {
+  width: 3.25rem;
+  height: 3.25rem;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  color: #fff;
+  background: #126064;
+  font-weight: 900;
+}
+.story-message-row.muted .story-message-code { color: #496268; background: #e6efef; }
+.story-message-row > div { display: grid; gap: .18rem; }
+.story-message-row small { color: #6c7a80; line-height: 1.4; }
+.story-truth-callout,
+.story-ready-message {
+  width: min(900px, 100%);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  padding: .9rem 1rem;
+  border-radius: 12px;
+  color: #294348;
+  background: #eef8f8;
+}
+.story-truth-callout p { margin: 0; }
+.story-shipment-route {
+  position: relative;
+  width: min(960px, 100%);
+  margin: 1rem auto 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+.story-route-line {
+  position: absolute;
+  top: 1.7rem;
+  left: 10%;
+  right: 10%;
+  height: 3px;
+  background: #c6dcdd;
+}
+.story-route-stop {
+  position: relative;
+  display: grid;
+  place-items: center;
+  gap: .8rem;
+  text-align: center;
+}
+.story-route-stop > span {
+  width: 3.5rem;
+  height: 3.5rem;
+  display: grid;
+  place-items: center;
+  border: 3px solid #fff;
+  border-radius: 999px;
+  color: #fff;
+  background: #126064;
+  box-shadow: 0 0 0 2px #a8cbcc;
+}
+.story-route-stop strong { font-size: .78rem; letter-spacing: .02em; }
+.story-center-note {
+  margin: 0 auto;
+  color: #64747b;
+  text-align: center;
+  line-height: 1.5;
+}
+.story-translation-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 1rem;
+}
+.story-translation-grid > section {
+  min-height: 13rem;
+  display: grid;
+  align-content: center;
+  gap: .85rem;
+  padding: 1.2rem;
+  border: 1px solid #dfe6e8;
+  border-radius: 16px;
+  background: #fff;
+}
+.story-format-label { display: flex; align-items: center; gap: .45rem; color: #52656d; font-weight: 900; }
+.story-translation-grid pre {
+  margin: 0;
+  padding: 1rem;
+  overflow: auto;
+  border-radius: 10px;
+  color: #dce9e9;
+  background: #17262a;
+  font: 500 .82rem/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.story-translation-core {
+  min-width: 10rem;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: .45rem;
+  text-align: center;
+}
+.story-translation-core > span {
+  width: 3.7rem;
+  height: 3.7rem;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  color: #fff;
+  background: #126064;
+}
+.story-translation-core small { color: #748289; }
+.story-job-concepts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+.story-concept-card {
+  display: grid;
+  justify-items: center;
+  gap: .55rem;
+  padding: 1.15rem;
+  border: 1px solid #dfe6e8;
+  border-radius: 16px;
+  text-align: center;
+  background: #fff;
+}
+.story-concept-card > span { color: #126064; }
+.story-concept-card p { margin: 0; color: #68777e; font-size: .84rem; line-height: 1.45; }
+.story-job-loop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .55rem;
+  color: #53666d;
+  font-size: .79rem;
+  font-weight: 800;
+  text-align: center;
+}
+.story-job-loop > span {
+  max-width: 12rem;
+  padding: .65rem .75rem;
+  border-radius: 10px;
+  background: #f5f8f9;
+}
+.story-ready-message {
+  align-items: flex-start;
+}
+.story-ready-message > div { display: grid; gap: .2rem; }
+.story-ready-message span { color: #5e6f76; font-size: .84rem; line-height: 1.45; }
+.story-orientation-actions {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.story-button {
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  padding: .7rem 1rem;
+  border-radius: 10px;
+  font-weight: 850;
+}
+.story-button-primary { border: 1px solid #126064; color: #fff; background: #126064; }
+.story-button-secondary { border: 1px solid #d6e0e3; color: #45575f; background: #fff; }
+@media (max-width: 800px) {
+  .story-orientation-page { min-height: 100dvh; padding: .9rem; }
+  .story-orientation-brand small { display: none; }
+  .story-scene { min-height: auto; padding: 1rem .25rem; }
+  .story-company-flow,
+  .story-tender-scene,
+  .story-translation-grid,
+  .story-job-concepts { grid-template-columns: 1fr; }
+  .story-flow-arrow { transform: rotate(90deg); }
+  .story-motion-line { min-height: 3.5rem; transform: rotate(90deg); }
+  .story-translation-core { min-height: 7rem; }
+  .story-shipment-route { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 2rem; }
+  .story-route-line { display: none; }
+  .story-job-loop { flex-direction: column; }
+  .story-job-loop > svg { transform: rotate(90deg); }
+}
+@media (max-width: 520px) {
+  .story-orientation-topbar { grid-template-columns: 1fr auto; }
+  .story-orientation-brand { display: none; }
+  .story-orientation-progress { width: 100%; }
+  .story-scene-intro h1 { font-size: 2rem; }
+  .story-message-row { grid-template-columns: auto minmax(0, 1fr); }
+  .story-message-arrow { display: none; }
+  .story-orientation-actions .story-button { flex: 1; }
+}
+/* === End Milestone 42 === */

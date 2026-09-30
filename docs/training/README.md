@@ -35,7 +35,7 @@ Training Mode now includes the complete 10-mission path plus guided and advanced
 
 Before the incident queue, the learner also completes:
 
-- **First-Day Orientation** — partner roles, protocols, observation boundaries, and the analyst job.
+- **First-Day Orientation** — a six-scene, full-screen story wizard that introduces the three companies, the shipment lifecycle, 204/997/990, 214 status progression, REST/JSON versus X12, and the analyst's Network / Messages / Mapping mental model before any workstation tools appear.
 - **Guided Healthy Flow Parts 1–4** — Apex REST/JSON → canonical shipment → Midwest 204 → 997 → 990 → 214 → Apex-facing updates.
 - **Replay & Sequence Clinic** — duplicate business attempts, exact X12 replay suppression, and late/out-of-order event chronology.
 
@@ -103,7 +103,7 @@ After Mission 10, the Training Desk switches to a **10 / 10 Training Complete** 
 1. Open the deployed app and confirm the first screen is the clean `#/learn` three-company entry with no token field, mission board, or Ops Desk navigation.
 2. Confirm Apex Logistics, FreightBridge, and Midwest Carrier are the only three company cards and **Begin Your Journey** is the primary action.
 3. Choose **Begin Your Journey**, enter the access key on the second-step access screen, and confirm the app opens First-Day Orientation.
-4. Complete/review First-Day Orientation.
+4. Complete/review First-Day Orientation and confirm it runs outside the Ops Desk shell as six low-clutter scenes: companies → tender begins → 204/997/990 → 214 shipment movement → translation → your job.
 5. Complete the four-part guided healthy flow and verify 997 is technical acknowledgment while 990 is the business tender decision.
 6. Complete Missions 1–9 using the real controlled failure drills.
 7. Complete the Replay & Sequence Clinic and verify exact replay side effects are skipped while late event history does not regress `DELIVERED`.
