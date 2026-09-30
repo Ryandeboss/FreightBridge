@@ -232,6 +232,35 @@ def test_sftp_host_key_drill_records_pre_ingestion_observation_without_transacti
   assert response['_relatedTransactionIds'] == []
 
 
+def test_sftp_host_key_recovery_verifies_real_connection_without_message_replay(monkeypatch) -> None:
+  monkeypatch.setattr(
+    'app.integrations.failure_drills.MidwestSftpConfig.from_settings',
+    lambda: MidwestSftpConfig(
+      host='sftp.example.test',
+      port=22,
+      username='freightbridge',
+      private_key_b64='not-used-by-fake-client',
+      host_key_sha256='real-fingerprint',
+    ),
+  )
+  service = ControlledFailureDrillService(sftp_client_factory=RecoveredSftpClient)
+
+  recovery = service.recover(_run('SFTP_HOST_KEY_MISMATCH'))
+
+  assert recovery['status'] == 'SUCCEEDED'
+  assert recovery['recoveryKind'] == 'SFTP_CONNECTIVITY_VERIFIED'
+  assert recovery['connectionVerified'] is True
+  assert recovery['hostKeyPinning'] == 'VERIFIED'
+  assert recovery['directories'] == {
+    'inbound': True,
+    'outbound': True,
+    'archive': True,
+    'error': True,
+  }
+  assert recovery['transactionCreated'] is False
+  assert recovery['messageReplayAttempted'] is False
+
+
 def _run(scenario_key: str) -> dict[str, object]:
   return {
     'id': RUN_ID,
@@ -313,3 +342,17 @@ class HostKeyFailureClient:
 
   def __exit__(self, exc_type, exc, tb):
     return None
+
+
+class RecoveredSftpClient:
+  def __init__(self, config) -> None:
+    assert config.host_key_sha256 == 'real-fingerprint'
+
+  def __enter__(self):
+    return self
+
+  def __exit__(self, exc_type, exc, tb):
+    return None
+
+  def exists(self, path: str) -> bool:
+    return path in {'/inbound', '/outbound', '/archive', '/error'}
