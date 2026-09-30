@@ -5295,3 +5295,213 @@ input:disabled {
   }
 }
 /* === End Milestone 48 === */
+
+
+/* === Milestone 49: advanced interactive fixes === */
+.advanced-incident-expectation {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  padding: .7rem .8rem;
+  border: 1px solid #d7e4e4;
+  border-radius: 10px;
+  color: #496267;
+  background: #f5f9f9;
+  font-size: .76rem;
+  line-height: 1.45;
+}
+.advanced-workstation-code .workstation-editor {
+  min-width: 0;
+}
+.advanced-edit-form {
+  display: grid;
+  gap: .85rem;
+  padding: 1rem;
+}
+.advanced-edit-form label {
+  display: grid;
+  gap: .28rem;
+}
+.advanced-edit-form label > span {
+  color: #d8e3e5;
+  font-size: .73rem;
+  font-weight: 800;
+}
+.advanced-edit-form label > small,
+.advanced-safety-note {
+  color: #8fa0a6;
+  font-size: .67rem;
+  line-height: 1.4;
+}
+.advanced-edit-form select {
+  width: 100%;
+  min-height: 2.45rem;
+  padding: .45rem .55rem;
+  border: 1px solid #47575e;
+  border-radius: 7px;
+  color: #dfe8ea;
+  background: #1c282d;
+  font: inherit;
+}
+.advanced-edit-form pre {
+  margin: 0;
+  padding: .75rem;
+  overflow: auto;
+  border: 1px solid #34434a;
+  border-radius: 8px;
+  color: #cbd8db;
+  background: #141d21;
+  font-size: .7rem;
+  white-space: pre-wrap;
+}
+.advanced-checkbox {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: .5rem !important;
+}
+.advanced-checkbox input {
+  margin-top: .2rem;
+}
+.advanced-checkbox span {
+  font-weight: 700 !important;
+}
+.advanced-edit-status {
+  display: flex;
+  align-items: center;
+  min-height: 2.2rem;
+  padding: .55rem .65rem;
+  border: 1px solid #7f564e;
+  border-radius: 8px;
+  color: #e2b7ad;
+  background: #302321;
+  font-size: .7rem;
+  font-weight: 800;
+}
+.advanced-edit-status.ready {
+  border-color: #456e60;
+  color: #b9dfce;
+  background: #1e3029;
+}
+.advanced-fix-readiness {
+  display: flex;
+  align-items: flex-start;
+  gap: .6rem;
+  padding: .8rem;
+  border: 1px solid #e1c8c3;
+  border-radius: 10px;
+  background: #fff7f5;
+}
+.advanced-fix-readiness.ready {
+  border-color: #b7d7c9;
+  background: #f0f8f4;
+}
+.advanced-fix-readiness svg {
+  flex: 0 0 auto;
+  margin-top: .08rem;
+}
+.advanced-fix-readiness strong {
+  display: block;
+  color: #4a5559;
+  font-size: .78rem;
+}
+.advanced-fix-readiness p {
+  margin: .2rem 0 0;
+  color: #6d7c81;
+  font-size: .72rem;
+  line-height: 1.45;
+}
+.advanced-concept-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .6rem;
+}
+.advanced-concept-strip > span {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: .25rem .45rem;
+  align-items: start;
+  padding: .7rem;
+  border: 1px solid #dfe6e8;
+  border-radius: 9px;
+  background: #fbfcfc;
+}
+.advanced-concept-strip svg {
+  grid-row: 1 / 3;
+  color: #496b70;
+}
+.advanced-concept-strip strong {
+  color: #334b51;
+  font-size: .74rem;
+}
+.advanced-concept-strip small {
+  color: #75858b;
+  font-size: .67rem;
+  line-height: 1.4;
+}
+.replay-workstation-console {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(15rem, .75fr);
+  min-height: 31rem;
+  background: #182227;
+}
+.replay-evidence-stack {
+  display: grid;
+  align-content: start;
+  gap: .65rem;
+  padding: .9rem;
+  border-left: 1px solid #35434a;
+  background: #202b30;
+}
+.replay-workstation-evidence {
+  display: grid;
+  gap: .5rem;
+  padding: .7rem;
+  border: 1px solid #3e4e55;
+  border-radius: 9px;
+  color: #b7c4c8;
+  background: #1a252a;
+}
+.replay-workstation-evidence.complete {
+  border-color: #456e60;
+}
+.replay-workstation-evidence > div {
+  display: flex;
+  justify-content: space-between;
+  gap: .5rem;
+  color: #dce6e8;
+  font-size: .73rem;
+}
+.replay-workstation-evidence dl {
+  display: grid;
+  gap: .35rem;
+  margin: 0;
+}
+.replay-workstation-evidence dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+  gap: .45rem;
+}
+.replay-workstation-evidence dt {
+  color: #84969c;
+  font-size: .64rem;
+}
+.replay-workstation-evidence dd {
+  margin: 0;
+  color: #c8d5d8;
+  font-size: .66rem;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 900px) {
+  .advanced-concept-strip {
+    grid-template-columns: 1fr;
+  }
+  .replay-workstation-console {
+    grid-template-columns: 1fr;
+  }
+  .replay-evidence-stack {
+    border-top: 1px solid #35434a;
+    border-left: 0;
+  }
+}
+/* === End Milestone 49 === */
