@@ -1224,6 +1224,36 @@ const completedHostKeyMismatchLabRun = makeCompletedFailureLabRun({
   preTransaction: true,
 });
 
+const finalShiftFailedReference = 'UNKNOWNADADADAD';
+const finalShiftBaseRun = makeCompletedFailureLabRun({
+  id: 'adadadad-adad-4dad-8dad-adadadadadad',
+  scenarioKey: 'X12_214_UNKNOWN_SHIPMENT',
+  businessIdentifier: 'LABFINAL900',
+  stepKey: 'INJECT_X12_214_UNKNOWN_SHIPMENT',
+  displayName: 'Inject 214 with unknown shipment reference',
+  name: '214 Unknown Shipment Reference',
+  errorCode: 'SHIPMENT_NOT_FOUND',
+  category: 'BUSINESS_VALIDATION_ERROR',
+  stage: 'BUSINESS_VALIDATION',
+  safeMessage: 'Canonical shipment was not found.',
+  guidance: 'Compare the mapped B10 shipment reference with the known canonical shipment.',
+  injectedFault: 'B10 shipment reference changed to a synthetic unknown load while controls, version, and AT7 remain valid.',
+  payloadPreview: {
+    x12: 'ISA*00*          *00*          *ZZ*MWCX           *ZZ*FREIGHTBRIDGE  *260924*1500*U*00401*000000777*0*T*:~GS*QM*MWCX*FREIGHTBRIDGE*20260924*1500*777*X*004010~ST*214*7777~B10*MWCFINAL*UNKNOWNADADADAD*MWCX~AT7*AF****20260924*1500*UT~MS1*Aurora*IL~SE*7*7777~GE*1*777~IEA*1*000000777~',
+  },
+  observedBusinessIdentifierOverride: finalShiftFailedReference,
+  x12Fault: {
+    intendedShipmentReference: 'LABFINAL900',
+    receivedShipmentReference: finalShiftFailedReference,
+    interchangeControlNumber: '000000777',
+    groupControlNumber: '777',
+    transactionControlNumber: '7777',
+    injectedFault: 'B10 shipment reference UNKNOWNADADADAD instead of LABFINAL900',
+  },
+});
+
+const completedFinalShiftLabRun = finalShiftBaseRun;
+
 const failureRunsByScenario: Record<string, ReturnType<typeof makeCompletedFailureLabRun>> = {
   APEX_BAD_AUTH: completedBadAuthLabRun,
   APEX_INVALID_JSON: completedInvalidJsonLabRun,
@@ -1232,6 +1262,7 @@ const failureRunsByScenario: Record<string, ReturnType<typeof makeCompletedFailu
   X12_214_CONTROL_MISMATCH: completedControlMismatchLabRun,
   X12_214_UNSUPPORTED_STATUS: completedUnsupportedStatusLabRun,
   X12_214_WRONG_VERSION: completedWrongVersionLabRun,
+  X12_214_UNKNOWN_SHIPMENT: completedFinalShiftLabRun,
   SFTP_HOST_KEY_MISMATCH: completedHostKeyMismatchLabRun,
 };
 
@@ -1253,6 +1284,8 @@ function makeCompletedFailureLabRun({
   stepDocumentTypeOverride,
   transportOverride,
   messageFormatOverride,
+  observedBusinessIdentifierOverride,
+  x12Fault,
   preTransaction = false,
 }: {
   id: string;
@@ -1272,15 +1305,19 @@ function makeCompletedFailureLabRun({
   stepDocumentTypeOverride?: string;
   transportOverride?: string;
   messageFormatOverride?: string;
+  observedBusinessIdentifierOverride?: string | null;
+  x12Fault?: Record<string, unknown>;
   preTransaction?: boolean;
 }) {
   const documentType = documentTypeOverride !== undefined
     ? documentTypeOverride
     : scenarioKey.startsWith('X12_') ? '214' : 'APEX_LOAD_TENDER';
   const transport = transportOverride ?? (scenarioKey.startsWith('X12_') ? 'SFTP' : 'REST');
-  const observedBusinessIdentifier = preTransaction
-    ? null
-    : stage === 'AUTHENTICATION' || stage === 'PARSING' ? null : businessIdentifier;
+  const observedBusinessIdentifier = observedBusinessIdentifierOverride !== undefined
+    ? observedBusinessIdentifierOverride
+    : preTransaction
+      ? null
+      : stage === 'AUTHENTICATION' || stage === 'PARSING' ? null : businessIdentifier;
   return {
     ...completedFailureLabRun,
     id,
@@ -1318,6 +1355,7 @@ function makeCompletedFailureLabRun({
         guidance,
         injectedFault,
         payloadPreview,
+        ...(x12Fault ? { x12Fault } : {}),
         transactionStatusExplanation: 'The drill succeeded because the expected integration failure was correctly produced and recorded.',
       },
     },
@@ -1546,6 +1584,24 @@ function installFetchMock(options: {
         },
         guidance: 'Confirm the supported X12 version.',
         injectedFault: 'ISA12 set to 00501 and GS08 set to 005010.',
+      },
+      {
+        scenarioKey: 'X12_214_UNKNOWN_SHIPMENT',
+        name: '214 Unknown Shipment Reference',
+        description: 'Create a legitimate baseline shipment, then send a valid 214 with an unknown B10 shipment reference.',
+        stepCount: 2,
+        kind: 'FAILURE_DRILL',
+        layer: 'Business correlation',
+        expectedFailure: {
+          errorCode: 'SHIPMENT_NOT_FOUND',
+          category: 'BUSINESS_VALIDATION_ERROR',
+          stage: 'BUSINESS_VALIDATION',
+          retryable: false,
+          documentType: '214',
+          transport: 'SFTP',
+        },
+        guidance: 'Compare the mapped B10 shipment reference with the intended canonical shipment.',
+        injectedFault: 'B10 shipment reference changed while controls, version, and AT7 remain valid.',
       },
       {
         scenarioKey: 'SFTP_HOST_KEY_MISMATCH',
@@ -1873,6 +1929,25 @@ function installFetchMock(options: {
           normalizedShipmentStatus: 'PICKED_UP',
           apexFacingEvidence: true,
           correctedX12: 'ISA*00*          *00*          *ZZ*MWCX           *ZZ*FREIGHTBRIDGE  *260924*1510*U*00401*000000998*0*T*:~GS*QM*MWCX*FREIGHTBRIDGE*20260924*1510*998*X*004010~ST*214*9876~AT7*AF****20260924*1510*UT~SE*7*9876~GE*1*998~IEA*1*000000998~',
+        };
+      } else if (scenarioKey === 'X12_214_UNKNOWN_SHIPMENT') {
+        recovery = {
+          status: 'SUCCEEDED',
+          recoveryKind: 'CORRECTED_214_REFERENCE',
+          sameBusinessIdentifier: true,
+          correctedSt02: '7788',
+          correctedSe02: '7788',
+          controlCorrelation: 'MATCHED',
+          correctedAt7: 'AF',
+          correctedIsa12: '00401',
+          correctedGs08: '004010',
+          correctedShipmentReference: 'LABFINAL900',
+          profileCompatibility: 'SUPPORTED',
+          parseStatus: 'SUCCEEDED',
+          mappingStatus: 'SUCCEEDED',
+          normalizedShipmentStatus: 'PICKED_UP',
+          apexFacingEvidence: true,
+          correctedX12: 'ISA*00*          *00*          *ZZ*MWCX           *ZZ*FREIGHTBRIDGE  *260924*1510*U*00401*000000778*0*T*:~GS*QM*MWCX*FREIGHTBRIDGE*20260924*1510*778*X*004010~ST*214*7788~B10*MWCFINAL*LABFINAL900*MWCX~AT7*AF****20260924*1510*UT~MS1*Aurora*IL~SE*7*7788~GE*1*778~IEA*1*000000778~',
         };
       } else if (scenarioKey === 'SFTP_HOST_KEY_MISMATCH') {
         recovery = {
@@ -3355,6 +3430,132 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
     await userEvent.click(completeButton);
     expect(window.localStorage.getItem('freightbridge.replaySequencePracticeComplete')).toBe('true');
     expect(screen.getByTestId('replay-sequence-completion')).toHaveTextContent(/Advanced practice complete/i);
+  }, 15000);
+
+  test('keeps Mission 10 gated until replay and sequence practice is complete', async () => {
+    installFetchMock();
+    window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      completedMissions: [
+        'LEARN_THE_FLOW', 'APEX_BAD_AUTH', 'APEX_INVALID_JSON', 'APEX_INVALID_CONTRACT',
+        'DUPLICATE_SHIPMENT', 'X12_ENVELOPE_MISMATCH', 'STATUS_CALLBACK_MISSING',
+        'WRONG_X12_VERSION', 'SFTP_STOPS_WORKING',
+      ],
+    }));
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+
+    window.location.hash = '#/learn/mission/production-incident';
+    render(<App />);
+
+    expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
+    expect(window.location.hash).toBe('#/learn');
+    expect(screen.getByTestId('mission-10-card')).toHaveTextContent(/Locked/i);
+  });
+
+  test('opens Mission 10 after advanced replay and sequence practice', async () => {
+    installFetchMock();
+    window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      completedMissions: [
+        'LEARN_THE_FLOW', 'APEX_BAD_AUTH', 'APEX_INVALID_JSON', 'APEX_INVALID_CONTRACT',
+        'DUPLICATE_SHIPMENT', 'X12_ENVELOPE_MISMATCH', 'STATUS_CALLBACK_MISSING',
+        'WRONG_X12_VERSION', 'SFTP_STOPS_WORKING',
+      ],
+    }));
+    window.localStorage.setItem('freightbridge.replaySequencePracticeComplete', 'true');
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn';
+    render(<App />);
+
+    expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
+    expect(screen.getByTestId('mission-10-card')).toHaveTextContent(/Open Mission/i);
+    expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Mission 10 - Production Incident/i);
+    expect(screen.getByRole('link', { name: /Start Current Mission/i })).toHaveAttribute(
+      'href',
+      '#/learn/mission/production-incident',
+    );
+  });
+
+  test('Mission 10 completes the final shift by correcting the 214 shipment reference', async () => {
+    installFetchMock();
+    window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      completedMissions: [
+        'LEARN_THE_FLOW', 'APEX_BAD_AUTH', 'APEX_INVALID_JSON', 'APEX_INVALID_CONTRACT',
+        'DUPLICATE_SHIPMENT', 'X12_ENVELOPE_MISMATCH', 'STATUS_CALLBACK_MISSING',
+        'WRONG_X12_VERSION', 'SFTP_STOPS_WORKING',
+      ],
+    }));
+    window.localStorage.setItem('freightbridge.replaySequencePracticeComplete', 'true');
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn/mission/production-incident';
+    render(<App />);
+
+    expect(await screen.findByTestId('incident-mission-page')).toBeInTheDocument();
+    expect(screen.getByText(/Mission 10 - Final Shift Incident/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Start Incident/i }));
+
+    const workspace = await screen.findByTestId('incident-workspace');
+    expect(workspace).toHaveAttribute('data-scenario-key', 'X12_214_UNKNOWN_SHIPMENT');
+    expect(screen.queryByRole('heading', { name: /Evidence Checkpoints/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId('healthy-baseline-comparison')).toHaveTextContent(/Independent Investigation/i);
+    expect(screen.getByTestId('healthy-baseline-comparison')).toHaveTextContent(/No checkpoint map or failure classifier/i);
+    expect(screen.getByTestId('incident-analyst-toolbox')).toBeInTheDocument();
+
+    await userEvent.click(within(screen.getByTestId('evidence-source-case-correlation')).getAllByText(/^Inspect/i)[0]);
+    await userEvent.click(within(screen.getByTestId('evidence-source-raw-214')).getAllByText(/^Inspect/i)[0]);
+    await userEvent.click(within(screen.getByTestId('evidence-source-error')).getAllByText(/^Inspect/i)[0]);
+
+    expect(screen.getByTestId('evidence-source-case-correlation')).toHaveTextContent(/LABFINAL900/i);
+    expect(screen.getByTestId('evidence-source-case-correlation')).toHaveTextContent(/UNKNOWNADADADAD/i);
+    expect(screen.getByTestId('evidence-source-raw-214')).toHaveTextContent(/004010/i);
+    expect(screen.getByTestId('evidence-source-raw-214')).toHaveTextContent(/AT7\*AF/i);
+    expect(screen.getByTestId('evidence-source-error')).toHaveTextContent(/SHIPMENT_NOT_FOUND/i);
+    expect(screen.getByTestId('evidence-source-error')).toHaveTextContent(/BUSINESS_VALIDATION/i);
+
+    await chooseIncidentOption(
+      /Where did FreightBridge evidence last look healthy/i,
+      /passed X12 parsing and Midwest mapping/i,
+    );
+    await chooseIncidentOption(
+      /What is the most accurate FreightBridge diagnosis/i,
+      /B10 shipment reference does not match the intended canonical shipment/i,
+    );
+    await chooseIncidentOption(
+      /What should you do next/i,
+      /correct the B10 reference/i,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /Correct the shipment reference and verify recovery/i }));
+
+    const verification = await screen.findByTestId('verification-panel');
+    expect(verification).toHaveTextContent(/CORRECTED_214_REFERENCE/i);
+    expect(verification).toHaveTextContent(/Corrected Shipment Reference/i);
+    expect(verification).toHaveTextContent(/LABFINAL900/i);
+    expect(verification).toHaveTextContent(/Corrected ISA12/i);
+    expect(verification).toHaveTextContent(/00401/i);
+    expect(verification).toHaveTextContent(/Corrected GS08/i);
+    expect(verification).toHaveTextContent(/004010/i);
+    expect(verification).toHaveTextContent(/Corrected AT7-01/i);
+    expect(verification).toHaveTextContent(/AF/i);
+    expect(verification).toHaveTextContent(/PICKED_UP/i);
+    expect(verification).toHaveTextContent(/Apex-Facing Evidence/i);
+    expect(verification).toHaveTextContent(/PRESENT/i);
+
+    await userEvent.type(
+      screen.getByLabelText(/Send Mike a concise production-style incident update/i),
+      'Mike, Midwest sent a valid 004010 AF 214, but B10 referenced UNKNOWNADADADAD instead of LABFINAL900. FreightBridge failed at business validation; the corrected reference processed and Apex now shows PICKED_UP.',
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
+
+    expect(await screen.findByTestId('incident-debrief')).toHaveTextContent(/MISSION COMPLETE/i);
+    expect(screen.getByTestId('incident-debrief')).toHaveTextContent(/wrong shipment reference/i);
+    expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('PRODUCTION_INCIDENT');
+
+    await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
+    expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
+    expect(screen.getByTestId('mission-10-card')).toHaveTextContent(/Complete/i);
+    expect(screen.getByText('10 / 10')).toBeInTheDocument();
   }, 15000);
 
   test('searches transactions and opens detail with retry action', async () => {

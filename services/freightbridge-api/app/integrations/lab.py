@@ -414,6 +414,7 @@ class IntegrationLabService:
       'X12_214_CONTROL_MISMATCH',
       'X12_214_UNSUPPORTED_STATUS',
       'X12_214_WRONG_VERSION',
+      'X12_214_UNKNOWN_SHIPMENT',
       'SFTP_HOST_KEY_MISMATCH',
     }
     if scenario_key not in supported:
@@ -429,10 +430,13 @@ class IntegrationLabService:
       snapshot = dict(run['input_snapshot'])
       payload = self._apex_payload(snapshot)
       self._create_apex_load(load_id, payload)
-      baseline_dispatch = self.apex.post(
-        f'/v1/load-tenders/{load_id}/dispatch',
-        headers={'Idempotency-Key': f'lab-{run_id}-m27-recovery-baseline'},
-      )
+      if scenario_key == 'X12_214_UNKNOWN_SHIPMENT':
+        baseline_dispatch = {'status': 'CANONICAL_BASELINE_ALREADY_EXISTS'}
+      else:
+        baseline_dispatch = self.apex.post(
+          f'/v1/load-tenders/{load_id}/dispatch',
+          headers={'Idempotency-Key': f'lab-{run_id}-m27-recovery-baseline'},
+        )
 
     try:
       recovery = self.failure_drills.recover(run)
