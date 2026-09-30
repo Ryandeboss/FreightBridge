@@ -220,7 +220,7 @@ function IncidentMission({ mission }: { mission: IncidentMissionDefinition }) {
       </Link>
 
       <MissionBriefing>
-        <p className="eyebrow">Mission {mission.missionNumber} - {mission.missionNumber >= 5 ? 'Intermediate' : 'Beginner'} Incident</p>
+        <p className="eyebrow">Mission {mission.missionNumber} - {mission.missionNumber >= 8 ? 'Advanced' : mission.missionNumber >= 5 ? 'Intermediate' : 'Beginner'} Incident</p>
         <h1>{mission.title.replace(/^Mission \d+ - /, '')}</h1>
         <p>{mission.symptom}</p>
         <MissionPhaseProgress phases={missionPhases} current={phase} />
