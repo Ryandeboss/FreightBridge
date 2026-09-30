@@ -37,7 +37,7 @@ Before the incident queue, the learner also completes:
 
 - **First-Day Orientation** — a six-scene story wizard that introduces the three companies, the shipment lifecycle, 204/997/990, 214 status progression, REST/JSON versus X12, and the analyst's Network / Messages / Mapping mental model before any workstation tools appear.
 - **EDI & Protocol Basics** — a seven-lesson bootcamp separating exchange method from message format, then teaching REST/JSON, SFTP/X12, X12 envelope basics, 204/997/990/214 roles, canonical correlation, and the Midwest 214 status mapping before troubleshooting begins.
-- **Guided Healthy Flow Parts 1–4** — Apex REST/JSON → canonical shipment → Midwest 204 → 997 → 990 → 214 → Apex-facing updates.
+- **Healthy Integration Lab** — one unified **Console | Code | Answer** baseline lab that runs a real `FULL_SHIPMENT_LIFECYCLE`: Apex REST/JSON → canonical shipment → Midwest 204 → 997 → 990 → 214 → Apex-facing updates. The former four-part routes remain available for compatibility, but the curriculum now enters through the workstation.
 - **Replay & Sequence Clinic** — duplicate business attempts, exact X12 replay suppression, and late/out-of-order event chronology.
 
 Mission 10 stays locked until the Replay & Sequence Clinic is complete.
@@ -56,7 +56,9 @@ Milestone 45 introduces the reusable incident workstation used by later lab rede
 - **Code** presents a stable IDE-like file tree for mapping/validation logic, partner contracts, and reference rules. The first guided implementation is read-only.
 - **Answer** captures root-cause and remediation choices, gives evidence-oriented feedback, and exposes **Apply Fix & Run Again** only after the diagnosis is correct. Recovery must then be proven by a successful same-load run.
 
-Mission 2 (Apex authentication failure) is the first real scenario migrated to this workstation. It uses the existing server-backed `APEX_BAD_AUTH` drill and `FULL_SHIPMENT_LIFECYCLE` recovery rather than a mocked UI-only incident. Missions 3–10 remain on the prior incident UI until their later migration milestone.
+Milestone 46 also moves the healthy baseline into the same workstation before any failure is introduced. The Console teaches the normal observable sequence, Code exposes the partner contracts/mappings that explain it, and Answer checks that the learner can distinguish transport success, 997 technical acknowledgment, 990 business acceptance, and 214 status mapping. Completing the healthy workstation records the legacy healthy-flow milestones plus Mission 1, then unlocks Mission 2.
+
+Mission 2 (Apex authentication failure) is the first real failure scenario migrated to this workstation. It uses the existing server-backed `APEX_BAD_AUTH` drill and `FULL_SHIPMENT_LIFECYCLE` recovery rather than a mocked UI-only incident. Missions 3–10 remain on the prior incident UI until their later migration milestone.
 
 ## Failure Drills
 
@@ -109,8 +111,8 @@ After Mission 10, the Training Desk switches to a **10 / 10 Training Complete** 
 4. Complete/review First-Day Orientation inside the minimal curriculum shell and confirm the sidebar updates the Orientation module from Scene 1 through Scene 6 while the lesson remains low-clutter: companies → tender begins → 204/997/990 → 214 shipment movement → translation → your job.
 5. Confirm Orientation hands off to EDI & Protocol Basics, the sidebar shows Lesson 1 through Lesson 7, and the learner must correctly distinguish SFTP/X12, ST/SE, 997/990, and shipment correlation before continuing.
 6. Complete the bootcamp and verify the Healthy Integration module unlocks only afterward for new progress, while older downstream progress remains recognized.
-7. Complete the four-part guided healthy flow and verify 997 is technical acknowledgment while 990 is the business tender decision.
-8. Open Mission 2 and confirm the reusable **Console | Code | Answer** workstation appears only after the incident starts. Inspect the failed authentication checkpoint, a sanitized raw message, and the read-only Apex contract/pipeline files; submit the correct diagnosis and recovery, then use **Apply Fix & Run Again** to prove a same-load healthy lifecycle.
+7. Open the Healthy Integration Lab and confirm the fixed **Console | Code | Answer** tabs. Advance the real healthy Lab run, inspect raw FreightBridge-visible evidence and read-only mapping/profile files, then answer the baseline checks: SFTP delivery is not business acceptance, 997 is technical acknowledgment, 990 is the tender decision, and X6 maps to IN_TRANSIT.
+8. Complete the Healthy Integration Lab and verify all healthy-walkthrough completion flags plus Mission 1 are recorded, then open Mission 2 and confirm the reusable **Console | Code | Answer** workstation appears only after the incident starts. Inspect the failed authentication checkpoint, a sanitized raw message, and the read-only Apex contract/pipeline files; submit the correct diagnosis and recovery, then use **Apply Fix & Run Again** to prove a same-load healthy lifecycle.
 9. Complete Missions 3–9 using the real controlled failure drills.
 10. Complete the Replay & Sequence Clinic and verify exact replay side effects are skipped while late event history does not regress `DELIVERED`.
 11. Confirm Mission 10 unlocks only after advanced practice.
