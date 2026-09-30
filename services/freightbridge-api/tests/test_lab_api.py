@@ -183,6 +183,8 @@ def test_lab_failure_drill_scenarios_are_server_declared_with_expected_metadata(
   assert scenarios['X12_214_UNSUPPORTED_STATUS']['expected_failure']['errorCode'] == 'UNSUPPORTED_AT7_CODE'
   assert scenarios['X12_214_WRONG_VERSION']['expected_failure']['errorCode'] == 'UNSUPPORTED_X12_VERSION'
   assert scenarios['SFTP_HOST_KEY_MISMATCH']['expected_failure']['stage'] == 'TRANSPORT_BOUNDARY'
+  assert scenarios['REPLAY_SEQUENCE_PRACTICE']['kind'] == 'HAPPY_PATH'
+  assert scenarios['REPLAY_SEQUENCE_PRACTICE']['step_count'] == 13
 
 
 def test_lab_sftp_host_key_recovery_accepts_pre_transaction_connectivity_proof() -> None:
