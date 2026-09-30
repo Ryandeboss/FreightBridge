@@ -155,16 +155,10 @@ export function ApexBadAuthWorkstation({ mission }: { mission: IncidentMissionDe
     }
   }
 
-  async function applyFixAndRunAgain() {
+  function applyFixAndRunAgain() {
     if (!incidentRun || !diagnosisCorrect || !planCorrect) return;
-    setWorking(true);
     setError(null);
-    setRecoveryRun(null);
-    try {
-      setRecoveryRun(buildTrainingRecoveryRun(incidentRun));
-    } finally {
-      setWorking(false);
-    }
+    setRecoveryRun(buildTrainingRecoveryRun(incidentRun));
   }
 
   function finishLab() {
