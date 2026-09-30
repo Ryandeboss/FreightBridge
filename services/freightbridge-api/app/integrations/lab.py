@@ -21,6 +21,7 @@ from app.integrations.failure_drills import (
   LabDrillMismatch,
 )
 from app.integrations.midwest.dispatch_service import MidwestDirectDispatchService
+from app.integrations.midwest.sftp_client import MidwestSftpClient, MidwestSftpError
 from app.integrations.midwest.sftp_poll_service import MidwestSftpOutboundPollService, MidwestSftpReadinessService
 from app.integrations.midwest.transport import MidwestSftpTransport
 from app.models.lab import CreateLabRunRequest
@@ -107,6 +108,23 @@ REJECTED_STEPS = TECHNICAL_STEPS + (
 )
 
 
+REPLAY_SEQUENCE_STEPS = (
+  _step('CREATE_APEX_LOAD', 'Create Apex practice load', 'Analyst', 'Apex Logistics', 'REST', 'JSON', 'APEX_LOAD_TENDER'),
+  _step('DISPATCH_APEX_TENDER', 'Dispatch Apex practice tender', 'Apex Logistics', 'FreightBridge', 'REST', 'JSON', 'APEX_LOAD_TENDER'),
+  _step('DISPATCH_204_SFTP', 'Dispatch Midwest practice 204', 'FreightBridge', 'Midwest Carrier', 'SFTP', 'X12', '204'),
+  _step('MIDWEST_RECEIVE_204', 'Midwest receives practice 204', 'FreightBridge', 'Midwest Carrier', 'SFTP', 'X12', '204'),
+  _step('CREATE_TENDER_DECISION', 'Accept practice tender', 'Analyst', 'Midwest Carrier', 'REST', 'JSON', '990'),
+  _step('CREATE_214_DELIVERED', 'Create DELIVERED event', 'Analyst', 'Midwest Carrier', 'REST', 'JSON', '214'),
+  _step('DISPATCH_214_DELIVERED', 'Dispatch DELIVERED 214', 'Midwest Carrier', 'FreightBridge', 'SFTP', 'X12', '214'),
+  _step('FREIGHTBRIDGE_RECEIVE_214_DELIVERED', 'FreightBridge receives DELIVERED 214', 'Midwest Carrier', 'FreightBridge', 'SFTP', 'X12', '214'),
+  _step('REQUEUE_214_DELIVERED_REPLAY', 'Requeue exact DELIVERED 214 bytes', 'Analyst', 'Midwest Carrier', 'SFTP', 'X12', '214'),
+  _step('FREIGHTBRIDGE_RECEIVE_214_REPLAY', 'FreightBridge receives exact 214 replay', 'Midwest Carrier', 'FreightBridge', 'SFTP', 'X12', '214'),
+  _step('CREATE_214_ARRIVED', 'Create late ARRIVED event', 'Analyst', 'Midwest Carrier', 'REST', 'JSON', '214'),
+  _step('DISPATCH_214_ARRIVED', 'Dispatch late ARRIVED 214', 'Midwest Carrier', 'FreightBridge', 'SFTP', 'X12', '214'),
+  _step('FREIGHTBRIDGE_RECEIVE_214_LATE_ARRIVED', 'FreightBridge receives late ARRIVED 214', 'Midwest Carrier', 'FreightBridge', 'SFTP', 'X12', '214'),
+)
+
+
 def lifecycle_steps() -> tuple[LabStepDefinition, ...]:
   steps = list(ACCEPTED_STEPS)
   for status, at7, _, _, _ in EVENTS:
@@ -144,6 +162,12 @@ SCENARIOS: dict[str, LabScenarioDefinition] = {
     'Full shipment lifecycle',
     'Accepted tender plus picked up, in transit, arrived, and delivered 214 updates.',
     lifecycle_steps(),
+  ),
+  'REPLAY_SEQUENCE_PRACTICE': LabScenarioDefinition(
+    'REPLAY_SEQUENCE_PRACTICE',
+    'Replay and sequence practice',
+    'Advanced practice for exact X12 replay suppression and late shipment-event chronology.',
+    REPLAY_SEQUENCE_STEPS,
   ),
   **{
     definition.scenario_key: LabScenarioDefinition(
@@ -505,6 +529,22 @@ class IntegrationLabService:
       )
     if step_key == 'DISPATCH_204_SFTP':
       return {'shipmentNumber': load_id}, self._dispatch_204(load_id, correlation_id)
+    if step_key == 'REQUEUE_214_DELIVERED_REPLAY':
+      return {'shipmentNumber': load_id, 'sourceStep': 'FREIGHTBRIDGE_RECEIVE_214_DELIVERED'}, self._requeue_exact_delivered_214(run)
+    if step_key == 'FREIGHTBRIDGE_RECEIVE_214_REPLAY':
+      expected = self._expected_file(run, 'REQUEUE_214_DELIVERED_REPLAY')
+      return {'source': '/outbound', 'documentType': '214', 'expectedFileName': expected}, self._verified_exact_214_replay(
+        run,
+        correlation_id,
+        expected_file_name=expected,
+      )
+    if step_key == 'FREIGHTBRIDGE_RECEIVE_214_LATE_ARRIVED':
+      expected = self._expected_file(run, 'DISPATCH_214_ARRIVED')
+      return {'source': '/outbound', 'documentType': '214', 'expectedFileName': expected}, self._verified_late_arrived_214(
+        run,
+        correlation_id,
+        expected_file_name=expected,
+      )
     if step_key == 'MIDWEST_RECEIVE_204':
       response = self.midwest.post('/v1/sftp/inbound/poll')
       return {'source': '/inbound', 'expectedFileName': self._expected_file(run, 'DISPATCH_204_SFTP')}, self._verified_midwest_receive_204(run, response)
@@ -595,6 +635,134 @@ class IntegrationLabService:
       raise
     except Exception as exc:
       raise LabExecutionError('LAB_SFTP_STEP_FAILED', 'FreightBridge could not dispatch the Midwest 204 over SFTP.') from exc
+
+  def _requeue_exact_delivered_214(self, run: dict[str, object]) -> dict[str, object]:
+    receive = self._step_response(run, 'FREIGHTBRIDGE_RECEIVE_214_DELIVERED')
+    target = receive.get('targetProcessed')
+    if not isinstance(target, dict):
+      raise LabExecutionError('LAB_STEP_NOT_READY', 'Delivered 214 archive evidence is not available for replay practice.')
+    archive_path = target.get('destinationPath')
+    original_file = target.get('fileName')
+    if not isinstance(archive_path, str) or not archive_path or not isinstance(original_file, str) or not original_file:
+      raise LabExecutionError('LAB_STEP_NOT_READY', 'Delivered 214 archive path is incomplete for replay practice.')
+
+    load_id = str(run['business_identifier'])
+    try:
+      statuses = self.apex.get(f'/v1/loads/{load_id}/shipment-statuses')
+      before_count = len([item for item in statuses.get('events') or [] if isinstance(item, dict)])
+      with MidwestSftpClient() as client:
+        payload = client.download_bytes(archive_path)
+        stem = original_file[:-4] if original_file.endswith('.edi') else original_file
+        replay_file = f"{stem}__exact_replay_{str(run['id'])[:8]}.edi"
+        remote_path, disposition = client.upload_bytes_atomic_reconcile_identical('/outbound', replay_file, payload)
+    except MidwestSftpError as exc:
+      raise LabExecutionError('LAB_SFTP_STEP_FAILED', 'FreightBridge could not requeue the archived 214 replay bytes.') from exc
+
+    return {
+      'status': 'REQUEUED_EXACT_BYTES',
+      'transport': 'SFTP',
+      'fileName': replay_file,
+      'remotePath': remote_path,
+      'sourceArchivePath': archive_path,
+      'uploadDisposition': disposition,
+      'exactPayloadRequeued': True,
+      'apexEventCountBefore': before_count,
+    }
+
+  def _verified_exact_214_replay(
+    self,
+    run: dict[str, object],
+    correlation_id: str,
+    *,
+    expected_file_name: str,
+  ) -> dict[str, object]:
+    response = self._poll_freightbridge_sftp(correlation_id)
+    item = self._processed_file(response, expected_file_name)
+    if item is None:
+      raise LabExecutionError('LAB_SFTP_TARGET_FILE_NOT_FOUND', f'FreightBridge SFTP poll did not process replay file {expected_file_name}.')
+    self._ensure_archived(item, file_name=expected_file_name)
+    transaction_id = item.get('transactionId')
+    if not isinstance(transaction_id, str) or not transaction_id:
+      raise LabExecutionError('LAB_RECOVERY_NOT_VERIFIED', 'Exact 214 replay did not create auditable replay transaction evidence.')
+
+    try:
+      with connect() as connection:
+        detail = OperationsRepository(connection).get_transaction_detail(UUID(transaction_id))
+    except Exception as exc:
+      raise LabExecutionError('LAB_RECOVERY_NOT_VERIFIED', 'Exact 214 replay transaction detail could not be read.') from exc
+    if detail is None:
+      raise LabExecutionError('LAB_RECOVERY_NOT_VERIFIED', 'Exact 214 replay transaction detail was not found.')
+
+    transaction = dict(detail['transaction'])
+    replay_of = transaction.get('replay_of_transaction_id')
+    logs = [dict(log) for log in detail.get('logs') or []]
+    replay_log = any('Exact X12 replay detected' in str(log.get('message') or '') for log in logs)
+    before_count = self._step_response(run, 'REQUEUE_214_DELIVERED_REPLAY').get('apexEventCountBefore')
+    statuses = self.apex.get(f"/v1/loads/{run['business_identifier']}/shipment-statuses")
+    after_count = len([event for event in statuses.get('events') or [] if isinstance(event, dict)])
+    side_effects_skipped = isinstance(before_count, int) and before_count == after_count
+
+    original_target = self._step_response(run, 'FREIGHTBRIDGE_RECEIVE_214_DELIVERED').get('targetProcessed')
+    original_transaction = original_target.get('transactionId') if isinstance(original_target, dict) else None
+    if replay_of is None or (original_transaction and str(replay_of) != str(original_transaction)) or not side_effects_skipped or not replay_log:
+      raise LabExecutionError('LAB_RECOVERY_NOT_VERIFIED', 'Exact 214 replay did not prove replay linkage with business side effects skipped.')
+
+    return {
+      **response,
+      'targetFileName': expected_file_name,
+      'targetProcessed': item,
+      'status': 'REPLAY_ACCEPTED',
+      'replayTransactionId': transaction_id,
+      'originalTransactionId': str(original_transaction or replay_of),
+      'replayOfTransactionId': str(replay_of),
+      'processingStatus': transaction.get('processing_status'),
+      'replayLogVerified': replay_log,
+      'businessSideEffectsSkipped': side_effects_skipped,
+      'apexEventCountBefore': before_count,
+      'apexEventCountAfter': after_count,
+    }
+
+  def _verified_late_arrived_214(
+    self,
+    run: dict[str, object],
+    correlation_id: str,
+    *,
+    expected_file_name: str,
+  ) -> dict[str, object]:
+    response = self._verified_freightbridge_poll(
+      run,
+      correlation_id,
+      expected_file_name=expected_file_name,
+      document_type='214',
+      business_identifier=str(run['business_identifier']),
+      shipment_status='ARRIVED',
+    )
+    canonical = self._canonical_shipment_summary(str(run['business_identifier']))
+    statuses = self.apex.get(f"/v1/loads/{run['business_identifier']}/shipment-statuses")
+    arrived = self._step_response(run, 'CREATE_214_ARRIVED')
+    delivered = self._step_response(run, 'CREATE_214_DELIVERED')
+    late_event_present = any(
+      isinstance(event, dict) and self._shipment_event_matches(event, arrived)
+      for event in statuses.get('events') or []
+    )
+    current_status = canonical.get('currentStatus')
+    apex_current_status = statuses.get('currentStatus')
+    if not late_event_present or current_status != 'DELIVERED' or apex_current_status != 'DELIVERED':
+      raise LabExecutionError(
+        'LAB_RECOVERY_NOT_VERIFIED',
+        'Late ARRIVED event was not retained while preserving DELIVERED current status.',
+      )
+    return {
+      **response,
+      'lateEventStatus': 'ARRIVED',
+      'lateEventOccurredAt': arrived.get('occurredAt'),
+      'deliveredOccurredAt': delivered.get('occurredAt'),
+      'lateEventStored': late_event_present,
+      'currentStatus': current_status,
+      'apexCurrentStatus': apex_current_status,
+      'currentStatusPreserved': True,
+      'receivedAfterDelivered': True,
+    }
 
   def _poll_freightbridge_sftp(self, correlation_id: str) -> dict[str, object]:
     try:
