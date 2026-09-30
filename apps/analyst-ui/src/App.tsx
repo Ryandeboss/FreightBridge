@@ -19,6 +19,7 @@ import { LearnTheFlowMissionPage } from './pages/LearnTheFlowMissionPage';
 import { MappingDetailPage, MappingsPage } from './pages/MappingsPage';
 import { PartnerDetailPage, PartnersPage } from './pages/PartnersPage';
 import { ReplaySequencePracticePage } from './pages/ReplaySequencePracticePage';
+import { TrainingEntryPage } from './pages/TrainingEntryPage';
 import { TrainingHomePage } from './pages/TrainingHomePage';
 import { TransactionDetailPage } from './pages/TransactionDetailPage';
 import { TransactionsPage } from './pages/TransactionsPage';
@@ -33,9 +34,10 @@ function AppRoutes() {
   return (
     <HashRouter>
       <Routes>
+        <Route index element={<Navigate to="/learn" replace />} />
+        <Route path="/learn" element={<TrainingEntryPage />} />
         <Route element={<TrainingShell />}>
-          <Route index element={<Navigate to="/learn" replace />} />
-          <Route path="/learn" element={<TrainingHomePage />} />
+          <Route path="/learn/desk" element={<TrainingHomePage />} />
           <Route path="/learn/orientation" element={<FirstDayOrientationPage />} />
           <Route path="/learn/healthy/apex-tender" element={<HealthyApexTenderPage />} />
           <Route path="/learn/healthy/mapping-204" element={<HealthyMapping204Page />} />
