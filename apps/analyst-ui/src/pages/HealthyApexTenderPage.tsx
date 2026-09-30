@@ -103,7 +103,7 @@ export function HealthyApexTenderPage() {
 
   return (
     <section className="healthy-guide" data-testid="healthy-apex-tender-page">
-      <Link className="secondary-button training-back-link" to="/learn"><ArrowLeft size={16} />Ops Desk</Link>
+      <Link className="secondary-button training-back-link" to="/learn/desk"><ArrowLeft size={16} />Ops Desk</Link>
 
       <header className="healthy-guide-header">
         <div>
