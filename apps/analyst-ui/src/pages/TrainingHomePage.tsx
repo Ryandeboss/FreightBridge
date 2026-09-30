@@ -22,9 +22,7 @@ import {
 } from '../training/missions';
 import {
   healthyWalkthroughNextPath,
-  isHealthy997990Complete,
   isHealthyApexTenderComplete,
-  isHealthyMapping204Complete,
   isHealthyShipmentStatusComplete,
 } from '../training/healthyWalkthrough';
 import { isReplaySequencePracticeComplete } from '../training/advancedPractice';
@@ -42,28 +40,18 @@ export function TrainingHomePage() {
     completedCount >= PLANNED_MISSION_COUNT &&
     hasCompletedMission(progress, PRODUCTION_INCIDENT_MISSION_ID);
   const healthyPart1Complete = isHealthyApexTenderComplete();
-  const healthyPart2Complete = isHealthyMapping204Complete();
-  const healthyPart3Complete = isHealthy997990Complete();
   const healthyPart4Complete = isHealthyShipmentStatusComplete();
   const downstreamProgress = healthyPart1Complete || completedCount > 0;
   const bootcampComplete = isEdiBootcampComplete() || downstreamProgress;
   const orientationComplete = orientationStoredComplete || bootcampComplete;
   const healthyJourneyComplete = healthyPart4Complete || completedCount > 0;
   const healthyPath = healthyWalkthroughNextPath();
-  const healthyTitle = !healthyPart1Complete
-    ? 'Healthy Flow Part 1'
-    : !healthyPart2Complete
-      ? 'Healthy Flow Part 2'
-      : !healthyPart3Complete
-        ? 'Healthy Flow Part 3'
-        : healthyPart4Complete
-          ? 'Review Healthy Shipment Status'
-          : 'Healthy Flow Part 4';
-  const healthyAction = !healthyPart1Complete
-    ? 'Start Healthy Walkthrough'
-    : healthyPart4Complete
-      ? 'Review Healthy Walkthrough'
-      : 'Continue Healthy Walkthrough';
+  const healthyTitle = healthyJourneyComplete ? 'Review Healthy Integration Lab' : 'Healthy Integration Lab';
+  const healthyAction = healthyJourneyComplete
+    ? 'Review Healthy Integration Lab'
+    : healthyPart1Complete
+      ? 'Resume Healthy Integration Lab'
+      : 'Start Healthy Integration Lab';
   const finalMission = trainingMissions.find((mission) => mission.id === PRODUCTION_INCIDENT_MISSION_ID) ?? trainingMissions[trainingMissions.length - 1]!;
   const currentMission = trainingMissions.find(
     (mission) => mission.implemented && isMissionUnlocked(mission.id, progress) && !hasCompletedMission(progress, mission.id),
@@ -128,14 +116,16 @@ export function TrainingHomePage() {
                     {healthyAction}
                   </Link>
                 )}
-                {mission9Complete && !replaySequenceComplete ? (
-                  <Link className="primary-button" to="/learn/practice/replay-sequence">
-                    Advanced Replay & Sequence Practice<ArrowRight size={16} />
-                  </Link>
-                ) : (
-                  <Link className={bootcampComplete && healthyJourneyComplete ? 'primary-button' : 'secondary-button'} to={`/learn/mission/${currentMission.slug}`}>
-                    {currentMissionComplete ? 'Review Current Mission' : 'Start Current Mission'}<ArrowRight size={16} />
-                  </Link>
+                {healthyJourneyComplete && (
+                  mission9Complete && !replaySequenceComplete ? (
+                    <Link className="primary-button" to="/learn/practice/replay-sequence">
+                      Advanced Replay & Sequence Practice<ArrowRight size={16} />
+                    </Link>
+                  ) : (
+                    <Link className="primary-button" to={`/learn/mission/${currentMission.slug}`}>
+                      {currentMissionComplete ? 'Review Current Mission' : 'Start Current Mission'}<ArrowRight size={16} />
+                    </Link>
+                  )
                 )}
                 <Link className="secondary-button" to="/dashboard">Advanced Console</Link>
               </>
@@ -206,16 +196,9 @@ export function TrainingHomePage() {
               <Link className="ops-inbox-item active" to={healthyPath}>
                 <span className="ops-inbox-icon"><Workflow size={18} /></span>
                 <span>
-                  <small>{healthyPart1Complete ? 'Guided Healthy Flow' : 'Next'}</small>
+                  <small>{healthyPart1Complete ? 'Resume baseline' : 'Next'}</small>
                   <strong>{healthyTitle}</strong>
-                  <span>{healthyPart3Complete
-                    ? 'Follow the accepted shipment through Midwest 214 pickup, transit, arrival, delivery, and Apex-facing status updates.'
-                    : healthyPart2Complete
-                      ? 'Process the same saved 204 through Midwest, verify the 997 technical acknowledgment, then receive the 990 business tender decision.'
-                      : healthyPart1Complete
-                        ? 'Translate the same saved shipment into Midwest X12 204 before any Midwest processing happens.'
-                        : 'Start with Apex REST/JSON becoming a FreightBridge canonical shipment.'}</span>
-                </span>
+                  <span>Use the Console, Code, and Answer workstation to follow one healthy shipment from Apex REST/JSON through 204, 997, 990, and 214 delivery evidence.</span>                </span>
                 <ArrowRight size={16} />
               </Link>
               <Link className="ops-inbox-item muted" to="/learn/orientation">
@@ -303,33 +286,13 @@ export function TrainingHomePage() {
       {bootcampComplete && (
         <article className="panel healthy-home-card" data-testid="healthy-home-card">
           <div>
-            <p className="eyebrow">Guided healthy flow</p>
-            <h2>{!healthyPart1Complete
-              ? 'Part 1 - Apex tender into FreightBridge'
-              : !healthyPart2Complete
-                ? 'Part 2 - Midwest 204 mapping workbench'
-                : !healthyPart3Complete
-                  ? 'Part 3 - 997 acknowledgment and 990 tender response'
-                  : 'Part 4 - 214 shipment status and Apex updates'}</h2>
-            <p>{!healthyPart1Complete
-              ? 'Watch a real simulated REST/JSON tender pass authentication, parsing, validation, and canonical shipment creation.'
-              : !healthyPart2Complete
-                ? 'Resume the same saved Lab run, translate its canonical shipment into a Midwest X12 204, and stop at inbound SFTP delivery.'
-                : !healthyPart3Complete
-                  ? 'Continue the same saved run through Midwest 204 processing, the 997 technical acknowledgment, and the 990 business tender decision.'
-                  : 'Continue the accepted load through Midwest 214 status messages, FreightBridge normalization, and Apex-facing shipment updates.'}</p>
+            <p className="eyebrow">Module 03 · Healthy baseline</p>
+            <h2>Healthy Integration Lab</h2>
+            <p>Learn the same Console, Code, and Answer workstation you will use for incidents by following a successful Apex → FreightBridge → Midwest shipment first.</p>
           </div>
-          <Link className={healthyPart4Complete ? 'secondary-button' : 'primary-button'} to={healthyPath}>
+          <Link className={healthyJourneyComplete ? 'secondary-button' : 'primary-button'} to={healthyPath}>
             <Workflow size={16} />
-            {!healthyPart1Complete
-              ? 'Start Part 1'
-              : !healthyPart2Complete
-                ? 'Start Part 2'
-                : !healthyPart3Complete
-                  ? 'Start Part 3'
-                  : healthyPart4Complete
-                    ? 'Review Part 4'
-                    : 'Start Part 4'}
+            {healthyAction}
           </Link>
         </article>
       )}

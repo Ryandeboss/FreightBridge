@@ -3841,6 +3841,16 @@ input:disabled {
   letter-spacing: 0 !important;
   text-transform: none !important;
 }
+.lab-workstation-status.success {
+  border-color: #b8d8cb;
+  color: #315f50 !important;
+  background: #eef8f3;
+}
+.lab-workstation-status.neutral {
+  border-color: #cbdadd;
+  color: #526b72 !important;
+  background: #f3f7f8;
+}
 .lab-workstation-tabs {
   display: flex;
   align-items: stretch;
@@ -4364,3 +4374,95 @@ input:disabled {
   }
 }
 /* === End Milestone 45 === */
+
+
+/* === Milestone 46: healthy integration workstation === */
+.healthy-workstation-brief {
+  gap: 1.25rem;
+}
+.healthy-baseline-path {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  overflow-x: auto;
+  padding: .8rem .9rem;
+  border: 1px solid #dce5e7;
+  border-radius: 12px;
+  color: #5e7077;
+  background: #f8fafb;
+}
+.healthy-baseline-path span {
+  flex: 0 0 auto;
+  padding: .4rem .55rem;
+  border-radius: 7px;
+  color: #28494d;
+  background: #eef6f6;
+  font-size: .75rem;
+  font-weight: 800;
+}
+.healthy-console-runner {
+  display: grid;
+  gap: .7rem;
+  margin: 1rem;
+  padding: .8rem;
+  border: 1px solid #3a4b52;
+  border-radius: 9px;
+  color: #c7d2d6;
+  background: #202d33;
+}
+.healthy-console-runner > div,
+.healthy-console-runner.complete {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+}
+.healthy-console-runner span {
+  font-size: .75rem;
+  line-height: 1.45;
+}
+.healthy-console-runner .primary-button {
+  width: fit-content;
+}
+.healthy-console-runner.complete {
+  border-color: #35604f;
+  color: #bde2d0;
+  background: #1d3029;
+}
+.healthy-proof-strip {
+  max-width: 920px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .65rem;
+}
+.healthy-proof-strip > div {
+  min-width: 0;
+  display: grid;
+  gap: .2rem;
+  padding: .75rem .8rem;
+  border: 1px solid #dfe6e8;
+  border-radius: 10px;
+  background: #fff;
+}
+.healthy-proof-strip span {
+  color: #75858b;
+  font-size: .68rem;
+  font-weight: 800;
+}
+.healthy-proof-strip strong {
+  color: #315f50;
+  font-size: .82rem;
+}
+@media (max-width: 680px) {
+  .healthy-baseline-path {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .healthy-baseline-path > svg {
+    transform: rotate(90deg);
+    margin-left: 1.5rem;
+  }
+  .healthy-proof-strip {
+    grid-template-columns: 1fr;
+  }
+}
+/* === End Milestone 46 === */
