@@ -2656,7 +2656,7 @@ test('resumes the saved healthy run, dispatches only the Midwest 204, and saves 
   expect(calledPaths).not.toContain('/214');
 });
 
-test('Training Desk points to Healthy Part 2 after Part 1 and Healthy Part 3 after Part 2', async () => {
+test('Training Desk keeps partial legacy healthy progress on the unified workstation', async () => {
   installFetchMock();
   window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
   window.localStorage.setItem('freightbridge.firstDayOrientationComplete', 'true');
@@ -2670,9 +2670,9 @@ test('Training Desk points to Healthy Part 2 after Part 1 and Healthy Part 3 aft
   const { rerender } = render(<App />);
 
   expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
-  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Flow Part 2/i);
-  expect(screen.getByRole('link', { name: /Continue Healthy Walkthrough/i })).toHaveAttribute('href', '#/learn/healthy/mapping-204');
-  expect(screen.getByTestId('healthy-home-card')).toHaveTextContent(/Part 2 - Midwest 204 mapping workbench/i);
+  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Integration Lab/i);
+  expect(within(screen.getByTestId('healthy-home-card')).getByRole('link', { name: /Resume Healthy Integration Lab/i })).toHaveAttribute('href', '#/learn/healthy/workstation');
+  expect(screen.getByTestId('healthy-home-card')).toHaveTextContent(/Console, Code, and Answer/i);
 
   window.localStorage.setItem('freightbridge.healthyWalkthrough', JSON.stringify({
     runId: labRun.id,
@@ -2684,8 +2684,8 @@ test('Training Desk points to Healthy Part 2 after Part 1 and Healthy Part 3 aft
   }));
   rerender(<App />);
 
-  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Flow Part 3/i);
-  expect(screen.getByRole('link', { name: /Continue Healthy Walkthrough/i })).toHaveAttribute('href', '#/learn/healthy/acknowledgments');
+  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Integration Lab/i);
+  expect(within(screen.getByTestId('healthy-home-card')).getByRole('link', { name: /Resume Healthy Integration Lab/i })).toHaveAttribute('href', '#/learn/healthy/workstation');
 });
 
 
@@ -2785,7 +2785,7 @@ test('continues the exact saved run through 997 then 990 and stops before 214', 
   expect(calledPaths.join('\n')).not.toContain('FREIGHTBRIDGE_RECEIVE_214_');
 });
 
-test('Training Desk promotes Healthy Part 3 after Part 2 and Healthy Part 4 after Part 3', async () => {
+test('Training Desk keeps later partial legacy healthy progress on the unified workstation', async () => {
   installFetchMock();
   window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
   window.localStorage.setItem('freightbridge.firstDayOrientationComplete', 'true');
@@ -2801,9 +2801,9 @@ test('Training Desk promotes Healthy Part 3 after Part 2 and Healthy Part 4 afte
   const { rerender } = render(<App />);
 
   expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
-  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Flow Part 3/i);
-  expect(screen.getByRole('link', { name: /Continue Healthy Walkthrough/i })).toHaveAttribute('href', '#/learn/healthy/acknowledgments');
-  expect(screen.getByTestId('healthy-home-card')).toHaveTextContent(/Part 3/i);
+  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Integration Lab/i);
+  expect(within(screen.getByTestId('healthy-home-card')).getByRole('link', { name: /Resume Healthy Integration Lab/i })).toHaveAttribute('href', '#/learn/healthy/workstation');
+  expect(screen.getByTestId('healthy-home-card')).toHaveTextContent(/Healthy Integration Lab/i);
 
   window.localStorage.setItem('freightbridge.healthyWalkthrough', JSON.stringify({
     runId: labRun.id,
@@ -2817,8 +2817,8 @@ test('Training Desk promotes Healthy Part 3 after Part 2 and Healthy Part 4 afte
   }));
   rerender(<App />);
 
-  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Flow Part 4/i);
-  expect(screen.getByRole('link', { name: /Continue Healthy Walkthrough/i })).toHaveAttribute('href', '#/learn/healthy/shipment-status');
+  expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Integration Lab/i);
+  expect(within(screen.getByTestId('healthy-home-card')).getByRole('link', { name: /Resume Healthy Integration Lab/i })).toHaveAttribute('href', '#/learn/healthy/workstation');
 });
 
 
@@ -2939,7 +2939,7 @@ test('Training Desk routes healthy progress into the unified workstation and pre
 
   expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
   expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Healthy Integration Lab/i);
-  expect(screen.getByRole('link', { name: /Resume Healthy Integration Lab/i })).toHaveAttribute('href', '#/learn/healthy/workstation');
+  expect(within(screen.getByTestId('healthy-home-card')).getByRole('link', { name: /Resume Healthy Integration Lab/i })).toHaveAttribute('href', '#/learn/healthy/workstation');
   expect(screen.getByTestId('healthy-home-card')).toHaveTextContent(/Console, Code, and Answer/i);
 
   window.localStorage.setItem('freightbridge.healthyWalkthrough', JSON.stringify({
@@ -2957,7 +2957,7 @@ test('Training Desk routes healthy progress into the unified workstation and pre
   rerender(<App />);
 
   expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Mission 1 - Your First Shift/i);
-  expect(screen.getByRole('link', { name: /Review Healthy Integration Lab/i })).toHaveAttribute('href', '#/learn/healthy/workstation');
+  expect(within(screen.getByTestId('healthy-home-card')).getByRole('link', { name: /Review Healthy Integration Lab/i })).toHaveAttribute('href', '#/learn/healthy/workstation');
 });
 
 
