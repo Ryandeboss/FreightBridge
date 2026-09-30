@@ -1322,7 +1322,7 @@ export const incidentMissions: IncidentMissionDefinition[] = [
       { id: 'profile', label: 'Hint 2 - Check the partner contract', body: 'The Midwest implementation guide defines 004010 as the supported X12 version for this project.' },
       { id: 'concept', label: 'Hint 3 - Technical concept', body: 'A message can be structurally valid X12 and still be incompatible with the active trading-partner profile.' },
     ],
-
+  },
 ];
 
 export function findIncidentMissionBySlug(slug: string | undefined): IncidentMissionDefinition | undefined {
