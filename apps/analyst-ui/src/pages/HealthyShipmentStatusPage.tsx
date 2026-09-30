@@ -188,7 +188,7 @@ export function HealthyShipmentStatusPage() {
 
   return (
     <section className="healthy-guide healthy-status-page" data-testid="healthy-shipment-status-page">
-      <Link className="secondary-button training-back-link" to="/learn"><ArrowLeft size={16} />Ops Desk</Link>
+      <Link className="secondary-button training-back-link" to="/learn/desk"><ArrowLeft size={16} />Ops Desk</Link>
 
       <header className="healthy-guide-header">
         <div>
@@ -403,7 +403,7 @@ function StepEvidence({ step }: { step: LabStep | null }) {
 function RecoveryState({ title, detail, runId }: { title: string; detail: string; runId?: string }) {
   return (
     <section className="healthy-guide" data-testid="healthy-status-recovery">
-      <Link className="secondary-button training-back-link" to="/learn"><ArrowLeft size={16} />Ops Desk</Link>
+      <Link className="secondary-button training-back-link" to="/learn/desk"><ArrowLeft size={16} />Ops Desk</Link>
       <article className="panel training-alert" role="alert">
         <AlertTriangle size={20} />
         <div>
