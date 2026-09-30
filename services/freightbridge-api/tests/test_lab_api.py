@@ -418,6 +418,71 @@ def test_lab_214_reconciliation_requires_matching_specific_event() -> None:
   assert service._has_matching_shipment_status(run, 'IN_TRANSIT') is True
 
 
+def test_replay_sequence_late_arrived_keeps_delivered_current_status() -> None:
+  service = IntegrationLabService(repository=None)  # type: ignore[arg-type]
+  run = {
+    **lab_run(status='RUNNING'),
+    'business_identifier': 'LABREPLAY900',
+    'steps': [
+      {
+        **lab_step(step_key='CREATE_214_DELIVERED', status='SUCCEEDED'),
+        'response_summary': {
+          'status': 'DELIVERED',
+          'occurredAt': '2026-10-02T00:00:00+00:00',
+          'city': 'Detroit',
+          'state': 'MI',
+        },
+      },
+      {
+        **lab_step(step_key='CREATE_214_ARRIVED', status='SUCCEEDED'),
+        'response_summary': {
+          'status': 'ARRIVED',
+          'occurredAt': '2026-10-01T16:00:00+00:00',
+          'city': 'Detroit',
+          'state': 'MI',
+        },
+      },
+    ],
+  }
+
+  service._verified_freightbridge_poll = lambda *args, **kwargs: {  # type: ignore[method-assign]
+    'status': 'POLLED',
+    'targetProcessed': {'fileName': 'late-arrived.edi', 'status': 'ARCHIVED'},
+  }
+  service._canonical_shipment_summary = lambda shipment_number: {  # type: ignore[method-assign]
+    'currentStatus': 'DELIVERED',
+  }
+
+  class ApexLateEventClient:
+    def get(self, path: str) -> dict[str, object]:
+      return {
+        'currentStatus': 'DELIVERED',
+        'events': [
+          {
+            'status': 'ARRIVED',
+            'occurredAt': '2026-10-01T16:00:00+00:00',
+            'city': 'Detroit',
+            'state': 'MI',
+          }
+        ],
+      }
+
+  service.apex = ApexLateEventClient()  # type: ignore[assignment]
+
+  result = service._verified_late_arrived_214(
+    run,
+    'corr',
+    expected_file_name='late-arrived.edi',
+  )
+
+  assert result['lateEventStored'] is True
+  assert result['currentStatusPreserved'] is True
+  assert result['currentStatus'] == 'DELIVERED'
+  assert result['apexCurrentStatus'] == 'DELIVERED'
+  assert result['lateEventOccurredAt'] == '2026-10-01T16:00:00+00:00'
+  assert result['deliveredOccurredAt'] == '2026-10-02T00:00:00+00:00'
+
+
 def test_lab_990_reconciliation_requires_expected_tender_outcome() -> None:
   service = IntegrationLabService(repository=None)  # type: ignore[arg-type]
   run = lab_run_with_sftp_file('expected.edi', scenario_key='TENDER_REJECTED')
