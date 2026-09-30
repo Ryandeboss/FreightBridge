@@ -19,6 +19,7 @@ import {
   PLANNED_MISSION_COUNT,
   TRAINING_ROLE,
   trainingEntities,
+  PRODUCTION_INCIDENT_MISSION_ID,
   SFTP_STOPS_WORKING_MISSION_ID,
   trainingMissions,
 } from '../training/missions';
@@ -327,6 +328,7 @@ export function TrainingHomePage() {
 }
 
 function isMissionUnlocked(missionId: string, progress: ReturnType<typeof loadTrainingProgress>): boolean {
+  if (missionId === PRODUCTION_INCIDENT_MISSION_ID && !isReplaySequencePracticeComplete()) return false;
   const mission = trainingMissions.find((candidate) => candidate.id === missionId);
   if (!mission?.unlocksAfter) return true;
   return hasCompletedMission(progress, mission.unlocksAfter);
