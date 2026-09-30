@@ -2510,3 +2510,74 @@ input:disabled {
   .journey-connector svg{transform:rotate(90deg)}
 }
 
+.journey-access-page{
+  min-height:100vh;
+  display:grid;
+  place-items:center;
+  padding:2rem 1.25rem;
+  background:#fff;
+  color:#172027;
+}
+.journey-access-panel{
+  width:min(420px,100%);
+  display:grid;
+  gap:1.25rem;
+}
+.journey-access-back{
+  width:max-content;
+  display:inline-flex;
+  align-items:center;
+  gap:.35rem;
+  color:#6f7d84;
+  font-size:.82rem;
+  font-weight:800;
+}
+.journey-access-back:hover{
+  color:#172027;
+  text-decoration:none;
+}
+.journey-access-mark{
+  width:48px;
+  height:48px;
+  display:grid;
+  place-items:center;
+  border:1px solid #dfe5e8;
+  border-radius:14px;
+  background:#f7f9fa;
+}
+.journey-access-copy{
+  display:grid;
+  gap:.55rem;
+}
+.journey-access-copy h1,
+.journey-access-copy p{
+  margin:0;
+}
+.journey-access-copy h1{
+  font-size:clamp(1.65rem,4vw,2.2rem);
+  line-height:1.12;
+  letter-spacing:-.025em;
+}
+.journey-access-copy>p:last-child{
+  color:#68767e;
+  line-height:1.55;
+}
+.journey-access-form{
+  display:grid;
+  gap:.8rem;
+}
+.journey-access-form label{
+  color:#4e5d65;
+}
+.journey-access-form input{
+  min-height:2.8rem;
+  border-color:#d4dce0;
+}
+.journey-access-form .journey-start-button{
+  width:100%;
+  border:1px solid #172027;
+}
+@media(max-width:560px){
+  .journey-access-page{padding:1.5rem 1rem}
+}
+
