@@ -2249,6 +2249,10 @@ async function completeIncidentMission({
   );
   await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
   expect(await screen.findByTestId('incident-debrief')).toBeInTheDocument();
+  const completedWorkstation = screen.queryByTestId('lab-workstation');
+  if (completedWorkstation) {
+    await userEvent.click(within(completedWorkstation).getByRole('tab', { name: /Console/i }));
+  }
 }
 
 describe('Analyst Console', () => {
