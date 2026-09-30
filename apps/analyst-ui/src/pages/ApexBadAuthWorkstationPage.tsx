@@ -156,32 +156,12 @@ export function ApexBadAuthWorkstation({ mission }: { mission: IncidentMissionDe
   }
 
   async function applyFixAndRunAgain() {
-    if (!token || !incidentRun || !diagnosisCorrect || !planCorrect) return;
+    if (!incidentRun || !diagnosisCorrect || !planCorrect) return;
     setWorking(true);
     setError(null);
     setRecoveryRun(null);
     try {
-      let nextRun = await createLabRun(token, {
-        scenarioKey: 'FULL_SHIPMENT_LIFECYCLE',
-        loadId: incidentRun.businessIdentifier,
-        equipmentType: 'VAN_53',
-        weightLbs: 42000,
-        pieces: 22,
-        commodityDescription: 'Recovered Training Freight',
-      });
-      let guard = 0;
-      while (nextRun.status !== 'SUCCEEDED' && nextRun.status !== 'FAILED' && guard < 30) {
-        const executed = await runNextLabStep(token, nextRun.id);
-        nextRun = executed.run;
-        guard += 1;
-      }
-      setRecoveryRun(nextRun);
-      if (nextRun.status !== 'SUCCEEDED' || nextRun.businessIdentifier !== incidentRun.businessIdentifier) {
-        setError('The recovery run did not prove a successful same-load retry.');
-      }
-    } catch (nextError) {
-      handleApiError(nextError);
-      setError(nextError instanceof ApiError ? nextError.message : 'The recovery retry could not be completed.');
+      setRecoveryRun(buildTrainingRecoveryRun(incidentRun));
     } finally {
       setWorking(false);
     }
@@ -527,11 +507,11 @@ function AnswerView({
           {verified ? <CheckCircle2 size={21} /> : <XCircle size={21} />}
           <div>
             <span>Verification</span>
-            <strong>{verified ? 'SUCCEEDED · same incident load' : 'Recovery not verified'}</strong>
+            <strong>{verified ? 'SUCCEEDED · training verification' : 'Recovery not verified'}</strong>
             <p>
               {verified
-                ? 'Authentication passed on the corrected retry and the same business identifier completed the healthy lifecycle.'
-                : 'The retry did not produce the required same-load successful lifecycle.'}
+                ? 'The corrected authenticated retry is simulated for this guided lesson. The same business identifier is preserved, and no second Apex load is created.'
+                : 'The training verification did not produce the expected corrected result.'}
             </p>
           </div>
         </div>
@@ -577,6 +557,26 @@ function OptionGroup({
 
 function OptionFeedback({ option, correct }: { option: IncidentOption; correct: boolean }) {
   return <div className={'workstation-option-feedback ' + (correct ? 'correct' : 'incorrect')}>{option.explanation}</div>;
+}
+
+function buildTrainingRecoveryRun(incidentRun: LabRun): LabRun {
+  const now = new Date().toISOString();
+  return {
+    ...incidentRun,
+    id: incidentRun.id + '-training-verification',
+    scenarioKey: 'TRAINING_VERIFICATION',
+    status: 'SUCCEEDED',
+    resultSummary: {
+      ...incidentRun.resultSummary,
+      technicalAcknowledgment: 'ACCEPTED',
+      tenderStatus: 'ACCEPTED',
+      shipmentStatus: 'DELIVERED',
+      trainingVerification: true,
+    },
+    updatedAt: now,
+    completedAt: now,
+    steps: [],
+  };
 }
 
 function WorkstationError({ message }: { message: string }) {
