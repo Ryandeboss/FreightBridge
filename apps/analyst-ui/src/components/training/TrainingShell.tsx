@@ -80,7 +80,11 @@ export function TrainingShell() {
 
   const progress = loadTrainingProgress();
   const completed = (missionId: string) => hasCompletedMission(progress, missionId);
-  const orientationComplete = isFirstDayOrientationComplete();
+
+  // Progress is monotonic for the curriculum UI. Older browser state may contain
+  // later mission completions without the newer orientation/healthy-flow keys.
+  // Downstream work therefore implies that prerequisite course modules were completed.
+  const orientationStoredComplete = isFirstDayOrientationComplete();
   const healthyParts = [
     isHealthyApexTenderComplete(),
     isHealthyMapping204Complete(),
@@ -88,15 +92,24 @@ export function TrainingShell() {
     isHealthyShipmentStatusComplete(),
   ].filter(Boolean).length;
   const healthyMissionComplete = completed(LEARN_THE_FLOW_MISSION_ID);
-  const healthyCompletedUnits = healthyParts + (healthyMissionComplete ? 1 : 0);
-  const healthyComplete = healthyCompletedUnits >= 5;
-  const guidedCompleted = GUIDED_MISSION_IDS.filter(completed).length;
-  const guidedComplete = guidedCompleted === GUIDED_MISSION_IDS.length;
+  const rawHealthyCompletedUnits = healthyParts + (healthyMissionComplete ? 1 : 0);
+  const rawGuidedCompleted = GUIDED_MISSION_IDS.filter(completed).length;
   const replayComplete = isReplaySequencePracticeComplete();
   const advancedMissionCompleted = ADVANCED_MISSION_IDS.filter(completed).length;
-  const advancedCompletedUnits = advancedMissionCompleted + (replayComplete ? 1 : 0);
-  const advancedComplete = advancedCompletedUnits >= 3;
+  const rawAdvancedCompletedUnits = advancedMissionCompleted + (replayComplete ? 1 : 0);
   const finalComplete = completed(PRODUCTION_INCIDENT_MISSION_ID);
+
+  const advancedHasProgress = rawAdvancedCompletedUnits > 0 || finalComplete;
+  const guidedHasProgress = rawGuidedCompleted > 0 || advancedHasProgress;
+  const healthyHasProgress = rawHealthyCompletedUnits > 0 || guidedHasProgress;
+
+  const orientationComplete = orientationStoredComplete || healthyHasProgress;
+  const healthyCompletedUnits = guidedHasProgress ? 5 : rawHealthyCompletedUnits;
+  const healthyComplete = healthyCompletedUnits >= 5;
+  const guidedCompleted = advancedHasProgress ? GUIDED_MISSION_IDS.length : rawGuidedCompleted;
+  const guidedComplete = guidedCompleted === GUIDED_MISSION_IDS.length;
+  const advancedCompletedUnits = finalComplete ? 3 : rawAdvancedCompletedUnits;
+  const advancedComplete = advancedCompletedUnits >= 3;
 
   const healthyPath = healthyWalkthroughNextPath();
   const healthyModulePath = healthyParts < 4
@@ -110,8 +123,6 @@ export function TrainingShell() {
     : '/learn/practice/replay-sequence';
   const finalPath = missionPath(PRODUCTION_INCIDENT_MISSION_ID);
 
-  const guidedHasProgress = guidedCompleted > 0;
-  const advancedHasProgress = advancedCompletedUnits > 0;
   const finalHasProgress = finalComplete;
 
   const modules = [
