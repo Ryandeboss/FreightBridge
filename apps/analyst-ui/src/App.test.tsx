@@ -2367,13 +2367,28 @@ describe('Analyst Console', () => {
     expect(screen.getByTestId('ops-desk-shell')).toBeInTheDocument();
     expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Inbox/i);
     expect(screen.getByTestId('ops-current-focus')).toHaveTextContent(/Current Mission/i);
-    expect(screen.getByTestId('ops-coach')).toHaveTextContent(/Mike/i);
+    const curriculum = screen.getByTestId('curriculum-sidebar');
+    expect(curriculum).toHaveTextContent(/Orientation/i);
+    expect(curriculum).toHaveTextContent(/Healthy Integration/i);
+    expect(curriculum).toHaveTextContent(/Guided Troubleshooting/i);
+    expect(curriculum).toHaveTextContent(/Advanced Incidents/i);
+    expect(curriculum).toHaveTextContent(/Final Shift/i);
+    expect(screen.queryByTestId('ops-coach')).not.toBeInTheDocument();
+    expect(within(curriculum).queryByRole('link', { name: /Transactions/i })).not.toBeInTheDocument();
+    expect(within(curriculum).queryByRole('link', { name: /Business Trace/i })).not.toBeInTheDocument();
+    expect(within(curriculum).queryByRole('link', { name: /Errors/i })).not.toBeInTheDocument();
+    expect(within(curriculum).queryByRole('link', { name: /Mappings/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Investigate without leaving the workstation/i)).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Welcome to FreightBridge/i })).toBeInTheDocument();
     expect(screen.getByTestId('training-role')).toHaveTextContent(/FreightBridge Integration Support Analyst/i);
     expect(screen.getByTestId('external-partner-apex')).toHaveTextContent(/External Trading Partner/i);
     expect(screen.getByTestId('external-partner-midwest')).toHaveTextContent(/External Trading Partner/i);
     expect(screen.getByTestId('training-workplace-freightbridge')).toHaveTextContent(/Your Workplace/i);
     expect(screen.getByText(/Training Progress/i)).toBeInTheDocument();
+    expect(screen.getByTestId('curriculum-progress')).toHaveTextContent(/Course progress/i);
+    await userEvent.click(screen.getByRole('button', { name: /Collapse course outline/i }));
+    expect(screen.getByTestId('ops-desk-shell')).toHaveClass('sidebar-collapsed');
+    expect(screen.getByRole('button', { name: /Expand course outline/i })).toBeInTheDocument();
     const advancedConsoleLinks = screen.getAllByRole('link', { name: /Advanced Console/i });
     expect(advancedConsoleLinks[0]).toHaveAttribute('href', '#/dashboard');
 
@@ -2383,20 +2398,24 @@ describe('Analyst Console', () => {
   });
 
 
-test('runs the standalone story orientation and hands off to the healthy walkthrough', async () => {
+test('runs the story orientation inside the curriculum shell and hands off to the healthy walkthrough', async () => {
   installFetchMock();
   window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
   window.location.hash = '#/learn/orientation';
   render(<App />);
 
   expect(await screen.findByTestId('first-day-orientation-page')).toBeInTheDocument();
-  expect(screen.queryByTestId('ops-desk-shell')).not.toBeInTheDocument();
+  expect(screen.getByTestId('ops-desk-shell')).toBeInTheDocument();
+  const curriculum = screen.getByTestId('curriculum-sidebar');
+  expect(within(curriculum).getByTestId('curriculum-module-orientation')).toHaveTextContent(/Scene 1 of 6/i);
+  expect(screen.queryByTestId('ops-coach')).not.toBeInTheDocument();
   expect(screen.getByTestId('orientation-companies')).toHaveTextContent(/Three companies make one shipment journey possible/i);
   expect(screen.getByTestId('orientation-companies')).toHaveTextContent(/Apex Logistics/i);
   expect(screen.getByTestId('orientation-companies')).toHaveTextContent(/FreightBridge/i);
   expect(screen.getByTestId('orientation-companies')).toHaveTextContent(/Midwest Carrier/i);
 
   await userEvent.click(screen.getByRole('button', { name: /Continue/i }));
+  expect(within(curriculum).getByTestId('curriculum-module-orientation')).toHaveTextContent(/Scene 2 of 6/i);
   expect(screen.getByTestId('orientation-tender-begins')).toHaveTextContent(/Apex asks for a carrier/i);
   expect(screen.getByTestId('orientation-tender-begins')).toHaveTextContent(/Aurora, IL/i);
 
@@ -2842,7 +2861,7 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
 
 
 
-  test('keeps compact analyst tools inside the Ops Desk and preserves full-console escalation', async () => {
+  test('keeps contextual analyst tools routable without exposing them in permanent course navigation', async () => {
     installFetchMock();
     window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
     window.location.hash = '#/learn/tools/transactions';
@@ -2850,11 +2869,13 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
 
     expect(await screen.findByTestId('analyst-tools-page')).toBeInTheDocument();
     expect(screen.getByTestId('ops-desk-shell')).toBeInTheDocument();
-    expect(screen.getByTestId('ops-coach')).toHaveTextContent(/Mike/i);
+    expect(screen.queryByTestId('ops-coach')).not.toBeInTheDocument();
+    const curriculum = screen.getByTestId('curriculum-sidebar');
+    expect(within(curriculum).queryByRole('link', { name: /Transactions/i })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /^Transactions$/i })).toBeInTheDocument();
     expect(screen.getByText(/When analysts use this/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Open This Tool in Full Console/i })).toHaveAttribute('href', '#/transactions');
-    expect(screen.getByTestId('ops-coach').querySelector('.ops-coach-console-link')).toHaveTextContent('Open Full Console');
+    expect(within(curriculum).getByRole('link', { name: /Advanced Console/i })).toHaveAttribute('href', '#/dashboard');
   });
 
   test('finds a load and uses the processing log to identify the last successful checkpoint', async () => {
@@ -3616,7 +3637,8 @@ test('Training Desk promotes Healthy Part 4 after Part 3 and missions after Part
     expect(screen.getByTestId('training-complete-inbox')).toHaveTextContent(/No training incidents waiting/i);
     expect(screen.getByTestId('ops-inbox').querySelector('.ops-count-badge')).toHaveTextContent('0');
     expect(screen.getByTestId('ops-current-focus')).toHaveTextContent(/Training path finished/i);
-    expect(screen.getByTestId('ops-desk-shell').querySelector('.ops-nav-count')).toHaveTextContent('0');
+    expect(screen.getByTestId('curriculum-progress')).toHaveTextContent(/100%/i);
+    expect(screen.getByTestId('curriculum-module-final')).toHaveTextContent(/Complete/i);
     expect(screen.getByRole('link', { name: /^Open Advanced Console$/i })).toHaveAttribute('href', '#/dashboard');
   }, 15000);
 

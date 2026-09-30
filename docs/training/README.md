@@ -1,6 +1,6 @@
 # FreightBridge Training Mode
 
-Training Mode turns FreightBridge into a guided workplace simulation for a new FreightBridge Integration Support Analyst. The public front door is `#/learn`: a deliberately minimal three-company entry screen with no console navigation or technical clutter. New learners choose **Begin Your Journey**, complete the small access step, and enter orientation; returning learners choose **Continue Training**, validate access, and resume the workstation at `#/learn/desk`. The original technical workspace remains available as the Advanced Console.
+Training Mode turns FreightBridge into a guided workplace simulation for a new FreightBridge Integration Support Analyst. The public front door is `#/learn`: a deliberately minimal three-company entry screen with no console navigation or technical clutter. After access, the learner works inside a collapsible curriculum shell organized by course modules rather than analyst tools. The persistent sidebar shows course/module progress; Transaction Search, Business Trace, Errors, Mappings, Partner Profile, and similar investigation capabilities are intentionally absent from permanent learner navigation and are reserved for contextual labs. The original technical workspace remains available as the Advanced Console.
 
 ## What The Learner Does
 
@@ -41,19 +41,11 @@ Before the incident queue, the learner also completes:
 
 Mission 10 stays locked until the Replay & Sequence Clinic is complete.
 
-## Analyst Toolset
+## Curriculum Shell And Contextual Tools
 
-Training Mode includes compact read-only tools inside the Ops Desk:
+The persistent learner shell is course-oriented rather than tool-oriented. It contains a collapsible module outline with progress for Orientation, Healthy Integration, Guided Troubleshooting, Advanced Incidents, and the Final Shift. Mike's former persistent right-side coach panel has been removed.
 
-- Transaction Search
-- Business Trace
-- Payload Viewer
-- Processing Log
-- Error Detail
-- Mapping Viewer
-- Partner Profile
-
-These tools reuse the same FreightBridge operations/configuration APIs as the Advanced Console. Raw evidence is progressively disclosed behind **View Raw**. Mutation-capable configuration and operational actions remain in the Advanced Console.
+Investigation capabilities still reuse the same FreightBridge operations/configuration APIs, but learner-facing tool links are no longer exposed in the permanent sidebar or Training Home. Transaction evidence, raw payloads, processing logs, errors, partner rules, and mapping information are intended to appear only when a lesson or lab gives the learner a reason to use them. The Advanced Console continues to expose the full technical workspace.
 
 ## Failure Drills
 
@@ -103,13 +95,14 @@ After Mission 10, the Training Desk switches to a **10 / 10 Training Complete** 
 1. Open the deployed app and confirm the first screen is the clean `#/learn` three-company entry with no token field, mission board, or Ops Desk navigation.
 2. Confirm Apex Logistics, FreightBridge, and Midwest Carrier are the only three company cards and **Begin Your Journey** is the primary action.
 3. Choose **Begin Your Journey**, enter the access key on the second-step access screen, and confirm the app opens First-Day Orientation.
-4. Complete/review First-Day Orientation and confirm it runs outside the Ops Desk shell as six low-clutter scenes: companies → tender begins → 204/997/990 → 214 shipment movement → translation → your job.
+4. Complete/review First-Day Orientation inside the minimal curriculum shell and confirm the sidebar updates the Orientation module from Scene 1 through Scene 6 while the lesson remains low-clutter: companies → tender begins → 204/997/990 → 214 shipment movement → translation → your job.
 5. Complete the four-part guided healthy flow and verify 997 is technical acknowledgment while 990 is the business tender decision.
 6. Complete Missions 1–9 using the real controlled failure drills.
 7. Complete the Replay & Sequence Clinic and verify exact replay side effects are skipped while late event history does not regress `DELIVERED`.
 8. Confirm Mission 10 unlocks only after advanced practice.
 9. Complete Mission 10 by diagnosing `SHIPMENT_NOT_FOUND` at business validation and correcting the B10 shipment reference.
 10. Return to the Training Desk and confirm the completed state shows **10 / 10**, inbox count **0**, and **No training incidents waiting**.
-11. Open the Advanced Console and confirm the full operations/configuration workspace remains available.
+11. Confirm the curriculum sidebar can collapse, Mike's persistent right panel is gone, and Transactions / Business Trace / Errors / Mappings / Partners do not appear as permanent learner navigation.
+12. Open the Advanced Console and confirm the full operations/configuration workspace remains available.
 
 See [FreightBridge employee POV](freightbridge-employee-pov.md), [Healthy integration baseline](healthy-integration-baseline.md), and [Incident game loop](incident-game-loop.md) for the underlying training model.

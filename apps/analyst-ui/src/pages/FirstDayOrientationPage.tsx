@@ -13,8 +13,9 @@ import {
   ShieldCheck,
   Truck,
 } from 'lucide-react';
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useOutletContext } from 'react-router-dom';
+import type { TrainingOutletContext } from '../components/training/TrainingShell';
 import { TRAINING_ROLE } from '../training/missions';
 import { markFirstDayOrientationComplete } from '../training/orientation';
 
@@ -22,7 +23,12 @@ const STEP_COUNT = 6;
 
 export function FirstDayOrientationPage() {
   const navigate = useNavigate();
+  const { setOrientationScene } = useOutletContext<TrainingOutletContext>();
   const [step, setStep] = useState(0);
+
+  useEffect(() => {
+    setOrientationScene(step + 1);
+  }, [setOrientationScene, step]);
 
   function finishOrientation() {
     markFirstDayOrientationComplete();
@@ -31,18 +37,10 @@ export function FirstDayOrientationPage() {
 
   return (
     <main className="story-orientation-page" data-testid="first-day-orientation-page">
-      <header className="story-orientation-topbar">
-        <Link className="story-orientation-exit" to="/learn/desk">
-          <ArrowLeft size={16} />
-          Exit orientation
-        </Link>
-        <div className="story-orientation-brand">
-          <span><ShieldCheck size={17} /></span>
-          <strong>FreightBridge</strong>
-          <small>First-Day Orientation</small>
-        </div>
-        <span className="story-orientation-counter">{step + 1} / {STEP_COUNT}</span>
-      </header>
+      <div className="story-orientation-lesson-meta">
+        <span>Module 01 · Orientation</span>
+        <strong>Scene {step + 1} of {STEP_COUNT}</strong>
+      </div>
 
       <div className="story-orientation-progress" aria-label={`Orientation scene ${step + 1} of ${STEP_COUNT}`}>
         {Array.from({ length: STEP_COUNT }, (_, index) => (
