@@ -3690,14 +3690,38 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     await userEvent.click(runEvidence);
 
     const replayConsole = screen.getByTestId('replay-workstation-console');
-    expect(replayConsole).toHaveTextContent(/duplicate business attempt/i);
-    expect(replayConsole).toHaveTextContent(/TX-214-1080/i);
-    expect(replayConsole).toHaveTextContent(/Same payload hash and X12 controls/i);
-    expect(replayConsole).toHaveTextContent(/Business side effects skipped/i);
-    expect(replayConsole).toHaveTextContent(/occurred_at=13:35:00Z/i);
-    expect(replayConsole).toHaveTextContent(/current status remains DELIVERED/i);
+    expect(replayConsole).toHaveTextContent(/Apex tenders load LABREPLAY900/i);
+    expect(replayConsole).toHaveTextContent(/FreightBridge sends the carrier 204/i);
+    expect(replayConsole).toHaveTextContent(/Apex sends LABREPLAY900 a second time/i);
+    expect(replayConsole).toHaveTextContent(/The same DELIVERED 214 arrives again/i);
+    expect(replayConsole).toHaveTextContent(/An ARRIVED 214 shows up after DELIVERED/i);
     expect(screen.queryByRole('button', { name: /Run Evidence Sequence/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/FreightBridge SFTP poll did not process/i)).not.toBeInTheDocument();
+
+    const blockedEvent = screen.getByTestId('replay-story-event-duplicate-apex');
+    expect(blockedEvent).toHaveClass('blocked');
+    expect(blockedEvent).toHaveTextContent(/BLOCKED/i);
+    await userEvent.click(blockedEvent);
+
+    let logViewer = screen.getByTestId('replay-log-viewer');
+    expect(logViewer).toHaveTextContent(/duplicate_business_request/i);
+    expect(logViewer).toHaveTextContent(/decision=BLOCK_DUPLICATE_BUSINESS/i);
+    expect(logViewer).toHaveTextContent(/duplicate_204_created=false/i);
+    await userEvent.click(screen.getByRole('button', { name: /Close log/i }));
+    expect(screen.queryByTestId('replay-log-viewer')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByTestId('replay-story-event-exact-replay'));
+    logViewer = screen.getByTestId('replay-log-viewer');
+    expect(logViewer).toHaveTextContent(/exact_replay_detected/i);
+    expect(logViewer).toHaveTextContent(/matching_transaction_id=TX-214-1080/i);
+    await userEvent.click(screen.getByRole('button', { name: /Close log/i }));
+
+    await userEvent.click(screen.getByTestId('replay-story-event-late-arrived'));
+    logViewer = screen.getByTestId('replay-log-viewer');
+    expect(logViewer).toHaveTextContent(/out_of_order_event/i);
+    expect(logViewer).toHaveTextContent(/occurred_at=2026-10-01T13:35:00Z/i);
+    expect(logViewer).toHaveTextContent(/current_status_before=DELIVERED/i);
+    await userEvent.click(screen.getByRole('button', { name: /Close log/i }));
 
     await userEvent.click(within(lab).getByRole('tab', { name: /Code/i }));
     const policyEditor = screen.getByTestId('replay-policy-editor');
