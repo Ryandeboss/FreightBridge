@@ -3797,7 +3797,11 @@ test('Training Desk routes healthy progress into the unified workstation and pre
 
     await userEvent.click(within(lab).getByRole('tab', { name: /Answer/i }));
     await userEvent.selectOptions(screen.getByLabelText(/Primary failure boundary/i), 'BUSINESS_VALIDATION');
-    await userEvent.selectOptions(screen.getByLabelText(/Primary diagnosis/i), 'duplicate-no-idempotency');
+    expect(screen.queryByRole('option', { name: /duplicate/i })).not.toBeInTheDocument();
+    await userEvent.type(
+      screen.getByLabelText(/Primary diagnosis/i),
+      'Apex repeated the same load request without idempotent retry identity, so FreightBridge blocked the duplicate business attempt.',
+    );
     await userEvent.click(screen.getByRole('button', { name: /Submit Diagnosis/i }));
     expect(screen.getByTestId('independent-diagnosis-result')).toHaveTextContent(/Diagnosis accepted/i);
     expect(screen.getByRole('button', { name: /Apply Fix & Verify/i })).toBeDisabled();
