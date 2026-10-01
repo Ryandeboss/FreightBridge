@@ -6268,6 +6268,10 @@ input:disabled {
 .final-shift-answer {
   gap: .9rem;
 }
+.final-shift-answer .workstation-answer-heading > div {
+  display: grid;
+  gap: .2rem;
+}
 .final-shift-assessment,
 .final-shift-report {
   display: grid;

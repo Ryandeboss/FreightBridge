@@ -3944,11 +3944,14 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(verification).toHaveTextContent(/Apex-Facing Evidence/i);
     expect(verification).toHaveTextContent(/PRESENT/i);
 
+    const completeFinalShift = screen.getByRole('button', { name: /Complete Final Shift/i });
+    expect(completeFinalShift).toBeDisabled();
     await userEvent.type(
       screen.getByLabelText(/Final incident update to Mike/i),
-      'Mike, Midwest sent a valid 004010 pickup 214, but B10 used the wrong shipment reference. FreightBridge failed business validation; I corrected the reference, preserved the valid profile and AF mapping, and verified Apex now shows PICKED_UP.',
+      'Correction verified successfully.',
     );
-    await userEvent.click(screen.getByRole('button', { name: /Complete Final Shift/i }));
+    expect(completeFinalShift).toBeEnabled();
+    await userEvent.click(completeFinalShift);
 
     expect(await screen.findByTestId('final-shift-completion')).toHaveTextContent(/TRAINING COMPLETE/i);
     expect(screen.getByTestId('final-shift-completion')).toHaveTextContent(/wrong shipment reference/i);
