@@ -1419,9 +1419,14 @@ function installFetchMock(options: {
   readiness?: Record<string, unknown>;
   initialLabRun?: Record<string, unknown>;
   failNextLabStep?: boolean;
+  accountProgress?: Record<string, string>;
+  accountProgressUpdatedAt?: string | null;
+  rejectAccountLogin?: boolean;
 } = {}) {
   let currentDraftMapping: Record<string, unknown> = draftMapping;
   let currentLabRun: Record<string, unknown> = options.initialLabRun ?? labRun;
+  let currentAccountProgress: Record<string, string> = options.accountProgress ?? {};
+  let accountProgressUpdatedAt: string | null = options.accountProgressUpdatedAt ?? null;
   const readiness = options.readiness ?? {
     status: 'ready',
     dependencies: {
@@ -1629,6 +1634,71 @@ function installFetchMock(options: {
     const auth = init?.headers instanceof Headers
       ? init.headers.get('Authorization')
       : (init?.headers as Record<string, string> | undefined)?.Authorization;
+
+    if (path === '/api/account/login' && init?.method === 'POST') {
+      if (options.rejectAccountLogin) {
+        return jsonResponse(
+          { detail: { error: { code: 'invalid_credentials', message: 'Invalid login credentials' } } },
+          400,
+        );
+      }
+      return jsonResponse({
+        accessToken: token,
+        refreshToken: 'refresh-token',
+        expiresIn: 3600,
+        expiresAt: 2000000000,
+        tokenType: 'bearer',
+        user: { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', email: 'learner@example.com' },
+      });
+    }
+
+    if (path === '/api/account/register' && init?.method === 'POST') {
+      return jsonResponse({
+        status: 'SIGNED_IN',
+        email: 'learner@example.com',
+        session: {
+          accessToken: token,
+          refreshToken: 'refresh-token',
+          expiresIn: 3600,
+          expiresAt: 2000000000,
+          tokenType: 'bearer',
+          user: { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', email: 'learner@example.com' },
+        },
+      });
+    }
+
+    if (path === '/api/account/refresh' && init?.method === 'POST') {
+      return jsonResponse({
+        accessToken: token,
+        refreshToken: 'refresh-token-2',
+        expiresIn: 3600,
+        expiresAt: 2000003600,
+        tokenType: 'bearer',
+        user: { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', email: 'learner@example.com' },
+      });
+    }
+
+    if (path === '/api/account/me') {
+      if (auth !== `Bearer ${token}`) {
+        return jsonResponse({ detail: { error: { code: 'AUTHENTICATION_ERROR', message: 'Sign in to continue.' } } }, 401);
+      }
+      return jsonResponse({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', email: 'learner@example.com' });
+    }
+
+    if (path === '/api/account/progress') {
+      if (auth !== `Bearer ${token}`) {
+        return jsonResponse({ detail: { error: { code: 'AUTHENTICATION_ERROR', message: 'Sign in to continue.' } } }, 401);
+      }
+      if (init?.method === 'PUT') {
+        const body = JSON.parse(String(init.body)) as { snapshot?: Record<string, string> };
+        currentAccountProgress = body.snapshot ?? {};
+        accountProgressUpdatedAt = '2026-10-01T21:00:00Z';
+      }
+      return jsonResponse({
+        snapshot: currentAccountProgress,
+        updatedAt: accountProgressUpdatedAt,
+      });
+    }
 
     if (
       (path.startsWith('/api/operations') || path.startsWith('/api/configuration') || path.startsWith('/api/lab'))
