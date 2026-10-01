@@ -73,6 +73,12 @@ export function AdvancedIncidentWorkstation({ mission }: { mission: IncidentMiss
   const verified = verifyRecovery(mission, incidentRun, recoveryRun, recovery);
   const canRunFix = requiredEvidenceInspected && lastHealthyCorrect && diagnosisCorrect && fixReady;
   const canComplete = verified;
+  const nextLabPath = mission.missionNumber === 8
+    ? '/learn/mission/sftp-stops-working'
+    : '/learn/practice/replay-sequence';
+  const nextLabLabel = mission.missionNumber === 8
+    ? 'Continue to Mission 9'
+    : 'Continue to Replay & Sequence Lab';
 
   async function startIncident() {
     if (!token) return;
@@ -261,8 +267,8 @@ export function AdvancedIncidentWorkstation({ mission }: { mission: IncidentMiss
               <h2>{mission.shortTitle} recovered.</h2>
               <p>You diagnosed the failure, changed the controlled configuration, and verified the recovery from FreightBridge evidence.</p>
             </div>
-            <Link className="primary-button" to="/learn/desk">
-              Return to Training Desk <ArrowRight size={16} />
+            <Link className="primary-button" to={nextLabPath}>
+              {nextLabLabel} <ArrowRight size={16} />
             </Link>
           </article>
           <article className="panel guided-incident-debrief" data-testid="incident-debrief">
