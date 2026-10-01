@@ -104,7 +104,7 @@ export function TrainingHomePage() {
                   Free Practice
                 </Link>
                 <Link className="secondary-button" to="/dashboard">
-                  Advanced Console
+                  Open Advanced Console
                 </Link>
                 <Link className="secondary-button" to={`/learn/mission/${finalMission.slug}`}>
                   Review Final Shift
