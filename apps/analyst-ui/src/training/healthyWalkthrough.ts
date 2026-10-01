@@ -1,3 +1,5 @@
+import { notifyTrainingStateChanged } from './sync';
+
 export const HEALTHY_WALKTHROUGH_STORAGE_KEY = 'freightbridge.healthyWalkthrough';
 
 export type HealthyWalkthroughState = {
@@ -76,6 +78,7 @@ export function saveHealthyApexTenderProgress(runId: string, loadId: string): vo
       completedAt: existing?.completedAt ?? new Date().toISOString(),
     }),
   );
+  notifyTrainingStateChanged();
 }
 
 export function saveHealthyMapping204Progress(runId: string, loadId: string): void {
@@ -93,6 +96,7 @@ export function saveHealthyMapping204Progress(runId: string, loadId: string): vo
       part2CompletedAt: existing?.part2CompletedAt ?? new Date().toISOString(),
     }),
   );
+  notifyTrainingStateChanged();
 }
 
 export function saveHealthy997990Progress(runId: string, loadId: string): void {
@@ -112,6 +116,7 @@ export function saveHealthy997990Progress(runId: string, loadId: string): void {
       part3CompletedAt: new Date().toISOString(),
     }),
   );
+  notifyTrainingStateChanged();
 }
 
 export function saveHealthyShipmentStatusProgress(runId: string, loadId: string): void {
@@ -133,4 +138,5 @@ export function saveHealthyShipmentStatusProgress(runId: string, loadId: string)
       part4CompletedAt: new Date().toISOString(),
     }),
   );
+  notifyTrainingStateChanged();
 }
