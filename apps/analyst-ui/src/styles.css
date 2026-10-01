@@ -173,6 +173,16 @@ td small {
   text-decoration: none;
 }
 
+.console-account-email{
+  display:block;
+  margin-bottom:.55rem;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:#9fb0b8;
+  font-size:.72rem;
+}
+
 .sidebar-footer {
   margin-top: auto;
   display: grid;
@@ -2562,6 +2572,35 @@ input:disabled {
   color:#68767e;
   line-height:1.55;
 }
+.journey-account-switch{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:.35rem;
+  padding:.28rem;
+  border:1px solid #dfe5e8;
+  border-radius:10px;
+  background:#f7f9fa;
+}
+.journey-account-switch button{
+  min-height:2.45rem;
+  border:0;
+  border-radius:8px;
+  background:transparent;
+  color:#6d7b82;
+  font:inherit;
+  font-size:.82rem;
+  font-weight:850;
+  cursor:pointer;
+}
+.journey-account-switch button.active{
+  background:#fff;
+  color:#172027;
+  box-shadow:0 1px 4px rgba(23,32,39,.08);
+}
+.journey-access-form small{
+  color:#7b898f;
+  font-size:.72rem;
+}
 .journey-access-form{
   display:grid;
   gap:.8rem;
@@ -3216,6 +3255,22 @@ input:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.course-account{
+  display:flex !important;
+  grid-auto-flow:column;
+  align-items:center;
+  justify-content:end;
+  gap:.65rem !important;
+}
+.course-account > span{
+  max-width:16rem;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:#6f7d84;
+  font-size:.75rem;
+  font-weight:750;
 }
 .course-main {
   grid-column: 2;
