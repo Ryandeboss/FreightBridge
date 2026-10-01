@@ -3517,7 +3517,7 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     );
     await userEvent.click(within(screen.getByTestId('lab-workstation')).getByRole('tab', { name: /Answer/i }));
     await chooseIncidentOption(/Where did FreightBridge evidence last look healthy/i, /passed X12 parsing/i);
-    await chooseIncidentOption(/What is the most accurate FreightBridge diagnosis/i, /unsupported status code ZZ/i);
+    await chooseIncidentOption(/What is the most accurate FreightBridge diagnosis/i, /unsupported AT7-01 value ZZ/i);
     await chooseIncidentOption(/What should you do next/i, /supported AT7 value/i);
     await userEvent.click(screen.getByRole('button', { name: /Retry corrected supported 214 status/i }));
     expect(await screen.findByTestId('verification-panel')).toHaveTextContent(/Shipment Status/i);
