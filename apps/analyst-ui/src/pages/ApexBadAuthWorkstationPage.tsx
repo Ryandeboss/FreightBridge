@@ -548,12 +548,6 @@ function readRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-function statusIcon(status: IncidentEvidencePoint['status']) {
-  if (status === 'SUCCEEDED') return <CheckCircle2 size={17} />;
-  if (status === 'FAILED') return <XCircle size={17} />;
-  return <Circle size={17} />;
-}
-
 function statusLabel(status: IncidentEvidencePoint['status']) {
   return status === 'NOT_REACHED' ? 'NOT REACHED' : status;
 }
