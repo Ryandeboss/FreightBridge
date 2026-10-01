@@ -3,9 +3,7 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
-  Circle,
   FileCode2,
-  FileJson2,
   Play,
   RotateCcw,
   Server,
@@ -17,10 +15,10 @@ import { ApiError } from '../api/client';
 import { createLabRun, runNextLabStep, type LabRun } from '../api/lab';
 import { useOperationsSession } from '../auth/OperationsSession';
 import { LabWorkstation } from '../components/training/LabWorkstation';
+import { TrainingStoryTimeline, type TrainingStoryEvent } from '../components/training/TrainingStoryTimeline';
 import { completeMission, hasCompletedMission, loadTrainingProgress } from '../training/progress';
 import type { IncidentEvidencePoint, IncidentMissionDefinition, IncidentOption } from '../training/types';
 
-type DetailMode = 'processing' | 'raw';
 type CodeFile = { id: string; path: string; language: string; content: string };
 
 const codeFiles: CodeFile[] = [
@@ -88,8 +86,6 @@ export function ApexBadAuthWorkstation({ mission }: { mission: IncidentMissionDe
   const { token, handleApiError } = useOperationsSession();
   const [incidentRun, setIncidentRun] = useState<LabRun | null>(null);
   const [recoveryRun, setRecoveryRun] = useState<LabRun | null>(null);
-  const [selectedEvidenceId, setSelectedEvidenceId] = useState(mission.evidencePoints[0]?.id ?? '');
-  const [detailMode, setDetailMode] = useState<DetailMode>('processing');
   const [activeFileId, setActiveFileId] = useState(codeFiles[0].id);
   const [diagnosisId, setDiagnosisId] = useState<string | null>(null);
   const [planId, setPlanId] = useState<string | null>(null);
@@ -101,9 +97,6 @@ export function ApexBadAuthWorkstation({ mission }: { mission: IncidentMissionDe
   const failureDrill = useMemo(() => readRecord(incidentRun?.resultSummary.failureDrill), [incidentRun]);
   const observed = readRecord(failureDrill?.observed);
   const payloadPreview = failureDrill?.payloadPreview ?? {};
-  const selectedEvidence =
-    mission.evidencePoints.find((point) => point.id === selectedEvidenceId)
-    ?? mission.evidencePoints[0];
   const activeFile = codeFiles.find((file) => file.id === activeFileId) ?? codeFiles[0];
   const diagnosisCorrect = diagnosisId === mission.correctDiagnosisId;
   const planCorrect = planId === mission.correctPlanId;
@@ -124,8 +117,6 @@ export function ApexBadAuthWorkstation({ mission }: { mission: IncidentMissionDe
     setDiagnosisId(null);
     setPlanId(null);
     setCompleted(false);
-    setSelectedEvidenceId(mission.evidencePoints[0]?.id ?? '');
-    setDetailMode('processing');
     try {
       let nextRun = await createLabRun(token, {
         scenarioKey: mission.scenarioKey,
@@ -145,8 +136,6 @@ export function ApexBadAuthWorkstation({ mission }: { mission: IncidentMissionDe
         throw new Error('Controlled authentication drill did not reach its expected observed-failure result.');
       }
       setIncidentRun(nextRun);
-      const failedPoint = mission.evidencePoints.find((point) => point.status === 'FAILED');
-      if (failedPoint) setSelectedEvidenceId(failedPoint.id);
     } catch (nextError) {
       handleApiError(nextError);
       setError(nextError instanceof ApiError ? nextError.message : 'The incident drill could not be started.');
@@ -241,14 +230,6 @@ export function ApexBadAuthWorkstation({ mission }: { mission: IncidentMissionDe
               run={incidentRun}
               observed={observed}
               payloadPreview={payloadPreview}
-              selectedEvidence={selectedEvidence}
-              selectedEvidenceId={selectedEvidenceId}
-              detailMode={detailMode}
-              onSelectEvidence={(id) => {
-                setSelectedEvidenceId(id);
-                setDetailMode('processing');
-              }}
-              onDetailMode={setDetailMode}
             />
           }
           code={
@@ -287,94 +268,65 @@ function ConsoleView({
   run,
   observed,
   payloadPreview,
-  selectedEvidence,
-  selectedEvidenceId,
-  detailMode,
-  onSelectEvidence,
-  onDetailMode,
 }: {
   mission: IncidentMissionDefinition;
   run: LabRun;
   observed: Record<string, unknown>;
   payloadPreview: unknown;
-  selectedEvidence: IncidentEvidencePoint | undefined;
-  selectedEvidenceId: string;
-  detailMode: DetailMode;
-  onSelectEvidence: (id: string) => void;
-  onDetailMode: (mode: DetailMode) => void;
 }) {
-  return (
-    <div className="workstation-console" data-testid="workstation-console">
-      <section className="workstation-console-stream">
-        <div className="workstation-pane-heading">
-          <div><span>Integration log</span><strong>{run.businessIdentifier}</strong></div>
-          <small>Sequence stops at the first failed checkpoint.</small>
-        </div>
-        <div className="workstation-log-list">
-          {mission.evidencePoints.map((point, index) => (
-            <button
-              key={point.id}
-              className={'workstation-log-row ' + point.status.toLowerCase().replace('_', '-') + (point.id === selectedEvidenceId ? ' selected' : '')}
-              type="button"
-              onClick={() => onSelectEvidence(point.id)}
-              data-testid={'workstation-log-' + point.id}
-            >
-              <span className="workstation-log-seq">{String(index + 1).padStart(2, '0')}</span>
-              <span className="workstation-log-icon">{statusIcon(point.status)}</span>
-              <span className="workstation-log-copy">
-                <strong>{point.checkpoint}</strong>
-                <small>{point.source}</small>
-              </span>
-              <span className="workstation-log-status">{statusLabel(point.status)}</span>
-            </button>
-          ))}
-        </div>
-        <div className="workstation-stop-banner">
-          <XCircle size={17} />
-          Processing stopped at Partner authentication. Later checkpoints were not reached.
-        </div>
-      </section>
+  const events: TrainingStoryEvent[] = mission.evidencePoints.map((point, index) => {
+    const route = apexInboundRoute(point.id);
+    const failed = point.status === 'FAILED';
+    return {
+      id: point.id,
+      title: point.checkpoint,
+      from: route.from,
+      to: route.to,
+      document: index === 0 ? 'REST / JSON · Apex Load Tender' : 'FreightBridge inbound processing',
+      status: statusLabel(point.status),
+      tone: point.status === 'FAILED' ? 'blocked' : point.status === 'NOT_REACHED' ? 'muted' : 'success',
+      summary: point.observed,
+      explanation: point.meaning,
+      testId: 'workstation-log-' + point.id,
+      logLines: [
+        'level=' + (failed ? 'ERROR' : 'INFO') + '  component=' + route.component,
+        'business_identifier=' + run.businessIdentifier,
+        'checkpoint=' + point.id + '  status=' + point.status,
+        'source="' + point.source + '"',
+        ...(point.id === 'received' ? ['payload_preview=' + JSON.stringify(payloadPreview, null, 2)] : []),
+        ...(failed ? [
+          'error_code=' + String(observed.errorCode ?? 'AUTHENTICATION_ERROR'),
+          'stage=' + String(observed.stage ?? 'AUTHENTICATION'),
+          'category=' + String(observed.category ?? 'AUTHENTICATION_ERROR'),
+        ] : []),
+        'observed="' + point.observed + '"',
+      ],
+    };
+  });
 
-      <aside className="workstation-inspector">
-        <div className="workstation-pane-heading">
-          <div><span>Selected checkpoint</span><strong>{selectedEvidence?.checkpoint ?? 'Choose a log row'}</strong></div>
-        </div>
-        {selectedEvidence && (
-          <>
-            <dl className="workstation-inspector-grid">
-              <div><dt>Status</dt><dd>{statusLabel(selectedEvidence.status)}</dd></div>
-              <div><dt>Boundary</dt><dd>{selectedEvidence.id === 'received' ? 'Apex → FreightBridge' : 'FreightBridge processing'}</dd></div>
-              <div><dt>Protocol</dt><dd>{selectedEvidence.id === 'received' || selectedEvidence.id === 'authentication' ? 'REST / HTTP' : 'Internal'}</dd></div>
-              <div><dt>Document</dt><dd>Apex Load Tender · JSON</dd></div>
-            </dl>
-            <div className="workstation-detail-toggle" role="group" aria-label="Selected checkpoint evidence">
-              <button className={detailMode === 'processing' ? 'active' : ''} type="button" onClick={() => onDetailMode('processing')}>View Processing Details</button>
-              <button className={detailMode === 'raw' ? 'active' : ''} type="button" onClick={() => onDetailMode('raw')}>View Raw Message</button>
-            </div>
-            {detailMode === 'processing' ? (
-              <div className="workstation-processing-detail" data-testid="workstation-processing-detail">
-                <p>{selectedEvidence.observed}</p>
-                <small>{selectedEvidence.meaning}</small>
-                {selectedEvidence.status === 'FAILED' && (
-                  <dl>
-                    <div><dt>Error code</dt><dd>{String(observed.errorCode ?? 'AUTHENTICATION_ERROR')}</dd></div>
-                    <div><dt>Stage</dt><dd>{String(observed.stage ?? 'AUTHENTICATION')}</dd></div>
-                    <div><dt>Category</dt><dd>{String(observed.category ?? 'AUTHENTICATION_ERROR')}</dd></div>
-                  </dl>
-                )}
-              </div>
-            ) : (
-              <div className="workstation-raw" data-testid="workstation-raw-message">
-                <div><FileJson2 size={16} /><span>Sanitized request evidence</span></div>
-                <pre>{JSON.stringify(payloadPreview, null, 2)}</pre>
-                <small>Authentication values are redacted. FreightBridge never exposes partner secrets in training evidence.</small>
-              </div>
-            )}
-          </>
-        )}
-      </aside>
-    </div>
+  return (
+    <TrainingStoryTimeline
+      identifier={run.businessIdentifier}
+      events={events}
+      scenarioTitle="Apex submits a load tender, but FreightBridge cannot trust the request."
+      scenarioBody={mission.partnerMessage?.body ?? mission.symptom}
+      guidance="Start with request arrival. The first red record is where processing actually stops; gray records after it were never reached."
+      testId="workstation-console"
+    >
+      <div className="workstation-stop-banner">
+        <AlertTriangle size={17} />
+        <span>Follow the records in order and identify the first boundary that failed before choosing a diagnosis.</span>
+      </div>
+    </TrainingStoryTimeline>
   );
+}
+
+function apexInboundRoute(id: string): { from: string; to: string; component: string } {
+  if (id === 'received') return { from: 'Apex Logistics', to: 'FreightBridge API', component: 'inbound.apex' };
+  if (id === 'authentication') return { from: 'FreightBridge API', to: 'Partner Authentication', component: 'auth.partner' };
+  if (id === 'json' || id === 'parsing') return { from: 'Partner Authentication', to: 'JSON Parser', component: 'inbound.json' };
+  if (id === 'validation') return { from: 'JSON Parser', to: 'Contract Validation', component: 'validation.apex' };
+  return { from: 'FreightBridge', to: 'Canonical Shipment', component: 'domain.shipment' };
 }
 
 function CodeView({
@@ -592,12 +544,6 @@ function readRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
-}
-
-function statusIcon(status: IncidentEvidencePoint['status']) {
-  if (status === 'SUCCEEDED') return <CheckCircle2 size={17} />;
-  if (status === 'FAILED') return <XCircle size={17} />;
-  return <Circle size={17} />;
 }
 
 function statusLabel(status: IncidentEvidencePoint['status']) {

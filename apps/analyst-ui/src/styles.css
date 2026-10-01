@@ -5924,6 +5924,94 @@ input:disabled {
   }
 }
 
+
+/* Shared training story consoles */
+.training-story-console {
+  position: relative;
+  min-height: 31rem;
+  background: #182227;
+}
+.training-story-context {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: .75rem;
+  align-items: flex-start;
+  padding: .9rem 1rem;
+  border-bottom: 1px solid #304047;
+  color: #b7c6ca;
+  background: #1d292e;
+}
+.training-story-context-icon {
+  width: 2.2rem;
+  height: 2.2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: #9fc9c7;
+  background: #26383d;
+}
+.training-story-context > div:last-child {
+  min-width: 0;
+  display: grid;
+  gap: .25rem;
+}
+.training-story-context span {
+  color: #81959b;
+  font-size: .65rem;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.training-story-context strong {
+  color: #eff5f6;
+  font-size: .9rem;
+}
+.training-story-context p,
+.training-story-context small {
+  margin: 0;
+  color: #aebec2;
+  font-size: .78rem;
+  line-height: 1.52;
+}
+.training-story-context small {
+  color: #879ba1;
+}
+.replay-story-row.muted {
+  opacity: .68;
+  background: #1a2429;
+}
+.replay-story-row.muted:hover,
+.replay-story-row.muted:focus-visible {
+  opacity: .9;
+  background: #202d33;
+  box-shadow: inset 3px 0 #61747b;
+}
+.replay-story-row.muted .replay-story-number {
+  border-color: #485a61;
+  color: #879a9f;
+  background: #202b30;
+}
+.replay-story-status.muted {
+  border-color: #46575e;
+  color: #889ba0;
+  background: #202b30;
+}
+.training-story-console .guided-evidence-sources,
+.training-story-console .guided-console-support,
+.training-story-console .independent-no-hints,
+.training-story-console .final-shift-no-hints,
+.training-story-console .workstation-stop-banner {
+  border-top: 1px solid #304047;
+}
+@media (max-width: 760px) {
+  .training-story-context {
+    grid-template-columns: 1fr;
+  }
+  .training-story-context-icon {
+    display: none;
+  }
+}
+
 /* === End Milestone 49 === */
 
 

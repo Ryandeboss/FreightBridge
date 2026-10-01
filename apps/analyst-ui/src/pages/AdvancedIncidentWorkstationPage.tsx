@@ -3,9 +3,7 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
-  Circle,
   FileCode2,
-  FileJson2,
   Play,
   Server,
   ShieldCheck,
@@ -17,10 +15,9 @@ import { ApiError } from '../api/client';
 import { createLabRun, recoverLabRun, runNextLabStep, type LabRun } from '../api/lab';
 import { useOperationsSession } from '../auth/OperationsSession';
 import { LabWorkstation } from '../components/training/LabWorkstation';
+import { TrainingStoryTimeline, type TrainingStoryEvent } from '../components/training/TrainingStoryTimeline';
 import { completeMission, hasCompletedMission, loadTrainingProgress } from '../training/progress';
-import type { IncidentEvidencePoint, IncidentEvidenceSource, IncidentMissionDefinition, IncidentOption } from '../training/types';
-
-type DetailMode = 'processing' | 'raw';
+import type { IncidentEvidenceSource, IncidentMissionDefinition, IncidentOption } from '../training/types';
 
 type VersionDraft = {
   isa12: string;
@@ -40,8 +37,6 @@ export function AdvancedIncidentWorkstation({ mission }: { mission: IncidentMiss
   const alreadyCompleted = hasCompletedMission(loadTrainingProgress(), mission.id);
   const [incidentRun, setIncidentRun] = useState<LabRun | null>(null);
   const [recoveryRun, setRecoveryRun] = useState<LabRun | null>(null);
-  const [selectedEvidenceId, setSelectedEvidenceId] = useState(mission.evidencePoints[0]?.id ?? '');
-  const [detailMode, setDetailMode] = useState<DetailMode>('processing');
   const [inspectedEvidenceIds, setInspectedEvidenceIds] = useState<string[]>([]);
   const [lastHealthyId, setLastHealthyId] = useState<string | null>(null);
   const [diagnosisId, setDiagnosisId] = useState<string | null>(null);
@@ -60,8 +55,6 @@ export function AdvancedIncidentWorkstation({ mission }: { mission: IncidentMiss
   const observed = record(failureDrill?.observed);
   const payloadPreview = record(failureDrill?.payloadPreview);
   const recovery = record(recoveryRun?.resultSummary.recovery);
-  const selectedEvidence =
-    mission.evidencePoints.find((point) => point.id === selectedEvidenceId) ?? mission.evidencePoints[0];
 
   const requiredEvidenceInspected = (mission.requiredEvidenceSourceIds ?? [])
     .every((id) => inspectedEvidenceIds.includes(id));
@@ -90,8 +83,6 @@ export function AdvancedIncidentWorkstation({ mission }: { mission: IncidentMiss
     setDiagnosisId(null);
     setStatusUpdate('');
     setCompleted(false);
-    setSelectedEvidenceId(mission.evidencePoints[0]?.id ?? '');
-    setDetailMode('processing');
     setActiveFileId('received');
     setVersionDraft({ isa12: '00501', gs08: '005010' });
     setSftpDraft({ hostKeyMode: 'temporary-invalid-fingerprint', replayBusinessMessage: false });
@@ -115,8 +106,6 @@ export function AdvancedIncidentWorkstation({ mission }: { mission: IncidentMiss
         throw new Error('Controlled advanced incident did not reach its expected observed-failure result.');
       }
       setIncidentRun(nextRun);
-      const failed = mission.evidencePoints.find((point) => point.status === 'FAILED');
-      if (failed) setSelectedEvidenceId(failed.id);
       const preview = record(record(nextRun.resultSummary.failureDrill)?.payloadPreview);
       if (mission.scenarioKey === 'X12_214_WRONG_VERSION') {
         setVersionDraft({
@@ -211,15 +200,7 @@ export function AdvancedIncidentWorkstation({ mission }: { mission: IncidentMiss
               failureDrill={failureDrill}
               observed={observed}
               payloadPreview={payloadPreview}
-              selectedEvidence={selectedEvidence}
-              selectedEvidenceId={selectedEvidenceId}
-              detailMode={detailMode}
               inspectedEvidenceIds={inspectedEvidenceIds}
-              onSelectEvidence={(id) => {
-                setSelectedEvidenceId(id);
-                setDetailMode('processing');
-              }}
-              onDetailMode={setDetailMode}
               onInspectSource={(id) => setInspectedEvidenceIds((current) => current.includes(id) ? current : [...current, id])}
             />
           }
@@ -288,12 +269,7 @@ function AdvancedConsole({
   failureDrill,
   observed,
   payloadPreview,
-  selectedEvidence,
-  selectedEvidenceId,
-  detailMode,
   inspectedEvidenceIds,
-  onSelectEvidence,
-  onDetailMode,
   onInspectSource,
 }: {
   mission: IncidentMissionDefinition;
@@ -301,97 +277,86 @@ function AdvancedConsole({
   failureDrill: Record<string, unknown> | null;
   observed: Record<string, unknown> | null;
   payloadPreview: Record<string, unknown> | null;
-  selectedEvidence: IncidentEvidencePoint | undefined;
-  selectedEvidenceId: string;
-  detailMode: DetailMode;
   inspectedEvidenceIds: string[];
-  onSelectEvidence: (id: string) => void;
-  onDetailMode: (mode: DetailMode) => void;
   onInspectSource: (id: string) => void;
 }) {
   const failed = mission.evidencePoints.find((point) => point.status === 'FAILED');
+  const transportCase = mission.scenarioKey === 'SFTP_HOST_KEY_MISMATCH';
+  const events: TrainingStoryEvent[] = mission.evidencePoints.map((point, index) => ({
+    id: point.id,
+    title: point.checkpoint,
+    from: index === 0
+      ? transportCase ? 'FreightBridge' : 'Midwest Carrier'
+      : mission.evidencePoints[index - 1]?.source ?? 'FreightBridge',
+    to: point.source,
+    document: transportCase ? advancedSftpDocument(point.id) : advancedVersionDocument(point.id),
+    status: point.status === 'NOT_REACHED' ? 'NOT REACHED' : point.status,
+    tone: point.status === 'FAILED' ? 'blocked' : point.status === 'NOT_REACHED' ? 'muted' : 'success',
+    summary: point.observed,
+    explanation: point.meaning,
+    testId: 'advanced-log-' + point.id,
+    logLines: [
+      'level=' + (point.status === 'FAILED' ? 'ERROR' : 'INFO') + '  source="' + point.source + '"',
+      'scenario=' + mission.scenarioKey + '  checkpoint=' + point.id,
+      'business_identifier=' + (transportCase ? '(none - pre-transaction)' : run.businessIdentifier),
+      'status=' + point.status,
+      ...(point.status === 'FAILED' ? [
+        'error_code=' + String(observed?.errorCode ?? 'see_failure_record'),
+        'stage=' + String(observed?.stage ?? 'unknown'),
+        'category=' + String(observed?.category ?? 'unknown'),
+        'evidence=' + raw(payloadPreview ?? failureDrill),
+      ] : []),
+      'observed="' + point.observed + '"',
+    ],
+  }));
+
   return (
-    <div className="workstation-console guided-workstation-console" data-testid="advanced-workstation-console">
-      <section className="workstation-console-stream">
-        <div className="workstation-pane-heading">
-          <div><span>FreightBridge evidence</span><strong>{mission.scenarioKey === 'SFTP_HOST_KEY_MISMATCH' ? 'Pre-transaction transport probe' : run.businessIdentifier}</strong></div>
-          <small>Find the first failed boundary before changing configuration.</small>
-        </div>
-        <div className="workstation-log-list">
-          {mission.evidencePoints.map((point, index) => (
-            <button
-              key={point.id}
-              className={'workstation-log-row ' + point.status.toLowerCase().replace('_', '-') + (point.id === selectedEvidenceId ? ' selected' : '')}
-              type="button"
-              onClick={() => onSelectEvidence(point.id)}
-              data-testid={'advanced-log-' + point.id}
-            >
-              <span className="workstation-log-seq">{String(index + 1).padStart(2, '0')}</span>
-              <span className="workstation-log-icon">{statusIcon(point.status)}</span>
-              <span className="workstation-log-copy"><strong>{point.checkpoint}</strong><small>{point.source}</small></span>
-              <span className="workstation-log-status">{point.status === 'NOT_REACHED' ? 'NOT REACHED' : point.status}</span>
-            </button>
-          ))}
-        </div>
-        <div className="workstation-stop-banner">
-          <XCircle size={17} />
-          <span>Processing stopped at <strong>{failed?.checkpoint}</strong>. Do not “fix” a later layer that was never reached.</span>
-        </div>
+    <TrainingStoryTimeline
+      identifier={transportCase ? 'Pre-transaction transport probe' : run.businessIdentifier}
+      events={events}
+      scenarioTitle={mission.shortTitle}
+      scenarioBody={mission.partnerMessage?.body ?? mission.symptom}
+      guidance={transportCase
+        ? 'This story begins before a business transaction exists. Follow the connection boundary in order and do not invent message-level evidence.'
+        : 'The 214 is already inside FreightBridge. Follow the technical checks in order until the active Midwest profile rejects it.'}
+      testId="advanced-workstation-console"
+    >
+      <div className="workstation-stop-banner">
+        <XCircle size={17} />
+        <span>Processing stopped at <strong>{failed?.checkpoint}</strong>. Do not “fix” a later layer that was never reached.</span>
+      </div>
 
-        <div className="guided-evidence-sources">
-          <div className="workstation-pane-heading">
-            <div><span>Evidence set</span><strong>Inspect the required sources</strong></div>
-          </div>
-          {mission.evidenceSources?.map((source) => (
-            <AdvancedEvidenceSource
-              key={source.id}
-              source={source}
-              run={run}
-              failureDrill={failureDrill}
-              inspected={inspectedEvidenceIds.includes(source.id)}
-              onInspect={() => onInspectSource(source.id)}
-            />
-          ))}
-        </div>
-      </section>
-
-      <aside className="workstation-inspector">
+      <div className="guided-evidence-sources">
         <div className="workstation-pane-heading">
-          <div><span>Selected checkpoint</span><strong>{selectedEvidence?.checkpoint ?? 'Choose evidence'}</strong></div>
+          <div><span>Evidence set</span><strong>Inspect the required sources</strong></div>
         </div>
-        {selectedEvidence && (
-          <>
-            <dl className="workstation-inspector-grid">
-              <div><dt>Status</dt><dd>{selectedEvidence.status}</dd></div>
-              <div><dt>Source</dt><dd>{selectedEvidence.source}</dd></div>
-              <div><dt>Error code</dt><dd>{selectedEvidence.status === 'FAILED' ? String(observed?.errorCode ?? '—') : '—'}</dd></div>
-              <div><dt>Stage</dt><dd>{selectedEvidence.status === 'FAILED' ? String(observed?.stage ?? '—') : '—'}</dd></div>
-            </dl>
-            <div className="workstation-detail-toggle" role="group" aria-label="Selected evidence detail">
-              <button className={detailMode === 'processing' ? 'active' : ''} type="button" onClick={() => onDetailMode('processing')}>
-                View Processing Details
-              </button>
-              <button className={detailMode === 'raw' ? 'active' : ''} type="button" onClick={() => onDetailMode('raw')}>
-                View Raw Message
-              </button>
-            </div>
-            {detailMode === 'processing' ? (
-              <div className="workstation-processing-detail">
-                <p>{selectedEvidence.observed}</p>
-                <small>{selectedEvidence.meaning}</small>
-              </div>
-            ) : (
-              <div className="workstation-raw" data-testid="advanced-raw-evidence">
-                <div><FileJson2 size={16} /><span>FreightBridge-visible evidence</span></div>
-                <pre>{raw(payloadPreview ?? failureDrill)}</pre>
-                <small>Only evidence available to FreightBridge is shown.</small>
-              </div>
-            )}
-          </>
-        )}
-      </aside>
-    </div>
+        {mission.evidenceSources?.map((source) => (
+          <AdvancedEvidenceSource
+            key={source.id}
+            source={source}
+            run={run}
+            failureDrill={failureDrill}
+            inspected={inspectedEvidenceIds.includes(source.id)}
+            onInspect={() => onInspectSource(source.id)}
+          />
+        ))}
+      </div>
+    </TrainingStoryTimeline>
   );
+}
+
+function advancedVersionDocument(pointId: string): string {
+  if (pointId === 'sftp') return 'SFTP · inbound X12 214';
+  if (pointId === 'structure') return 'X12 214 · envelope and controls';
+  if (pointId === 'profile') return 'Midwest 214 · implementation profile';
+  return 'FreightBridge 214 processing';
+}
+
+function advancedSftpDocument(pointId: string): string {
+  if (pointId === 'configuration') return 'SFTP endpoint configuration';
+  if (pointId === 'host-key') return 'SSH host identity verification';
+  if (pointId === 'authentication') return 'SFTP authentication';
+  return 'Integration transaction creation';
 }
 
 function AdvancedEvidenceSource({
@@ -848,12 +813,6 @@ function sourceRaw(
 function directoryValue(recovery: Record<string, unknown> | null, key: string): string {
   const directories = record(recovery?.directories);
   return directories?.[key] === true ? 'READY' : 'NOT READY';
-}
-
-function statusIcon(status: string) {
-  if (status === 'SUCCEEDED') return <CheckCircle2 size={15} />;
-  if (status === 'FAILED') return <XCircle size={15} />;
-  return <Circle size={15} />;
 }
 
 function record(value: unknown): Record<string, unknown> | null {
