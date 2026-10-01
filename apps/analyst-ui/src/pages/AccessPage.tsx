@@ -86,6 +86,7 @@ export function AccessPage() {
           <button
             type="button"
             className={mode === 'signin' ? 'active' : ''}
+            aria-label="Show sign in"
             onClick={() => {
               setMode('signin');
               setMessage(null);
@@ -96,6 +97,7 @@ export function AccessPage() {
           <button
             type="button"
             className={mode === 'register' ? 'active' : ''}
+            aria-label="Show create account"
             onClick={() => {
               setMode('register');
               setMessage(null);
