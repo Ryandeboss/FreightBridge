@@ -17,6 +17,12 @@ def test_protected_public_routes_keep_expected_methods() -> None:
   expected = {
     ('/health', 'GET'),
     ('/readiness', 'GET'),
+    ('/api/account/register', 'POST'),
+    ('/api/account/login', 'POST'),
+    ('/api/account/refresh', 'POST'),
+    ('/api/account/me', 'GET'),
+    ('/api/account/progress', 'GET'),
+    ('/api/account/progress', 'PUT'),
     ('/api/integrations/apex/load-tenders', 'POST'),
     ('/api/integrations/midwest/load-tenders/{shipment_number}/generate', 'POST'),
     ('/api/integrations/midwest/load-tenders/{shipment_number}/dispatch-direct', 'POST'),
