@@ -3820,10 +3820,13 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     await userEvent.click(within(lab).getByRole('tab', { name: /Answer/i }));
     await userEvent.selectOptions(screen.getByLabelText(/Primary failure boundary/i), 'BUSINESS_VALIDATION');
     expect(screen.queryByRole('option', { name: /duplicate/i })).not.toBeInTheDocument();
+    const diagnosisInput = screen.getByLabelText(/Primary diagnosis/i);
+    expect(screen.getByRole('button', { name: /Submit Diagnosis/i })).toBeDisabled();
     await userEvent.type(
-      screen.getByLabelText(/Primary diagnosis/i),
-      'Apex repeated the same load request without idempotent retry identity, so FreightBridge blocked the duplicate business attempt.',
+      diagnosisInput,
+      'FreightBridge already had the shipment, and the second request lacked the retry identity needed to reuse the earlier result.',
     );
+    expect(screen.getByRole('button', { name: /Submit Diagnosis/i })).toBeEnabled();
     await userEvent.click(screen.getByRole('button', { name: /Submit Diagnosis/i }));
     expect(screen.getByTestId('independent-diagnosis-result')).toHaveTextContent(/Diagnosis accepted/i);
     expect(screen.getByRole('button', { name: /Apply Fix & Verify/i })).toBeDisabled();
@@ -3843,10 +3846,11 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(verification).toHaveTextContent(/Duplicate 204 Created/i);
     expect(verification).toHaveTextContent(/NO/i);
 
-    await userEvent.type(
-      screen.getByLabelText(/Incident update to Mike/i),
-      'Mike, Apex retried the same load without safe retry identity, so FreightBridge rejected a duplicate business attempt. I changed the retry to an idempotent replay, reused the existing shipment, and verified that no duplicate 204 was created.',
-    );
+    const incidentUpdate = screen.getByLabelText(/Incident update to Mike/i);
+    expect(screen.getByRole('button', { name: /Complete Independent Investigation/i })).toBeDisabled();
+    await userEvent.type(incidentUpdate, 'Recovered safely.');
+    expect(screen.queryByText(/minimum characters/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Complete Independent Investigation/i })).toBeEnabled();
     await userEvent.click(screen.getByRole('button', { name: /Complete Independent Investigation/i }));
 
     expect(window.localStorage.getItem('freightbridge.independentInvestigationComplete')).toBe('true');
