@@ -5636,6 +5636,7 @@ input:disabled {
 }
 .independent-answer-fields select,
 .independent-answer-fields input,
+.independent-answer-fields textarea,
 .independent-answer textarea,
 .advanced-edit-form input {
   width: 100%;
@@ -5647,8 +5648,19 @@ input:disabled {
   background: #fff;
   font: inherit;
 }
-.independent-answer-fields select {
+.independent-answer-fields select,
+.independent-answer-fields textarea {
   text-align: left;
+}
+.independent-answer-fields textarea {
+  min-height: 6.5rem;
+  resize: vertical;
+  line-height: 1.5;
+}
+.independent-answer-fields label > small {
+  color: #7b8b90;
+  font-size: .68rem;
+  line-height: 1.4;
 }
 .independent-diagnosis-result {
   padding: .65rem .75rem;
