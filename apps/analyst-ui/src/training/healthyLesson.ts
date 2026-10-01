@@ -1,3 +1,5 @@
+import { notifyTrainingStateChanged } from './sync';
+
 export const HEALTHY_LESSON_STORAGE_KEY = 'freightbridge.healthyLesson';
 export const HEALTHY_LESSON_SCENE_COUNT = 5;
 
@@ -37,6 +39,7 @@ export function saveHealthyLessonScene(scene: number): void {
       scene: Math.min(HEALTHY_LESSON_SCENE_COUNT, Math.max(1, Math.round(scene))),
     }),
   );
+  notifyTrainingStateChanged();
 }
 
 export function completeHealthyLesson(): void {
@@ -51,4 +54,5 @@ export function completeHealthyLesson(): void {
       completedAt: current.completedAt ?? new Date().toISOString(),
     }),
   );
+  notifyTrainingStateChanged();
 }
