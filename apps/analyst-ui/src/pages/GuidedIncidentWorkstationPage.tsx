@@ -19,6 +19,7 @@ import { ApiError } from '../api/client';
 import { createLabRun, recoverLabRun, runNextLabStep, type LabRun } from '../api/lab';
 import { useOperationsSession } from '../auth/OperationsSession';
 import { LabWorkstation } from '../components/training/LabWorkstation';
+import { TrainingStoryTimeline, type TrainingStoryEvent } from '../components/training/TrainingStoryTimeline';
 import { AnalystNotes } from '../components/training/TrainingComponents';
 import { completeMission, hasCompletedMission, loadTrainingProgress } from '../training/progress';
 import { trainingMissions } from '../training/missions';
@@ -28,8 +29,6 @@ import type {
   IncidentMissionDefinition,
   IncidentOption,
 } from '../training/types';
-
-type DetailMode = 'processing' | 'raw';
 
 type CodeFile = {
   id: string;
@@ -243,8 +242,6 @@ export function GuidedIncidentWorkstation({ mission }: { mission: IncidentMissio
   const { token, handleApiError } = useOperationsSession();
   const [incidentRun, setIncidentRun] = useState<LabRun | null>(null);
   const [recoveryRun, setRecoveryRun] = useState<LabRun | null>(null);
-  const [selectedEvidenceId, setSelectedEvidenceId] = useState(mission.evidencePoints[0]?.id ?? '');
-  const [detailMode, setDetailMode] = useState<DetailMode>('processing');
   const [activeFileId, setActiveFileId] = useState(() => guidedFiles(mission)[0]?.id ?? '');
   const [lastHealthyId, setLastHealthyId] = useState<string | null>(null);
   const [diagnosisId, setDiagnosisId] = useState<string | null>(null);
@@ -259,9 +256,6 @@ export function GuidedIncidentWorkstation({ mission }: { mission: IncidentMissio
   const failureDrill = useMemo(() => readRecord(incidentRun?.resultSummary.failureDrill), [incidentRun]);
   const observed = readRecord(failureDrill?.observed);
   const payloadPreview = failureDrill?.payloadPreview ?? {};
-  const selectedEvidence =
-    mission.evidencePoints.find((point) => point.id === selectedEvidenceId)
-    ?? mission.evidencePoints[0];
   const files = guidedFiles(mission);
   const activeFile = files.find((file) => file.id === activeFileId) ?? files[0];
   const requiredEvidenceIds = mission.requiredEvidenceSourceIds ?? [];
@@ -297,8 +291,6 @@ export function GuidedIncidentWorkstation({ mission }: { mission: IncidentMissio
     setInspectedEvidenceIds([]);
     setStatusUpdate('');
     setCompleted(false);
-    setSelectedEvidenceId(mission.evidencePoints[0]?.id ?? '');
-    setDetailMode('processing');
     setActiveFileId(files[0]?.id ?? '');
 
     try {
@@ -448,15 +440,7 @@ export function GuidedIncidentWorkstation({ mission }: { mission: IncidentMissio
               failureDrill={failureDrill}
               observed={observed}
               payloadPreview={payloadPreview}
-              selectedEvidence={selectedEvidence}
-              selectedEvidenceId={selectedEvidenceId}
-              detailMode={detailMode}
               inspectedEvidenceIds={inspectedEvidenceIds}
-              onSelectEvidence={(id) => {
-                setSelectedEvidenceId(id);
-                setDetailMode('processing');
-              }}
-              onDetailMode={setDetailMode}
               onInspectSource={(id) => setInspectedEvidenceIds((current) => current.includes(id) ? current : [...current, id])}
             />
           }
@@ -502,12 +486,7 @@ function ConsoleView({
   failureDrill,
   observed,
   payloadPreview,
-  selectedEvidence,
-  selectedEvidenceId,
-  detailMode,
   inspectedEvidenceIds,
-  onSelectEvidence,
-  onDetailMode,
   onInspectSource,
 }: {
   mission: IncidentMissionDefinition;
@@ -515,144 +494,111 @@ function ConsoleView({
   failureDrill: Record<string, unknown> | null;
   observed: Record<string, unknown> | null;
   payloadPreview: unknown;
-  selectedEvidence: IncidentEvidencePoint | undefined;
-  selectedEvidenceId: string;
-  detailMode: DetailMode;
   inspectedEvidenceIds: string[];
-  onSelectEvidence: (id: string) => void;
-  onDetailMode: (mode: DetailMode) => void;
   onInspectSource: (id: string) => void;
 }) {
   const failed = mission.evidencePoints.find((point) => point.status === 'FAILED');
+  const isMidwestFlow = mission.scenarioKey.startsWith('X12_214_');
+  const partnerName = isMidwestFlow ? 'Midwest Carrier' : 'Apex Logistics';
+  const events: TrainingStoryEvent[] = mission.evidencePoints.map((point, index) => ({
+    id: point.id,
+    title: point.checkpoint,
+    from: index === 0 ? partnerName : mission.evidencePoints[index - 1]?.source ?? partnerName,
+    to: point.source,
+    document: guidedDocumentLabel(mission.scenarioKey, point.id),
+    status: point.status === 'NOT_REACHED' ? 'NOT REACHED' : point.status,
+    tone: point.status === 'FAILED' ? 'blocked' : point.status === 'NOT_REACHED' ? 'muted' : 'success',
+    summary: point.observed,
+    explanation: point.meaning,
+    testId: 'workstation-log-' + point.id,
+    logLines: [
+      'level=' + (point.status === 'FAILED' ? 'ERROR' : 'INFO') + '  source="' + point.source + '"',
+      'business_identifier=' + run.businessIdentifier,
+      'scenario=' + mission.scenarioKey + '  checkpoint=' + point.id,
+      'status=' + point.status,
+      ...(point.status === 'FAILED' ? [
+        'error_code=' + String(observed?.errorCode ?? 'see_failure_record'),
+        'stage=' + String(observed?.stage ?? 'unknown'),
+        'category=' + String(observed?.category ?? 'unknown'),
+        'payload_preview=' + rawText(payloadPreview),
+      ] : []),
+      'observed="' + point.observed + '"',
+    ],
+  }));
+
   return (
-    <div className="workstation-console guided-workstation-console" data-testid="workstation-console">
-      <section className="workstation-console-stream">
-        <div className="workstation-pane-heading">
-          <div><span>FreightBridge integration log</span><strong>{run.businessIdentifier}</strong></div>
-          <small>Read top to bottom. Later steps are not reached after the first failure.</small>
-        </div>
-        <div className="workstation-log-list">
-          {mission.evidencePoints.map((point, index) => (
-            <article
-              key={point.id}
-              className={'guided-log-record ' + point.status.toLowerCase().replace('_', '-')}
-            >
-              <button
-                className={'workstation-log-row ' + point.status.toLowerCase().replace('_', '-') + (point.id === selectedEvidenceId ? ' selected' : '')}
-                type="button"
-                onClick={() => onSelectEvidence(point.id)}
-                data-testid={'workstation-log-' + point.id}
-              >
-                <span className="workstation-log-seq">{String(index + 1).padStart(2, '0')}</span>
-                <span className="workstation-log-icon">{statusIcon(point.status)}</span>
-                <span className="workstation-log-copy">
-                  <h3>{point.checkpoint}</h3>
-                  <small>{point.source}</small>
-                </span>
-                <span className="workstation-log-status">{statusLabel(point.status)}</span>
-              </button>
-            </article>
-          ))}
-        </div>
-        <div className="workstation-stop-banner">
-          <XCircle size={17} />
-          <span>
-            Processing stopped at <strong>{failed?.checkpoint ?? 'the first failed checkpoint'}</strong>.
-            {' '}Later checkpoints were not reached.
-          </span>
-        </div>
+    <TrainingStoryTimeline
+      identifier={run.businessIdentifier}
+      events={events}
+      scenarioTitle={mission.shortTitle}
+      scenarioBody={mission.partnerMessage?.body ?? mission.symptom}
+      guidance="Read the integration path in order. The first red event is the first failed boundary; gray events after it were never reached."
+      testId="workstation-console"
+    >
+      <div className="workstation-stop-banner">
+        <XCircle size={17} />
+        <span>
+          Processing stopped at <strong>{failed?.checkpoint ?? 'the first failed checkpoint'}</strong>.
+          {' '}Later checkpoints were not reached.
+        </span>
+      </div>
 
-        {mission.evidenceSources && (
-          <div className="guided-evidence-sources">
-            {(mission.requiredEvidenceSourceIds?.length ?? 0) > 0
-              && !(mission.requiredEvidenceSourceIds ?? []).every((id) => inspectedEvidenceIds.includes(id))
-              && (
-                <div className="workstation-answer-hint" data-testid="diagnosis-gate">
-                  <AlertTriangle size={18} />
-                  <p>Inspect the required evidence in Console before choosing the root cause.</p>
-                </div>
-              )}
-            <div className="workstation-pane-heading">
-              <div><span>Guided evidence</span><strong>Open the sources the mission asks you to compare</strong></div>
-            </div>
-            {mission.evidenceSources.map((source) => (
-              <EvidenceSource
-                key={source.id}
-                source={source}
-                run={run}
-                failureDrill={failureDrill}
-                inspected={inspectedEvidenceIds.includes(source.id)}
-                onInspect={() => onInspectSource(source.id)}
-              />
-            ))}
-          </div>
-        )}
-
-        {(mission.scenarioKey === 'APEX_INVALID_CONTRACT' || mission.scenarioKey === 'X12_214_UNSUPPORTED_STATUS') && (
-          <FailureBoundaryClassifier mission={mission} observed={observed} />
-        )}
-
-        {(mission.scenarioKey === 'APEX_INVALID_CONTRACT' || mission.scenarioKey === 'X12_214_UNSUPPORTED_STATUS') && (
-          <ContextualToolbox mission={mission} run={run} observed={observed} />
-        )}
-
-        <section className="guided-console-support">
-          <div className="guided-answer-hints">
-            {mission.hints.map((hint) => (
-              <details key={hint.id}>
-                <summary>{hint.label}</summary>
-                <p>{hint.body}</p>
-              </details>
-            ))}
-          </div>
-          <AnalystNotes storageKey={'freightbridge.trainingNotes.' + mission.id} />
-        </section>
-      </section>
-
-      <aside className="workstation-inspector">
-        <div className="workstation-pane-heading">
-          <div><span>Selected checkpoint</span><strong>{selectedEvidence?.checkpoint ?? 'Choose a log row'}</strong></div>
-        </div>
-        {selectedEvidence && (
-          <>
-            <dl className="workstation-inspector-grid">
-              <div><dt>Status</dt><dd>{statusLabel(selectedEvidence.status)}</dd></div>
-              <div><dt>Source</dt><dd>{selectedEvidence.source}</dd></div>
-              <div><dt>Error code</dt><dd>{selectedEvidence.status === 'FAILED' ? String(observed?.errorCode ?? 'See failure evidence') : '—'}</dd></div>
-              <div><dt>Stage</dt><dd>{selectedEvidence.status === 'FAILED' ? String(observed?.stage ?? 'See failure evidence') : '—'}</dd></div>
-            </dl>
-            <div className="workstation-detail-toggle" role="group" aria-label="Selected checkpoint evidence">
-              <button className={detailMode === 'processing' ? 'active' : ''} type="button" onClick={() => onDetailMode('processing')}>
-                View Processing Details
-              </button>
-              <button className={detailMode === 'raw' ? 'active' : ''} type="button" onClick={() => onDetailMode('raw')}>
-                View Raw Message
-              </button>
-            </div>
-            {detailMode === 'processing' ? (
-              <div className="workstation-processing-detail" data-testid="workstation-processing-detail">
-                <p>{selectedEvidence.observed}</p>
-                <small>{selectedEvidence.meaning}</small>
-                {selectedEvidence.status === 'FAILED' && (
-                  <dl>
-                    <div><dt>Error code</dt><dd>{String(observed?.errorCode ?? 'Unknown')}</dd></div>
-                    <div><dt>Stage</dt><dd>{String(observed?.stage ?? 'Unknown')}</dd></div>
-                    <div><dt>Category</dt><dd>{String(observed?.category ?? 'Unknown')}</dd></div>
-                  </dl>
-                )}
-              </div>
-            ) : (
-              <div className="workstation-raw" data-testid="workstation-raw-message">
-                <div><FileJson2 size={16} /><span>FreightBridge-visible evidence</span></div>
-                <pre>{rawText(payloadPreview)}</pre>
-                <small>Only evidence available to FreightBridge is shown; external partner internal logs are not inferred.</small>
+      {mission.evidenceSources && (
+        <div className="guided-evidence-sources">
+          {(mission.requiredEvidenceSourceIds?.length ?? 0) > 0
+            && !(mission.requiredEvidenceSourceIds ?? []).every((id) => inspectedEvidenceIds.includes(id))
+            && (
+              <div className="workstation-answer-hint" data-testid="diagnosis-gate">
+                <AlertTriangle size={18} />
+                <p>Inspect the required evidence in Console before choosing the root cause.</p>
               </div>
             )}
-          </>
-        )}
-      </aside>
-    </div>
+          <div className="workstation-pane-heading">
+            <div><span>Guided evidence</span><strong>Open the sources the mission asks you to compare</strong></div>
+          </div>
+          {mission.evidenceSources.map((source) => (
+            <EvidenceSource
+              key={source.id}
+              source={source}
+              run={run}
+              failureDrill={failureDrill}
+              inspected={inspectedEvidenceIds.includes(source.id)}
+              onInspect={() => onInspectSource(source.id)}
+            />
+          ))}
+        </div>
+      )}
+
+      {(mission.scenarioKey === 'APEX_INVALID_CONTRACT' || mission.scenarioKey === 'X12_214_UNSUPPORTED_STATUS') && (
+        <FailureBoundaryClassifier mission={mission} observed={observed} />
+      )}
+
+      {(mission.scenarioKey === 'APEX_INVALID_CONTRACT' || mission.scenarioKey === 'X12_214_UNSUPPORTED_STATUS') && (
+        <ContextualToolbox mission={mission} run={run} observed={observed} />
+      )}
+
+      <section className="guided-console-support">
+        <div className="guided-answer-hints">
+          {mission.hints.map((hint) => (
+            <details key={hint.id}>
+              <summary>{hint.label}</summary>
+              <p>{hint.body}</p>
+            </details>
+          ))}
+        </div>
+        <AnalystNotes storageKey={'freightbridge.trainingNotes.' + mission.id} />
+      </section>
+    </TrainingStoryTimeline>
   );
+}
+
+function guidedDocumentLabel(scenarioKey: string, pointId: string): string {
+  if (scenarioKey === 'APEX_INVALID_JSON') return pointId === 'received' ? 'REST / JSON · Apex Load Tender' : 'Inbound JSON processing';
+  if (scenarioKey === 'APEX_INVALID_CONTRACT') return pointId === 'validation' ? 'Apex contract validation' : 'REST / JSON · Apex Load Tender';
+  if (scenarioKey === 'APEX_DUPLICATE_SHIPMENT') return pointId === 'downstream' ? 'X12 204 · prevented duplicate' : 'REST / JSON · Apex Load Tender retry';
+  if (scenarioKey === 'X12_214_CONTROL_MISMATCH') return pointId === 'sftp' ? 'SFTP · X12 214 file' : 'X12 214 transaction processing';
+  if (scenarioKey === 'X12_214_UNSUPPORTED_STATUS') return pointId === 'mapping' ? 'AT7 status mapping' : 'X12 214 shipment status';
+  return 'FreightBridge integration evidence';
 }
 
 function EvidenceSource({
