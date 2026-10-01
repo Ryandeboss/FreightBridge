@@ -1,5 +1,4 @@
 import {
-  Activity,
   ArrowRight,
   Award,
   CheckCircle2,
