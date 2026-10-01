@@ -3572,8 +3572,12 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(await screen.findByTestId('incident-debrief')).toHaveTextContent(/profile compatibility/i);
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('WRONG_X12_VERSION');
 
-    await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
-    expect(await screen.findByTestId('mission-9-card')).toHaveTextContent(/Open Mission/i);
+    expect(screen.getByTestId('curriculum-module-advanced')).toHaveTextContent(/1 of 3 labs/i);
+    const continueToMission9 = screen.getByRole('link', { name: /Continue to Mission 9/i });
+    expect(continueToMission9).toHaveAttribute('href', '#/learn/mission/sftp-stops-working');
+    await userEvent.click(continueToMission9);
+    await waitFor(() => expect(window.location.hash).toBe('#/learn/mission/sftp-stops-working'));
+    expect(await screen.findByRole('heading', { name: /Midwest SFTP Suddenly Stops Working/i })).toBeInTheDocument();
   }, 10000);
 
   test('Mission 9 requires a safe interactive SFTP trust fix before readiness verification', async () => {
@@ -3649,8 +3653,13 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(await screen.findByTestId('incident-debrief')).toHaveTextContent(/host-key mismatch/i);
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('SFTP_STOPS_WORKING');
 
-    await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
-    expect(await screen.findByTestId('mission-10-card')).toHaveTextContent(/Locked/i);
+    expect(screen.getByTestId('curriculum-module-advanced')).toHaveTextContent(/2 of 3 labs/i);
+    const continueToReplayLab = screen.getByRole('link', { name: /Continue to Replay & Sequence Lab/i });
+    expect(continueToReplayLab).toHaveAttribute('href', '#/learn/practice/replay-sequence');
+    await userEvent.click(continueToReplayLab);
+    await waitFor(() => expect(window.location.hash).toBe('#/learn/practice/replay-sequence'));
+    expect(await screen.findByTestId('replay-sequence-practice-page')).toBeInTheDocument();
+    expect(screen.getByTestId('curriculum-module-advanced')).toHaveTextContent(/2 of 3 labs/i);
   }, 10000);
 
   test('runs replay and sequence practice through the advanced workstation policy editor', async () => {
