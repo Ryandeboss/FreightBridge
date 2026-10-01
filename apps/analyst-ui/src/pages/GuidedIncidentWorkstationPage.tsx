@@ -30,6 +30,8 @@ import type {
 } from '../training/types';
 
 type DetailMode = 'processing' | 'raw';
+
+const GUIDED_STATUS_UPDATE_MIN_CHARS = 40;
 type CodeFile = {
   id: string;
   path: string;
@@ -785,6 +787,9 @@ function AnswerView({
   const lastHealthyCorrect = lastHealthyId === mission.correctLastHealthyId;
   const diagnosisCorrect = diagnosisId === mission.correctDiagnosisId;
   const planCorrect = planId === mission.correctPlanId;
+  const statusUpdateLength = statusUpdate.trim().length;
+  const statusUpdateReady = statusUpdateLength >= GUIDED_STATUS_UPDATE_MIN_CHARS;
+  const statusUpdateProgressId = 'guided-status-update-progress-' + mission.id;
 
   return (
     <div className="workstation-answer guided-workstation-answer" data-testid="workstation-answer">
@@ -859,7 +864,17 @@ function AnswerView({
             value={statusUpdate}
             onChange={(event) => onStatusUpdate(event.target.value)}
             placeholder={mission.statusPrompt}
+            aria-describedby={statusUpdateProgressId}
           />
+          <small
+            id={statusUpdateProgressId}
+            className={'guided-status-update-progress ' + (statusUpdateReady ? 'ready' : '')}
+            data-testid="status-update-progress"
+          >
+            {statusUpdateReady
+              ? `Minimum reached · ${statusUpdateLength} characters`
+              : `${statusUpdateLength} / ${GUIDED_STATUS_UPDATE_MIN_CHARS} characters · ${GUIDED_STATUS_UPDATE_MIN_CHARS - statusUpdateLength} more needed`}
+          </small>
         </label>
       )}
 
@@ -867,7 +882,7 @@ function AnswerView({
         className="secondary-button"
         type="button"
         onClick={onComplete}
-        disabled={!verified || statusUpdate.trim().length < 40 || completed}
+        disabled={!verified || !statusUpdateReady || completed}
       >
         <CheckCircle2 size={16} />
         {completed ? 'Debrief Complete' : 'Complete Debrief'}
