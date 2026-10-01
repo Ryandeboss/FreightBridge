@@ -195,7 +195,7 @@ export function OperationsSessionProvider({ children }: { children: ReactNode })
   const handleApiError = useCallback(
     (error: unknown) => {
       if (error instanceof ApiError && error.status === 401) {
-        lock('Your session expired or was rejected. Sign in again to continue.');
+        lock('Your session expired or the token was rejected. Sign in again to continue.');
       }
     },
     [lock],
