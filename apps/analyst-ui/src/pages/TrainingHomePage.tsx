@@ -7,6 +7,7 @@ import {
   Code2,
   Repeat2,
   Route,
+  Search,
   Workflow,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -25,7 +26,7 @@ import {
   isHealthyApexTenderComplete,
   isHealthyShipmentStatusComplete,
 } from '../training/healthyWalkthrough';
-import { isReplaySequencePracticeComplete } from '../training/advancedPractice';
+import { isIndependentInvestigationComplete, isReplaySequencePracticeComplete } from '../training/advancedPractice';
 import { isFirstDayOrientationComplete } from '../training/orientation';
 import { isEdiBootcampComplete } from '../training/ediBootcamp';
 import { hasCompletedMission, loadTrainingProgress } from '../training/progress';
@@ -36,9 +37,11 @@ export function TrainingHomePage() {
   const orientationStoredComplete = isFirstDayOrientationComplete();
   const mission9Complete = hasCompletedMission(progress, SFTP_STOPS_WORKING_MISSION_ID);
   const replaySequenceComplete = isReplaySequencePracticeComplete();
+  const finalMissionComplete = hasCompletedMission(progress, PRODUCTION_INCIDENT_MISSION_ID);
+  const independentComplete = isIndependentInvestigationComplete() || finalMissionComplete;
   const trainingComplete =
     completedCount >= PLANNED_MISSION_COUNT &&
-    hasCompletedMission(progress, PRODUCTION_INCIDENT_MISSION_ID);
+    finalMissionComplete;
   const healthyPart1Complete = isHealthyApexTenderComplete();
   const healthyPart4Complete = isHealthyShipmentStatusComplete();
   const downstreamProgress = healthyPart1Complete || completedCount > 0;
@@ -120,6 +123,10 @@ export function TrainingHomePage() {
                   mission9Complete && !replaySequenceComplete ? (
                     <Link className="primary-button" to="/learn/practice/replay-sequence">
                       Advanced Replay & Sequence Practice<ArrowRight size={16} />
+                    </Link>
+                  ) : replaySequenceComplete && !independentComplete ? (
+                    <Link className="primary-button" to="/learn/practice/independent-investigation">
+                      Independent Investigation<ArrowRight size={16} />
                     </Link>
                   ) : (
                     <Link className="primary-button" to={`/learn/mission/${currentMission.slug}`}>
@@ -210,12 +217,24 @@ export function TrainingHomePage() {
             <>
               <Link className="ops-inbox-item active" to="/learn/practice/replay-sequence">
                 <span className="ops-inbox-icon"><Repeat2 size={18} /></span>
-                <span><small>Advanced Practice</small><strong>Replay & Sequence Clinic</strong><span>Prove the difference between duplicate business attempts, exact X12 replay, and late shipment events before the final shift.</span></span>
+                <span><small>Advanced Practice</small><strong>Replay & Sequence Clinic</strong><span>Prove the difference between duplicate business attempts, exact X12 replay, and late shipment events before independent investigation.</span></span>
                 <ArrowRight size={16} />
               </Link>
               <Link className="ops-inbox-item muted" to={`/learn/mission/${currentMission.slug}`}>
                 <span className="ops-inbox-icon"><CheckCircle2 size={18} /></span>
-                <span><small>Incident Queue</small><strong>Mission 9 complete</strong><span>Your final-shift prep is now the replay and sequencing clinic.</span></span>
+                <span><small>Incident Queue</small><strong>Mission 9 complete</strong><span>Your next step is the replay and sequencing policy clinic.</span></span>
+              </Link>
+            </>
+          ) : replaySequenceComplete && !independentComplete ? (
+            <>
+              <Link className="ops-inbox-item active" to="/learn/practice/independent-investigation">
+                <span className="ops-inbox-icon"><Search size={18} /></span>
+                <span><small>Module 06 · Independent</small><strong>Independent Investigation</strong><span>Choose your own evidence path, diagnose the retry failure, configure a safe correction, and prove recovery without a hint ladder.</span></span>
+                <ArrowRight size={16} />
+              </Link>
+              <Link className="ops-inbox-item muted" to="/learn/practice/replay-sequence">
+                <span className="ops-inbox-icon"><CheckCircle2 size={18} /></span>
+                <span><small>Completed</small><strong>Advanced Incidents complete</strong><span>The Final Shift unlocks after one independent case.</span></span>
               </Link>
             </>
           ) : (
@@ -311,6 +330,20 @@ export function TrainingHomePage() {
         </article>
       )}
 
+      {replaySequenceComplete && (
+        <article className="panel healthy-home-card independent-practice-home-card" data-testid="independent-practice-home-card">
+          <div>
+            <p className="eyebrow">Module 06 · Independent investigation</p>
+            <h2>Work a case without the guided path</h2>
+            <p>Use Console, Code, and Answer without required evidence clicks, checkpoint prompts, or hints. Your result must prove a safe idempotent recovery before Final Shift unlocks.</p>
+          </div>
+          <Link className={independentComplete ? 'secondary-button' : 'primary-button'} to="/learn/practice/independent-investigation">
+            <Search size={16} />
+            {independentComplete ? 'Review Independent Investigation' : 'Start Independent Investigation'}
+          </Link>
+        </article>
+      )}
+
       <section className="ops-partner-section" aria-labelledby="ops-partner-heading">
         <div className="ops-section-heading">
           <div><p className="eyebrow">The job in one picture</p><h2 id="ops-partner-heading">Apex → FreightBridge → Midwest</h2></div>
@@ -366,7 +399,11 @@ export function TrainingHomePage() {
 }
 
 function isMissionUnlocked(missionId: string, progress: ReturnType<typeof loadTrainingProgress>): boolean {
-  if (missionId === PRODUCTION_INCIDENT_MISSION_ID && !isReplaySequencePracticeComplete()) return false;
+  if (
+    missionId === PRODUCTION_INCIDENT_MISSION_ID
+    && !isIndependentInvestigationComplete()
+    && !hasCompletedMission(progress, PRODUCTION_INCIDENT_MISSION_ID)
+  ) return false;
   const mission = trainingMissions.find((candidate) => candidate.id === missionId);
   if (!mission?.unlocksAfter) return true;
   return hasCompletedMission(progress, mission.unlocksAfter);
