@@ -63,11 +63,11 @@ export function IncidentMissionPage() {
   }
 
   if (mission.missionNumber >= 3 && mission.missionNumber <= 7) {
-    return <GuidedIncidentWorkstation mission={mission} />;
+    return <GuidedIncidentWorkstation key={mission.id} mission={mission} />;
   }
 
   if (mission.missionNumber >= 8 && mission.missionNumber <= 9) {
-    return <AdvancedIncidentWorkstation mission={mission} />;
+    return <AdvancedIncidentWorkstation key={mission.id} mission={mission} />;
   }
 
   return <IncidentMission mission={mission} />;
