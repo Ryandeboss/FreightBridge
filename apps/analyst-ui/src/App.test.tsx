@@ -3564,11 +3564,11 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(verification).toHaveTextContent(/Apex-Facing Evidence/i);
     expect(verification).toHaveTextContent(/PRESENT/i);
 
-    await userEvent.type(
-      screen.getByLabelText(/Write Mike/i),
-      'Mike, the 214 was structurally valid but used ISA12 00501 and GS08 005010. I changed the controlled training profile values to 00401 and 004010, and the same-load recovery restored Apex-facing evidence.',
-    );
-    await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
+    expect(screen.getByText(/Write Mike a concise incident update/i)).toHaveTextContent(/optional/i);
+    const mission8CompleteDebrief = screen.getByRole('button', { name: /Complete Debrief/i });
+    expect(screen.getByLabelText(/Write Mike/i)).toHaveValue('');
+    expect(mission8CompleteDebrief).toBeEnabled();
+    await userEvent.click(mission8CompleteDebrief);
     expect(await screen.findByTestId('incident-debrief')).toHaveTextContent(/profile compatibility/i);
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('WRONG_X12_VERSION');
 
@@ -3641,11 +3641,11 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(verification).toHaveTextContent(/READY/i);
     expect(screen.queryByTestId('recovery-correlation')).not.toBeInTheDocument();
 
-    await userEvent.type(
-      screen.getByLabelText(/Write Mike/i),
-      'Mike, host-key verification failed before transaction creation. I restored the verified configured Midwest host identity, kept business replay disabled, and readiness confirmed the trusted SFTP connection and required directories.',
-    );
-    await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
+    expect(screen.getByText(/Write Mike a concise incident update/i)).toHaveTextContent(/optional/i);
+    const mission9CompleteDebrief = screen.getByRole('button', { name: /Complete Debrief/i });
+    expect(screen.getByLabelText(/Write Mike/i)).toHaveValue('');
+    expect(mission9CompleteDebrief).toBeEnabled();
+    await userEvent.click(mission9CompleteDebrief);
     expect(await screen.findByTestId('incident-debrief')).toHaveTextContent(/host-key mismatch/i);
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('SFTP_STOPS_WORKING');
 
