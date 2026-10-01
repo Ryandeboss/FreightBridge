@@ -16,7 +16,7 @@ export class ApiError extends Error {
 }
 
 type RequestOptions = {
-  method?: 'GET' | 'POST' | 'PATCH';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH';
   token?: string;
   query?: Record<string, QueryValue>;
   body?: unknown;
