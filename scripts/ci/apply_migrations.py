@@ -16,10 +16,10 @@ def main() -> int:
     return 2
 
   files = sorted(MIGRATIONS.glob('*.sql'))
-  expected_numbers = [f'{number:03d}' for number in range(1, 12)]
+  expected_numbers = [f'{number:03d}' for number in range(1, 13)]
   actual_numbers = [path.name.split('_', 1)[1].split('_', 1)[0] for path in files]
   if actual_numbers != expected_numbers:
-    print(f'Expected migrations 001-011, found {actual_numbers}.', file=sys.stderr)
+    print(f'Expected migrations 001-012, found {actual_numbers}.', file=sys.stderr)
     return 1
 
   with psycopg.connect(database_url, autocommit=True) as connection:
