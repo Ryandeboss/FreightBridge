@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import App from './App';
-import { OPERATIONS_TOKEN_STORAGE_KEY } from './auth/storage';
+import { ACCOUNT_SESSION_STORAGE_KEY, OPERATIONS_TOKEN_STORAGE_KEY } from './auth/storage';
 import { TRAINING_PROGRESS_STORAGE_KEY } from './training/progress';
 
 const token = 'runtime-token';
@@ -1419,9 +1419,14 @@ function installFetchMock(options: {
   readiness?: Record<string, unknown>;
   initialLabRun?: Record<string, unknown>;
   failNextLabStep?: boolean;
+  accountProgress?: Record<string, string>;
+  accountProgressUpdatedAt?: string | null;
+  rejectAccountLogin?: boolean;
 } = {}) {
   let currentDraftMapping: Record<string, unknown> = draftMapping;
   let currentLabRun: Record<string, unknown> = options.initialLabRun ?? labRun;
+  let currentAccountProgress: Record<string, string> = options.accountProgress ?? {};
+  let accountProgressUpdatedAt: string | null = options.accountProgressUpdatedAt ?? null;
   const readiness = options.readiness ?? {
     status: 'ready',
     dependencies: {
@@ -1629,6 +1634,71 @@ function installFetchMock(options: {
     const auth = init?.headers instanceof Headers
       ? init.headers.get('Authorization')
       : (init?.headers as Record<string, string> | undefined)?.Authorization;
+
+    if (path === '/api/account/login' && init?.method === 'POST') {
+      if (options.rejectAccountLogin) {
+        return jsonResponse(
+          { detail: { error: { code: 'invalid_credentials', message: 'Invalid login credentials' } } },
+          400,
+        );
+      }
+      return jsonResponse({
+        accessToken: token,
+        refreshToken: 'refresh-token',
+        expiresIn: 3600,
+        expiresAt: 2000000000,
+        tokenType: 'bearer',
+        user: { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', email: 'learner@example.com' },
+      });
+    }
+
+    if (path === '/api/account/register' && init?.method === 'POST') {
+      return jsonResponse({
+        status: 'SIGNED_IN',
+        email: 'learner@example.com',
+        session: {
+          accessToken: token,
+          refreshToken: 'refresh-token',
+          expiresIn: 3600,
+          expiresAt: 2000000000,
+          tokenType: 'bearer',
+          user: { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', email: 'learner@example.com' },
+        },
+      });
+    }
+
+    if (path === '/api/account/refresh' && init?.method === 'POST') {
+      return jsonResponse({
+        accessToken: token,
+        refreshToken: 'refresh-token-2',
+        expiresIn: 3600,
+        expiresAt: 2000003600,
+        tokenType: 'bearer',
+        user: { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', email: 'learner@example.com' },
+      });
+    }
+
+    if (path === '/api/account/me') {
+      if (auth !== `Bearer ${token}`) {
+        return jsonResponse({ detail: { error: { code: 'AUTHENTICATION_ERROR', message: 'Sign in to continue.' } } }, 401);
+      }
+      return jsonResponse({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', email: 'learner@example.com' });
+    }
+
+    if (path === '/api/account/progress') {
+      if (auth !== `Bearer ${token}`) {
+        return jsonResponse({ detail: { error: { code: 'AUTHENTICATION_ERROR', message: 'Sign in to continue.' } } }, 401);
+      }
+      if (init?.method === 'PUT') {
+        const body = JSON.parse(String(init.body)) as { snapshot?: Record<string, string> };
+        currentAccountProgress = body.snapshot ?? {};
+        accountProgressUpdatedAt = '2026-10-01T21:00:00Z';
+      }
+      return jsonResponse({
+        snapshot: currentAccountProgress,
+        updatedAt: accountProgressUpdatedAt,
+      });
+    }
 
     if (
       (path.startsWith('/api/operations') || path.startsWith('/api/configuration') || path.startsWith('/api/lab'))
@@ -2215,40 +2285,46 @@ async function chooseIncidentOption(prompt: RegExp, option: RegExp) {
 }
 
 describe('Analyst Console', () => {
-  test('starts on the public journey entry, then validates access and opens orientation', async () => {
+  test('starts on the public journey entry, signs in, and opens orientation', async () => {
     const fetchMock = installFetchMock();
     render(<App />);
 
     expect(await screen.findByTestId('journey-entry-page')).toBeInTheDocument();
-    expect(screen.queryByLabelText(/access key/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('link', { name: /Begin Your Journey/i }));
     expect(await screen.findByTestId('journey-access-page')).toBeInTheDocument();
 
-    await userEvent.type(screen.getByLabelText(/access key/i), token);
-    await userEvent.click(screen.getByRole('button', { name: /Enter Training/i }));
+    await userEvent.type(screen.getByLabelText(/email/i), 'learner@example.com');
+    await userEvent.type(screen.getByLabelText(/password/i), 'strong-pass-123');
+    await userEvent.click(screen.getByRole('button', { name: /^Sign In$/i }));
 
     expect(await screen.findByTestId('first-day-orientation-page')).toBeInTheDocument();
     expect(window.location.hash).toBe('#/learn/orientation');
     expect(window.localStorage.getItem('freightbridge.learningJourneyStarted')).toBe('true');
-    expect(window.sessionStorage.getItem(OPERATIONS_TOKEN_STORAGE_KEY)).toBe(token);
+    expect(window.localStorage.getItem(ACCOUNT_SESSION_STORAGE_KEY)).toContain(token);
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/api/operations/summary'),
+      expect.stringContaining('/api/account/login'),
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/account/progress'),
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: `Bearer ${token}` }),
       }),
     );
   });
 
-  test('rejects invalid access without leaving the learner access step', async () => {
-    installFetchMock();
+  test('rejects invalid account login without leaving the learner access step', async () => {
+    installFetchMock({ rejectAccountLogin: true });
     render(<App />);
 
     await userEvent.click(await screen.findByRole('link', { name: /Begin Your Journey/i }));
-    await userEvent.type(screen.getByLabelText(/access key/i), 'bad-token');
-    await userEvent.click(screen.getByRole('button', { name: /Enter Training/i }));
+    await userEvent.type(screen.getByLabelText(/email/i), 'learner@example.com');
+    await userEvent.type(screen.getByLabelText(/password/i), 'wrong-password');
+    await userEvent.click(screen.getByRole('button', { name: /^Sign In$/i }));
 
-    expect(await screen.findByText(/missing or invalid operations bearer token/i)).toBeInTheDocument();
+    expect(await screen.findByText(/invalid login credentials/i)).toBeInTheDocument();
     expect(screen.getByTestId('journey-access-page')).toBeInTheDocument();
     expect(screen.queryByTestId('ops-desk-shell')).not.toBeInTheDocument();
   });
@@ -2298,8 +2374,10 @@ describe('Analyst Console', () => {
     await userEvent.click(begin);
 
     expect(await screen.findByTestId('journey-access-page')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /One quick step before training/i })).toBeInTheDocument();
-    expect(screen.getByLabelText(/access key/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Sign in to continue training/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Show create account/i })).toBeInTheDocument();
   });
 
   test('shows Continue Training and resumes the desk after access validation', async () => {
@@ -2315,12 +2393,39 @@ describe('Analyst Console', () => {
 
     await userEvent.click(continueLink);
     expect(await screen.findByTestId('journey-access-page')).toBeInTheDocument();
-    await userEvent.type(screen.getByLabelText(/access key/i), token);
-    await userEvent.click(screen.getByRole('button', { name: /Enter Training/i }));
+    await userEvent.type(screen.getByLabelText(/email/i), 'learner@example.com');
+    await userEvent.type(screen.getByLabelText(/password/i), 'strong-pass-123');
+    await userEvent.click(screen.getByRole('button', { name: /^Sign In$/i }));
 
     expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
     expect(window.location.hash).toBe('#/learn/desk');
     expect(screen.getByTestId('ops-desk-shell')).toBeInTheDocument();
+    expect(screen.getByText('learner@example.com')).toBeInTheDocument();
+  });
+
+  test('restores server-backed progress on a new browser and resumes the desk', async () => {
+    installFetchMock({
+      accountProgressUpdatedAt: '2026-10-01T21:00:00Z',
+      accountProgress: {
+        'freightbridge.learningJourneyStarted': 'true',
+        'freightbridge.firstDayOrientationComplete': 'true',
+        'freightbridge.trainingProgress': JSON.stringify({
+          version: 1,
+          completedMissions: ['LEARN_THE_FLOW', 'APEX_BAD_AUTH'],
+        }),
+      },
+    });
+    window.location.hash = '#/learn';
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('link', { name: /Begin Your Journey/i }));
+    await userEvent.type(screen.getByLabelText(/email/i), 'learner@example.com');
+    await userEvent.type(screen.getByLabelText(/password/i), 'strong-pass-123');
+    await userEvent.click(screen.getByRole('button', { name: /^Sign In$/i }));
+
+    expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
+    expect(window.location.hash).toBe('#/learn/desk');
+    expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('APEX_BAD_AUTH');
   });
 
   test('Module 04 always enters at its first guided lab even when later progress exists', async () => {

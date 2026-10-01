@@ -50,6 +50,7 @@ def test_migration_chain_created_expected_tables_and_seeded_partners() -> None:
     ('public', 'mapping_rules'),
     ('public', 'integration_lab_runs'),
     ('public', 'integration_lab_steps'),
+    ('public', 'learner_course_progress'),
     ('apex_sim', 'loads'),
     ('apex_sim', 'load_locations'),
     ('apex_sim', 'tender_responses'),

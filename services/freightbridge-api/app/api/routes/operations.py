@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from app.core.config import get_settings
 from app.infrastructure.database import DatabaseConnectivityError, connect
 from app.infrastructure.operations_repository import OperationsRepository
+from app.integrations.supabase_auth import SupabaseAuthClient, SupabaseAuthError
 from app.integrations.midwest.retry_service import Midwest204ManualRetryService, RetryNotFoundError, RetryRejectedError
 from app.integrations.midwest.transport import MidwestDeliveryError
 from app.models.operations import (
@@ -33,11 +34,29 @@ logger = logging.getLogger(__name__)
 def require_operations_access(
   authorization: Annotated[str | None, Header(alias='Authorization')] = None,
 ) -> None:
-  expected = get_settings().operations_api_bearer_token
-  if not expected or not authorization or not authorization.startswith('Bearer '):
+  if not authorization or not authorization.startswith('Bearer '):
     raise_operations_auth_error()
+
   supplied = authorization.removeprefix('Bearer ').strip()
-  if not hmac.compare_digest(supplied, expected):
+  if not supplied:
+    raise_operations_auth_error()
+
+  settings = get_settings()
+  expected = settings.operations_api_bearer_token
+  if expected and hmac.compare_digest(supplied, expected):
+    return
+
+  if not settings.supabase_url or not settings.supabase_publishable_key:
+    raise_operations_auth_error()
+
+  try:
+    SupabaseAuthClient().get_user(supplied)
+  except SupabaseAuthError as exc:
+    if exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE:
+      raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail={'error': {'code': 'DEPENDENCY_ERROR', 'message': 'Learner account validation is temporarily unavailable.'}},
+      ) from exc
     raise_operations_auth_error()
 
 

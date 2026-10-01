@@ -7,6 +7,7 @@ import {
   Compass,
   Flag,
   Lock,
+  LogOut,
   Route,
   Search,
   ShieldCheck,
@@ -81,7 +82,7 @@ function percent(completed: number, total: number): number {
 }
 
 export function TrainingShell() {
-  const { lock } = useOperationsSession();
+  const { lock, accountEmail, isAccountSession } = useOperationsSession();
   const location = useLocation();
   const [orientationScene, setOrientationScene] = useState(1);
   const [bootcampLesson, setBootcampLesson] = useState(() => loadEdiBootcampState().lesson);
@@ -356,9 +357,18 @@ export function TrainingShell() {
           <small>Current module</small>
           <strong>{modules.find((module) => module.id === activeModuleId)?.title ?? 'Training'}</strong>
         </div>
-        <button className="icon-button" type="button" onClick={() => lock(null)} aria-label="Lock Console">
-          <Lock size={17} />
-        </button>
+        <div className="course-account">
+          {accountEmail && <span title={accountEmail}>{accountEmail}</span>}
+          <button
+            className="icon-button"
+            type="button"
+            onClick={() => lock(null)}
+            aria-label={isAccountSession ? 'Sign out' : 'Lock Console'}
+            title={isAccountSession ? 'Sign out' : 'Lock Console'}
+          >
+            {isAccountSession ? <LogOut size={17} /> : <Lock size={17} />}
+          </button>
+        </div>
       </header>
 
       <main className="course-main">

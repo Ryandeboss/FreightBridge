@@ -49,6 +49,29 @@ def test_operations_auth_valid_token_succeeds() -> None:
   assert response.json()['transactionsTotal'] == 3
 
 
+def test_operations_auth_accepts_learner_session(monkeypatch) -> None:
+  monkeypatch.setenv('SUPABASE_URL', 'https://example.supabase.co')
+  monkeypatch.setenv('SUPABASE_PUBLISHABLE_KEY', 'publishable-test-key')
+  get_settings.cache_clear()
+  repository = FakeOperationsRepository()
+  app.dependency_overrides[get_operations_repository] = lambda: repository
+
+  class FakeLearnerAuthClient:
+    def get_user(self, access_token: str):
+      assert access_token == 'learner-session-token'
+      return object()
+
+  monkeypatch.setattr('app.api.routes.operations.SupabaseAuthClient', FakeLearnerAuthClient)
+
+  response = TestClient(app).get(
+    '/api/operations/summary',
+    headers={'Authorization': 'Bearer learner-session-token'},
+  )
+
+  assert response.status_code == 200
+  assert response.json()['transactionsTotal'] == 3
+
+
 @pytest.mark.parametrize(
   ('query', 'expected_ids'),
   [

@@ -1,3 +1,5 @@
+import { notifyTrainingStateChanged } from './sync';
+
 export const EDI_BOOTCAMP_STORAGE_KEY = 'freightbridge.ediProtocolBootcamp';
 export const EDI_BOOTCAMP_LESSON_COUNT = 7;
 
@@ -37,6 +39,7 @@ export function saveEdiBootcampLesson(lesson: number): void {
       lesson: Math.min(EDI_BOOTCAMP_LESSON_COUNT, Math.max(1, Math.round(lesson))),
     }),
   );
+  notifyTrainingStateChanged();
 }
 
 export function isEdiBootcampComplete(): boolean {
@@ -55,4 +58,5 @@ export function completeEdiBootcamp(): void {
       completedAt: current.completedAt ?? new Date().toISOString(),
     }),
   );
+  notifyTrainingStateChanged();
 }
