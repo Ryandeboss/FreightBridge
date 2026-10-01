@@ -47,7 +47,7 @@ export function IndependentInvestigationPage() {
   const payloadPreview = failureDrill?.payloadPreview;
   const recovery = record(recoveryRun?.resultSummary.recovery);
 
-  const diagnosisCorrect = boundary === 'BUSINESS_VALIDATION' && independentDiagnosisIsCorrect(diagnosis);
+  const diagnosisCorrect = boundary === 'BUSINESS_VALIDATION' && diagnosis.trim().length > 0;
   const diagnosisAccepted = diagnosisSubmitted && diagnosisCorrect;
   const fixReady =
     retryMode === 'IDEMPOTENT_REPLAY'
@@ -64,7 +64,7 @@ export function IndependentInvestigationPage() {
       && recovery?.originalShipmentReused === true
       && recovery?.duplicate204Created === false,
   );
-  const canComplete = verified && report.trim().length >= 80;
+  const canComplete = verified && report.trim().length > 0;
 
   if (!unlocked) return <Navigate to="/learn/desk" replace />;
 
@@ -564,7 +564,7 @@ function IndependentAnswer({
           <small>Write this in your own words. There are no diagnosis choices in this module.</small>
         </label>
 
-        <button className="secondary-button" type="button" onClick={onSubmitDiagnosis} disabled={!boundary || diagnosis.trim().length < 20}>
+        <button className="secondary-button" type="button" onClick={onSubmitDiagnosis} disabled={!boundary || diagnosis.trim().length === 0}>
           Submit Diagnosis
         </button>
 
@@ -621,27 +621,15 @@ function IndependentAnswer({
             onChange={(event) => onReport(event.target.value)}
             placeholder="Summarize the customer report, FreightBridge evidence, root cause, correction, and verified outcome."
           />
-          <small>{report.trim().length} / 80 minimum characters</small>
+          <small>Keep it concise or detailed—the update only needs to be non-empty.</small>
         </label>
       )}
 
-      <button className="secondary-button" type="button" onClick={onComplete} disabled={!verified || report.trim().length < 80 || completed}>
+      <button className="secondary-button" type="button" onClick={onComplete} disabled={!verified || report.trim().length === 0 || completed}>
         <CheckCircle2 size={16} /> {completed ? 'Investigation Complete' : 'Complete Independent Investigation'}
       </button>
     </div>
   );
-}
-
-function independentDiagnosisIsCorrect(value: string): boolean {
-  const normalized = value.toLowerCase();
-  const namesDuplicate = normalized.includes('duplicate');
-  const identifiesRetryIdentity =
-    normalized.includes('idempot')
-    || normalized.includes('same load')
-    || normalized.includes('same shipment')
-    || normalized.includes('repeated request')
-    || normalized.includes('retry');
-  return namesDuplicate && identifiesRetryIdentity;
 }
 
 function record(value: unknown): Record<string, unknown> | null {
