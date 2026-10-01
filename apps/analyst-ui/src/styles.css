@@ -5297,17 +5297,14 @@ input:disabled {
   font-size: .74rem;
   font-weight: 800;
 }
+.guided-status-update span small {
+  color: #7b898e;
+  font-size: .68rem;
+  font-weight: 700;
+}
 .guided-status-update textarea {
   min-height: 6rem;
   resize: vertical;
-}
-.guided-status-update-progress {
-  color: #687b81;
-  font-size: .7rem;
-  font-weight: 700;
-}
-.guided-status-update-progress.ready {
-  color: #35675e;
 }
 .guided-incident-debrief {
   display: grid;
