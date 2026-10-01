@@ -91,7 +91,7 @@ export function OperationsSessionProvider({ children }: { children: ReactNode })
     try {
       window.localStorage.removeItem(ACCOUNT_SESSION_STORAGE_KEY);
       window.sessionStorage.removeItem(OPERATIONS_TOKEN_STORAGE_KEY);
-      if (accountSession) clearTrainingSnapshot();
+      if (accountSession) clearTrainingSnapshot(false);
     } catch {
       // Storage can be unavailable in private browser contexts.
     }
