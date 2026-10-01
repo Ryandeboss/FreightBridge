@@ -275,8 +275,7 @@ export function GuidedIncidentWorkstation({ mission }: { mission: IncidentMissio
     lastHealthyCorrect
     && diagnosisCorrect
     && planCorrect
-    && verified
-    && statusUpdate.trim().length >= 40;
+    && verified;
   const currentMissionIndex = trainingMissions.findIndex((candidate) => candidate.id === mission.id);
   const nextMission = currentMissionIndex >= 0 ? trainingMissions[currentMissionIndex + 1] : undefined;
   const nextMissionPath = nextMission ? '/learn/mission/' + nextMission.slug : '/learn/desk';
