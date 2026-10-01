@@ -24,7 +24,7 @@ export function AccessPage() {
   const [tone, setTone] = useState<'error' | 'info'>('info');
 
   if (isAuthenticated) {
-    return <Navigate to={destination} replace />;
+    return <Navigate to={hasStartedLearningJourney() ? '/learn/desk' : destination} replace />;
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
