@@ -678,8 +678,8 @@ export const incidentMissions: IncidentMissionDefinition[] = [
     correctDiagnosisId: 'json',
     planOptions: [
       { id: 'retry-json', label: 'Ask Apex to resend parseable JSON and verify the request continues through normal processing', explanation: 'Correct. The safe action is a corrected payload retry.' },
-      { id: 'patch-db', label: 'Insert the load directly into the database and bypass the failed inbound parser', explanation: 'Bypassing the inbound contract would hide the integration failure.' },
-      { id: 'wait-midwest', label: 'Wait for Midwest to send a 990 even though FreightBridge never produced a 204', explanation: 'Midwest never received a 204 for this failed inbound request.' },
+      { id: 'patch-db', label: 'Insert the load directly into the database and bypass the failed inbound parser so downstream work can continue', explanation: 'Bypassing the inbound contract would hide the integration failure.' },
+      { id: 'wait-midwest', label: 'Wait for Midwest to send a 990 even though FreightBridge never produced or delivered a valid 204', explanation: 'Midwest never received a 204 for this failed inbound request.' },
     ],
     correctPlanId: 'retry-json',
     remediationLabel: 'Retry with corrected JSON',
@@ -760,14 +760,14 @@ export const incidentMissions: IncidentMissionDefinition[] = [
     correctLastHealthyId: 'parsing',
     diagnosisOptions: [
       { id: 'contract', label: 'Parsed JSON failed the Apex load contract because a required business field was invalid', explanation: 'Correct. The observed failure is INVALID_APEX_LOAD at VALIDATION.' },
-      { id: 'syntax', label: 'FreightBridge could not parse JSON even though the request body reached the parser', explanation: 'Parsing succeeded in this mission.' },
-      { id: 'sftp', label: 'SFTP delivery to Midwest failed after FreightBridge generated a valid outbound 204', explanation: 'No 204 or SFTP delivery was attempted.' },
+      { id: 'syntax', label: 'FreightBridge could not parse JSON even though the request body reached the parser and authentication had succeeded', explanation: 'Parsing succeeded in this mission.' },
+      { id: 'sftp', label: 'SFTP delivery to Midwest failed after FreightBridge generated a valid outbound 204 and attempted delivery', explanation: 'No 204 or SFTP delivery was attempted.' },
     ],
     correctDiagnosisId: 'contract',
     planOptions: [
       { id: 'retry-contract', label: 'Ask Apex to resend a contract-valid payload and verify the corrected load through normal processing', explanation: 'Correct. The retry must include required business fields.' },
-      { id: 'skip-field', label: 'Ignore the missing postal code and force the shipment downstream despite the contract failure', explanation: 'Forcing incomplete shipment data would create unsafe downstream work.' },
-      { id: 'carrier-fix', label: 'Ask Midwest to accept the tender manually even though FreightBridge rejected the inbound load', explanation: 'Midwest has no tender to accept.' },
+      { id: 'skip-field', label: 'Ignore the missing postal code and force the shipment downstream despite the contract failure and incomplete partner data', explanation: 'Forcing incomplete shipment data would create unsafe downstream work.' },
+      { id: 'carrier-fix', label: 'Ask Midwest to accept the tender manually even though FreightBridge rejected the inbound load before creating a canonical shipment', explanation: 'Midwest has no tender to accept.' },
     ],
     correctPlanId: 'retry-contract',
     remediationLabel: 'Retry with contract-valid payload',
@@ -890,8 +890,8 @@ export const incidentMissions: IncidentMissionDefinition[] = [
     correctLastHealthyId: 'baseline',
     diagnosisOptions: [
       { id: 'duplicate', label: 'The same shipment was resent without an idempotency key, so FreightBridge blocked it as a duplicate', explanation: 'Correct. The evidence shows same business ID plus missing safe replay behavior.' },
-      { id: 'auth', label: 'Apex failed authentication on the retry before FreightBridge could compare shipment identity', explanation: 'The failure is duplicate protection, not authentication.' },
-      { id: 'carrier', label: 'Midwest rejected the repeated load tender after FreightBridge created another outbound 204', explanation: 'The second path stopped before duplicate downstream carrier work.' },
+      { id: 'auth', label: 'Apex failed authentication on the retry before FreightBridge could compare shipment identity or duplicate state', explanation: 'The failure is duplicate protection, not authentication.' },
+      { id: 'carrier', label: 'Midwest rejected the repeated load tender after FreightBridge created another outbound 204 for the same business shipment', explanation: 'The second path stopped before duplicate downstream carrier work.' },
     ],
     correctDiagnosisId: 'duplicate',
     planOptions: [
@@ -1014,13 +1014,13 @@ export const incidentMissions: IncidentMissionDefinition[] = [
     correctLastHealthyId: 'file-arrival',
     diagnosisOptions: [
       { id: 'control', label: 'The 214 arrived, but ST02 and SE02 do not match, so FreightBridge rejected it during parsing', explanation: 'Correct. The mismatch stops processing before mapping.' },
-      { id: 'unsupported-status', label: 'The 214 contained an unsupported AT7 status code after otherwise valid transaction controls', explanation: 'That is a mapping failure, but this incident fails earlier during parsing.' },
+      { id: 'unsupported-status', label: 'The 214 contained an unsupported AT7 status code after otherwise valid transaction controls and successful parsing', explanation: 'That is a mapping failure, but this incident fails earlier during parsing.' },
       { id: 'sftp-missing', label: 'Midwest never sent the file, so FreightBridge had no 214 available to inspect or parse', explanation: 'FreightBridge evidence shows the file reached the SFTP boundary.' },
     ],
     correctDiagnosisId: 'control',
     planOptions: [
       { id: 'correct-controls', label: 'Correct the 214 transaction-set control numbers and safely reprocess the same correlated status', explanation: 'Correct. The retry must use matching ST02/SE02 values.' },
-      { id: 'skip-parse', label: 'Bypass X12 parsing and manually create the Apex status even though the source 214 is invalid', explanation: 'Do not bypass envelope validation.' },
+      { id: 'skip-parse', label: 'Bypass X12 parsing and manually create the Apex status even though the source 214 is invalid and unverified', explanation: 'Do not bypass envelope validation.' },
       { id: 'ask-apex', label: 'Ask Apex to resend the status even though Midwest is the partner that originated the 214', explanation: 'Apex is downstream and did not send the Midwest 214.' },
     ],
     correctPlanId: 'correct-controls',
