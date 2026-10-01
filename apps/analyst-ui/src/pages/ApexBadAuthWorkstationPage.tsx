@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
-  Circle,
   FileCode2,
   Play,
   RotateCcw,
