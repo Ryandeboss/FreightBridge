@@ -97,14 +97,17 @@ export function TrainingHomePage() {
           <div className="ops-primary-actions">
             {trainingComplete ? (
               <>
-                <Link className="primary-button" to="/dashboard">
-                  Open Advanced Console<ArrowRight size={16} />
+                <Link className="primary-button" to="/learn/completion">
+                  View Course Completion<ArrowRight size={16} />
+                </Link>
+                <Link className="secondary-button" to="/learn/free-practice">
+                  Free Practice
+                </Link>
+                <Link className="secondary-button" to="/dashboard">
+                  Advanced Console
                 </Link>
                 <Link className="secondary-button" to={`/learn/mission/${finalMission.slug}`}>
                   Review Final Shift
-                </Link>
-                <Link className="secondary-button" to="/learn/practice/replay-sequence">
-                  Review Advanced Practice
                 </Link>
               </>
             ) : (
@@ -271,6 +274,10 @@ export function TrainingHomePage() {
             <span><strong>Trace</strong><small>Follow business IDs across REST, X12, SFTP, and canonical state.</small></span>
             <span><strong>Diagnose</strong><small>Separate transport, parsing, contract, mapping, replay, and business-validation failures.</small></span>
             <span><strong>Verify</strong><small>Prove recovery from FreightBridge evidence and customer-facing outcomes.</small></span>
+          </div>
+          <div className="training-complete-actions">
+            <Link className="primary-button" to="/learn/completion">View Completion</Link>
+            <Link className="secondary-button" to="/learn/free-practice">Enter Free Practice</Link>
           </div>
         </article>
       )}
