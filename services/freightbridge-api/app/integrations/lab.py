@@ -27,6 +27,9 @@ from app.integrations.midwest.transport import MidwestSftpTransport
 from app.models.lab import CreateLabRunRequest
 
 
+PARTNER_REQUEST_TIMEOUT_SECONDS = 75.0
+
+
 class LabExecutionError(RuntimeError):
   def __init__(self, code: str, message: str) -> None:
     super().__init__(message)
@@ -220,7 +223,7 @@ class PartnerSimulatorClient:
         self.base_url + path,
         json=json,
         headers={'Authorization': f'Bearer {self.bearer_token}', **(headers or {})},
-        timeout=20.0,
+        timeout=PARTNER_REQUEST_TIMEOUT_SECONDS,
       )
     except (httpx.TimeoutException, httpx.HTTPError) as exc:
       raise LabExecutionError(self.unavailable_code, 'Partner simulator could not be reached.') from exc
