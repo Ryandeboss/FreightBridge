@@ -23,7 +23,7 @@ export function AccessPage() {
   const [message, setMessage] = useState<string | null>(sessionMessage);
   const [tone, setTone] = useState<'error' | 'info'>('info');
 
-  if (isAuthenticated) {
+  if (isAuthenticated && !isSubmitting) {
     return <Navigate to={hasStartedLearningJourney() ? '/learn/desk' : destination} replace />;
   }
 
