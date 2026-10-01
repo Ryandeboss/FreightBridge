@@ -24,7 +24,7 @@ import {
   PRODUCTION_INCIDENT_MISSION_ID,
   trainingMissions,
 } from '../training/missions';
-import { isReplaySequencePracticeComplete } from '../training/advancedPractice';
+import { isIndependentInvestigationComplete } from '../training/advancedPractice';
 import { completeMission, hasCompletedMission, loadTrainingProgress } from '../training/progress';
 import type { IncidentMissionDefinition, IncidentOption, IncidentStatus, MissionPhase } from '../training/types';
 
@@ -46,7 +46,7 @@ export function IncidentMissionPage() {
     hasCompletedMission(progress, mission.id);
   const finalShiftPrerequisiteSatisfied =
     mission.id !== PRODUCTION_INCIDENT_MISSION_ID ||
-    isReplaySequencePracticeComplete() ||
+    isIndependentInvestigationComplete() ||
     hasCompletedMission(progress, mission.id);
 
   if (!roadmapPrerequisiteSatisfied || !finalShiftPrerequisiteSatisfied) {

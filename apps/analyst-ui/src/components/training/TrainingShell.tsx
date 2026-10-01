@@ -8,6 +8,7 @@ import {
   Flag,
   Lock,
   Route,
+  Search,
   ShieldCheck,
   Workflow,
 } from 'lucide-react';
@@ -40,7 +41,7 @@ import {
   isEdiBootcampComplete,
   loadEdiBootcampState,
 } from '../../training/ediBootcamp';
-import { isReplaySequencePracticeComplete } from '../../training/advancedPractice';
+import { isIndependentInvestigationComplete, isReplaySequencePracticeComplete } from '../../training/advancedPractice';
 import { HEALTHY_LESSON_SCENE_COUNT, loadHealthyLessonState } from '../../training/healthyLesson';
 import { hasCompletedMission, loadTrainingProgress } from '../../training/progress';
 
@@ -110,8 +111,11 @@ export function TrainingShell() {
   const advancedMissionCompleted = ADVANCED_MISSION_IDS.filter(completed).length;
   const rawAdvancedCompletedUnits = advancedMissionCompleted + (replayComplete ? 1 : 0);
   const finalComplete = completed(PRODUCTION_INCIDENT_MISSION_ID);
+  const independentStoredComplete = isIndependentInvestigationComplete();
+  const independentComplete = independentStoredComplete || finalComplete;
 
-  const advancedHasProgress = rawAdvancedCompletedUnits > 0 || finalComplete;
+  const independentHasProgress = independentComplete || finalComplete;
+  const advancedHasProgress = rawAdvancedCompletedUnits > 0 || independentHasProgress;
   const guidedHasProgress = rawGuidedCompleted > 0 || advancedHasProgress;
   const healthyHasProgress = rawHealthyCompletedUnits > 0 || guidedHasProgress;
   const bootcampHasProgress = bootcampState.lesson > 1 || bootcampState.complete || healthyHasProgress;
@@ -128,7 +132,7 @@ export function TrainingShell() {
   const healthyComplete = healthyCompletedUnits >= 5;
   const guidedCompleted = advancedHasProgress ? GUIDED_MISSION_IDS.length : rawGuidedCompleted;
   const guidedComplete = guidedCompleted === GUIDED_MISSION_IDS.length;
-  const advancedCompletedUnits = finalComplete ? 3 : rawAdvancedCompletedUnits;
+  const advancedCompletedUnits = independentHasProgress ? 3 : rawAdvancedCompletedUnits;
   const advancedComplete = advancedCompletedUnits >= 3;
 
   const healthyPath = healthyWalkthroughNextPath();
@@ -137,6 +141,7 @@ export function TrainingShell() {
   const advancedPath = advancedMissionCompleted < ADVANCED_MISSION_IDS.length
     ? firstIncompleteMissionPath(ADVANCED_MISSION_IDS, completed)
     : '/learn/practice/replay-sequence';
+  const independentPath = '/learn/practice/independent-investigation';
   const finalPath = missionPath(PRODUCTION_INCIDENT_MISSION_ID);
 
   const finalHasProgress = finalComplete;
@@ -198,13 +203,24 @@ export function TrainingShell() {
       meta: advancedComplete ? 'Complete' : `${advancedCompletedUnits} of 3 labs`,
     },
     {
-      id: 'final',
+      id: 'independent',
       number: '06',
+      title: 'Independent Investigation',
+      description: 'Choose your own evidence path and prove a safe recovery',
+      icon: Search,
+      to: independentPath,
+      unlocked: advancedComplete || independentHasProgress,
+      progress: independentComplete ? 100 : 0,
+      meta: independentComplete ? 'Complete' : '1 independent case',
+    },
+    {
+      id: 'final',
+      number: '07',
       title: 'Final Shift',
       description: 'Solve a production-style incident independently',
       icon: Flag,
       to: finalPath,
-      unlocked: advancedComplete || finalHasProgress,
+      unlocked: independentComplete || finalHasProgress,
       progress: finalComplete ? 100 : 0,
       meta: finalComplete ? 'Complete' : '1 final incident',
     },
@@ -216,8 +232,9 @@ export function TrainingShell() {
     + healthyCompletedUnits
     + guidedCompleted
     + advancedCompletedUnits
+    + (independentComplete ? 1 : 0)
     + (finalComplete ? 1 : 0);
-  const totalUnits = 1 + EDI_BOOTCAMP_LESSON_COUNT + 5 + GUIDED_MISSION_IDS.length + 3 + 1;
+  const totalUnits = 1 + EDI_BOOTCAMP_LESSON_COUNT + 5 + GUIDED_MISSION_IDS.length + 3 + 1 + 1;
   const courseProgress = percent(totalCompletedUnits, totalUnits);
 
   const pathname = location.pathname;
@@ -226,6 +243,7 @@ export function TrainingShell() {
   else if (pathname.startsWith('/learn/bootcamp')) activeModuleId = 'bootcamp';
   else if (pathname.startsWith('/learn/healthy') || pathname.includes('/mission/learn-the-flow')) activeModuleId = 'healthy';
   else if (pathname.startsWith('/learn/practice/replay-sequence')) activeModuleId = 'advanced';
+  else if (pathname.startsWith('/learn/practice/independent-investigation')) activeModuleId = 'independent';
   else if (pathname.startsWith('/learn/mission/')) {
     const slug = pathname.split('/').pop();
     const mission = trainingMissions.find((candidate) => candidate.slug === slug);

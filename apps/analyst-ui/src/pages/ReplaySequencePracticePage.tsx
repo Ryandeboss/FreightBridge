@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowRight,
   CheckCircle2,
   Circle,
   FileCode2,
@@ -215,7 +216,12 @@ export function ReplaySequencePracticePage() {
             <h2>Ready for independent investigation.</h2>
             <p>You proved duplicate protection, exact replay suppression, and event-time chronology using the same workstation model.</p>
           </div>
-          <Link className="primary-button" to="/learn/desk">Return to Training Desk <ArrowLeft size={16} /></Link>
+          <div className="workstation-complete-actions">
+            <Link className="primary-button" to="/learn/practice/independent-investigation">
+              Continue to Independent Investigation <ArrowRight size={16} />
+            </Link>
+            <Link className="secondary-button" to="/learn/desk">Training Desk</Link>
+          </div>
         </article>
       )}
     </section>

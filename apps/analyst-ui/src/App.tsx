@@ -16,6 +16,7 @@ import { HealthyMapping204Page } from './pages/HealthyMapping204Page';
 import { HealthyResponsesPage } from './pages/HealthyResponsesPage';
 import { HealthyShipmentStatusPage } from './pages/HealthyShipmentStatusPage';
 import { IntegrationLabPage } from './pages/IntegrationLabPage';
+import { IndependentInvestigationPage } from './pages/IndependentInvestigationPage';
 import { IncidentMissionPage } from './pages/IncidentMissionPage';
 import { LearnTheFlowMissionPage } from './pages/LearnTheFlowMissionPage';
 import { MappingDetailPage, MappingsPage } from './pages/MappingsPage';
@@ -56,6 +57,7 @@ function AppRoutes() {
           <Route path="/learn/mission/:missionSlug" element={<IncidentMissionPage />} />
           <Route path="/learn/tools/:tool" element={<AnalystToolsPage />} />
           <Route path="/learn/practice/replay-sequence" element={<ReplaySequencePracticePage />} />
+          <Route path="/learn/practice/independent-investigation" element={<IndependentInvestigationPage />} />
         </Route>
         <Route element={<ConsoleRoute />}>
           <Route path="/dashboard" element={<DashboardPage />} />

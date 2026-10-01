@@ -5524,3 +5524,166 @@ input:disabled {
   }
 }
 /* === End Milestone 49 === */
+
+
+/* === Milestone 50: independent investigation === */
+.independent-ticket {
+  display: grid;
+  gap: 1rem;
+}
+.independent-ticket-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .65rem;
+}
+.independent-ticket-grid > div {
+  display: grid;
+  gap: .28rem;
+  padding: .75rem;
+  border: 1px solid #dde6e8;
+  border-radius: 10px;
+  background: #fafcfc;
+}
+.independent-ticket-grid span {
+  color: #7a8b91;
+  font-size: .67rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.independent-ticket-grid strong {
+  color: #3d555b;
+  font-size: .78rem;
+  line-height: 1.5;
+}
+.independent-console {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(17rem, .8fr);
+  min-height: 31rem;
+  background: #182227;
+}
+.independent-evidence-menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+  padding: .85rem 1rem;
+  border-top: 1px solid #35434a;
+}
+.independent-evidence-menu button {
+  padding: .45rem .6rem;
+  border: 1px solid #42535a;
+  border-radius: 7px;
+  color: #c8d4d7;
+  background: #202b30;
+  cursor: pointer;
+  font: inherit;
+  font-size: .7rem;
+  font-weight: 750;
+}
+.independent-evidence-menu button.active {
+  border-color: #6f8f87;
+  color: #e2ece9;
+  background: #293b37;
+}
+.independent-no-hints {
+  display: flex;
+  align-items: flex-start;
+  gap: .5rem;
+  margin: .15rem 1rem 1rem;
+  padding: .65rem .75rem;
+  border: 1px dashed #46575e;
+  border-radius: 8px;
+  color: #9aabb0;
+  font-size: .7rem;
+  line-height: 1.45;
+}
+.independent-no-hints svg {
+  flex: 0 0 auto;
+  margin-top: .08rem;
+}
+.independent-case-note {
+  margin-top: .8rem;
+  padding: .7rem;
+  border: 1px solid #3c4b51;
+  border-radius: 8px;
+  color: #9facb0;
+  background: #1d292e;
+}
+.independent-case-note strong {
+  color: #d4dfe1;
+  font-size: .72rem;
+}
+.independent-case-note p {
+  margin: .3rem 0 0;
+  font-size: .7rem;
+  line-height: 1.45;
+}
+.independent-answer {
+  gap: .9rem;
+}
+.independent-answer-fields {
+  display: grid;
+  gap: .75rem;
+}
+.independent-answer-fields label {
+  display: grid;
+  gap: .35rem;
+}
+.independent-answer-fields label > span {
+  color: #43595f;
+  font-size: .74rem;
+  font-weight: 800;
+}
+.independent-answer-fields select,
+.independent-answer-fields input,
+.independent-answer-fields textarea,
+.independent-answer textarea,
+.advanced-edit-form input {
+  width: 100%;
+  min-height: 2.5rem;
+  padding: .5rem .6rem;
+  border: 1px solid #cfdadd;
+  border-radius: 8px;
+  color: #344b51;
+  background: #fff;
+  font: inherit;
+}
+.independent-answer-fields select,
+.independent-answer-fields textarea {
+  text-align: left;
+}
+.independent-answer-fields textarea {
+  min-height: 6.5rem;
+  resize: vertical;
+  line-height: 1.5;
+}
+.independent-answer-fields label > small {
+  color: #7b8b90;
+  font-size: .68rem;
+  line-height: 1.4;
+}
+.independent-diagnosis-result {
+  padding: .65rem .75rem;
+  border: 1px solid #e1c8c3;
+  border-radius: 8px;
+  color: #8b544a;
+  background: #fff7f5;
+  font-size: .72rem;
+  font-weight: 750;
+  line-height: 1.45;
+}
+.independent-diagnosis-result.accepted {
+  border-color: #b7d7c9;
+  color: #3e6c59;
+  background: #f0f8f4;
+}
+.independent-practice-home-card {
+  border-color: #d7e3df;
+}
+@media (max-width: 900px) {
+  .independent-console,
+  .independent-ticket-grid {
+    grid-template-columns: 1fr;
+  }
+}
+/* === End Milestone 50 === */

@@ -2400,6 +2400,7 @@ describe('Analyst Console', () => {
     expect(curriculum).toHaveTextContent(/Healthy Integration/i);
     expect(curriculum).toHaveTextContent(/Guided Troubleshooting/i);
     expect(curriculum).toHaveTextContent(/Advanced Incidents/i);
+    expect(curriculum).toHaveTextContent(/Independent Investigation/i);
     expect(curriculum).toHaveTextContent(/Final Shift/i);
     expect(screen.queryByTestId('ops-coach')).not.toBeInTheDocument();
     expect(within(curriculum).queryByRole('link', { name: /Transactions/i })).not.toBeInTheDocument();
@@ -3735,29 +3736,13 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     await userEvent.click(completeButton);
     expect(window.localStorage.getItem('freightbridge.replaySequencePracticeComplete')).toBe('true');
     expect(screen.getByTestId('replay-sequence-completion')).toHaveTextContent(/Advanced practice complete/i);
+    expect(screen.getByRole('link', { name: /Continue to Independent Investigation/i })).toHaveAttribute(
+      'href',
+      '#/learn/practice/independent-investigation',
+    );
   }, 15000);
 
-  test('keeps Mission 10 gated until replay and sequence practice is complete', async () => {
-    installFetchMock();
-    window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({
-      version: 1,
-      completedMissions: [
-        'LEARN_THE_FLOW', 'APEX_BAD_AUTH', 'APEX_INVALID_JSON', 'APEX_INVALID_CONTRACT',
-        'DUPLICATE_SHIPMENT', 'X12_ENVELOPE_MISMATCH', 'STATUS_CALLBACK_MISSING',
-        'WRONG_X12_VERSION', 'SFTP_STOPS_WORKING',
-      ],
-    }));
-    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
-
-    window.location.hash = '#/learn/mission/production-incident';
-    render(<App />);
-
-    expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
-    expect(window.location.hash).toBe('#/learn/desk');
-    expect(screen.getByTestId('mission-10-card')).toHaveTextContent(/Locked/i);
-  });
-
-  test('opens Mission 10 after advanced replay and sequence practice', async () => {
+  test('keeps Mission 10 gated until independent investigation is complete', async () => {
     installFetchMock();
     window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({
       version: 1,
@@ -3769,17 +3754,90 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     }));
     window.localStorage.setItem('freightbridge.replaySequencePracticeComplete', 'true');
     window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
-    window.location.hash = '#/learn/desk';
+
+    window.location.hash = '#/learn/mission/production-incident';
     render(<App />);
 
     expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
-    expect(screen.getByTestId('mission-10-card')).toHaveTextContent(/Open Mission/i);
-    expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Mission 10 - Production Incident/i);
-    expect(screen.getByRole('link', { name: /Start Current Mission/i })).toHaveAttribute(
+    expect(window.location.hash).toBe('#/learn/desk');
+    expect(screen.getByTestId('mission-10-card')).toHaveTextContent(/Locked/i);
+    expect(screen.getByTestId('curriculum-module-independent')).toHaveTextContent(/1 independent case/i);
+    expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Independent Investigation/i);
+    expect(screen.getByTestId('ops-current-focus')).toHaveTextContent(/Independent Investigation/i);
+    expect(screen.getByTestId('curriculum-module-final')).toHaveTextContent(/Locked/i);
+  });
+
+  test('completes Module 06 through a less-guided duplicate retry investigation and unlocks Final Shift', async () => {
+    installFetchMock();
+    window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      completedMissions: [
+        'LEARN_THE_FLOW', 'APEX_BAD_AUTH', 'APEX_INVALID_JSON', 'APEX_INVALID_CONTRACT',
+        'DUPLICATE_SHIPMENT', 'X12_ENVELOPE_MISMATCH', 'STATUS_CALLBACK_MISSING',
+        'WRONG_X12_VERSION', 'SFTP_STOPS_WORKING',
+      ],
+    }));
+    window.localStorage.setItem('freightbridge.replaySequencePracticeComplete', 'true');
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn/practice/independent-investigation';
+    render(<App />);
+
+    expect(await screen.findByTestId('independent-investigation-page')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Apex says one load request was rejected/i })).toBeInTheDocument();
+    expect(screen.queryByText(/Hint 1/i)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Open Assigned Case/i }));
+
+    const lab = await screen.findByTestId('lab-workstation');
+    expect(within(lab).getByRole('tab', { name: /Console/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('independent-console')).toHaveTextContent(/No evidence source is required/i);
+
+    await userEvent.click(screen.getByRole('button', { name: /Persisted Failure/i }));
+    expect(screen.getByTestId('independent-evidence-viewer')).toHaveTextContent(/DUPLICATE_SHIPMENT/i);
+    expect(screen.getByTestId('independent-evidence-viewer')).toHaveTextContent(/BUSINESS_VALIDATION/i);
+
+    await userEvent.click(within(lab).getByRole('tab', { name: /Answer/i }));
+    await userEvent.selectOptions(screen.getByLabelText(/Primary failure boundary/i), 'BUSINESS_VALIDATION');
+    expect(screen.queryByRole('option', { name: /duplicate/i })).not.toBeInTheDocument();
+    await userEvent.type(
+      screen.getByLabelText(/Primary diagnosis/i),
+      'Apex repeated the same load request without idempotent retry identity, so FreightBridge blocked the duplicate business attempt.',
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Submit Diagnosis/i }));
+    expect(screen.getByTestId('independent-diagnosis-result')).toHaveTextContent(/Diagnosis accepted/i);
+    expect(screen.getByRole('button', { name: /Apply Fix & Verify/i })).toBeDisabled();
+
+    await userEvent.click(within(lab).getByRole('tab', { name: /Code/i }));
+    await userEvent.click(screen.getByRole('button', { name: /Fix\/retry_policy\.training\.json/i }));
+    const editor = screen.getByTestId('independent-fix-editor');
+    await userEvent.selectOptions(within(editor).getByLabelText(/Retry intent/i), 'IDEMPOTENT_REPLAY');
+    await userEvent.type(within(editor).getByLabelText(/Idempotency key/i), 'retry-case-001');
+    await userEvent.click(within(editor).getByLabelText(/Reuse the existing shipment/i));
+    expect(editor).toHaveTextContent(/ready for verification/i);
+
+    await userEvent.click(within(lab).getByRole('tab', { name: /Answer/i }));
+    await userEvent.click(screen.getByRole('button', { name: /Apply Fix & Verify/i }));
+    const verification = await screen.findByTestId('independent-verification');
+    expect(verification).toHaveTextContent(/IDEMPOTENT_REPLAY/i);
+    expect(verification).toHaveTextContent(/Duplicate 204 Created/i);
+    expect(verification).toHaveTextContent(/NO/i);
+
+    await userEvent.type(
+      screen.getByLabelText(/Incident update to Mike/i),
+      'Mike, Apex retried the same load without safe retry identity, so FreightBridge rejected a duplicate business attempt. I changed the retry to an idempotent replay, reused the existing shipment, and verified that no duplicate 204 was created.',
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Complete Independent Investigation/i }));
+
+    expect(window.localStorage.getItem('freightbridge.independentInvestigationComplete')).toBe('true');
+    expect(screen.getByTestId('independent-investigation-completion')).toHaveTextContent(/cleared for the Final Shift/i);
+    expect(screen.getByRole('link', { name: /Continue to Final Shift/i })).toHaveAttribute(
       'href',
       '#/learn/mission/production-incident',
     );
-  });
+
+    await userEvent.click(screen.getByRole('link', { name: /Continue to Final Shift/i }));
+    expect(await screen.findByTestId('incident-mission-page')).toBeInTheDocument();
+    expect(screen.getByText(/Mission 10 - Final Shift Incident/i)).toBeInTheDocument();
+  }, 12000);
 
   test('Mission 10 completes the final shift by correcting the 214 shipment reference', async () => {
     installFetchMock();
@@ -3792,6 +3850,7 @@ test('Training Desk routes healthy progress into the unified workstation and pre
       ],
     }));
     window.localStorage.setItem('freightbridge.replaySequencePracticeComplete', 'true');
+    window.localStorage.setItem('freightbridge.independentInvestigationComplete', 'true');
     window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
     window.location.hash = '#/learn/mission/production-incident';
     render(<App />);
