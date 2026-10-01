@@ -3,7 +3,7 @@ import { FormEvent, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { useOperationsSession } from '../auth/OperationsSession';
-import { startLearningJourney } from '../training/journey';
+import { hasStartedLearningJourney, startLearningJourney } from '../training/journey';
 
 function requestedDestination(search: string): string {
   const candidate = new URLSearchParams(search).get('next');
@@ -35,13 +35,15 @@ export function AccessPage() {
     try {
       if (mode === 'signin') {
         await signIn(email, password);
+        const resumed = hasStartedLearningJourney();
         startLearningJourney();
-        navigate(destination, { replace: true });
+        navigate(resumed ? '/learn/desk' : destination, { replace: true });
       } else {
         const result = await register(email, password);
         if (result === 'SIGNED_IN') {
+          const resumed = hasStartedLearningJourney();
           startLearningJourney();
-          navigate(destination, { replace: true });
+          navigate(resumed ? '/learn/desk' : destination, { replace: true });
         } else {
           setTone('info');
           setMessage('Account created. Check your email to confirm the address, then sign in here.');
