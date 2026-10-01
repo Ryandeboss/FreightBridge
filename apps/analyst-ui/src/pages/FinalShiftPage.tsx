@@ -62,7 +62,7 @@ export function FinalShiftPage({ mission }: { mission: IncidentMissionDefinition
       && recovery?.normalizedShipmentStatus === 'PICKED_UP'
       && recovery?.apexFacingEvidence === true,
   );
-  const reportReady = verified && finalReportIsComplete(report);
+  const reportReady = verified && report.trim().length > 0;
 
   async function startShift() {
     if (!token) return;
@@ -656,7 +656,7 @@ function FinalShiftAnswer({
           disabled={!verified}
           placeholder="Summarize the partner claim, FreightBridge evidence, root cause, correction, and verified Apex-facing outcome."
         />
-        <small>{verified ? 'Close the incident like a production support analyst.' : 'Verify recovery before writing the final update.'}</small>
+        <small>{verified ? 'Add a concise incident update to complete the shift.' : 'Verify recovery before writing the final update.'}</small>
       </label>
 
       <button className="primary-button" type="button" onClick={onComplete} disabled={!reportReady || completed}>
@@ -681,14 +681,6 @@ function finalAssessmentIsCorrect(value: string): boolean {
   const identifiesBoundary = text.includes('business validation') || text.includes('business correlation') || text.includes('correlation');
   const identifiesMismatch = ['wrong', 'unknown', 'mismatch', 'does not match', "doesn't match", 'incorrect'].some((token) => text.includes(token));
   return text.length >= 60 && identifiesReference && identifiesBoundary && identifiesMismatch;
-}
-
-function finalReportIsComplete(value: string): boolean {
-  const text = value.trim().toLowerCase();
-  const referencesRootCause = text.includes('b10') || text.includes('shipment reference');
-  const referencesOutcome = text.includes('picked_up') || text.includes('picked up') || text.includes('pickup');
-  const referencesCustomer = text.includes('apex');
-  return text.length >= 100 && referencesRootCause && referencesOutcome && referencesCustomer;
 }
 
 function segmentElement(x12: string, segmentId: string, elementIndex: number): string | null {
