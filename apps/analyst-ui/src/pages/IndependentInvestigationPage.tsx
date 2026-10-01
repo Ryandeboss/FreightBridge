@@ -24,24 +24,6 @@ import {
 type EvidenceView = 'summary' | 'payload' | 'failure';
 type CodeFile = 'policy' | 'contract' | 'fix';
 
-const diagnosisOptions = [
-  {
-    value: 'duplicate-no-idempotency',
-    label: 'A repeated Apex request reused an existing load ID without safe retry identity, so FreightBridge blocked a duplicate business effect.',
-  },
-  {
-    value: 'authentication',
-    label: 'Apex credentials were rejected before FreightBridge could associate the repeated request with an existing shipment.',
-  },
-  {
-    value: 'parsing',
-    label: 'The second Apex request reached FreightBridge but malformed JSON prevented the platform from reading the business identifier.',
-  },
-  {
-    value: 'downstream',
-    label: 'FreightBridge created another valid shipment and the duplicate behavior began only after a second Midwest tender was sent.',
-  },
-];
 
 export function IndependentInvestigationPage() {
   const unlocked = isReplaySequencePracticeComplete() || isIndependentInvestigationComplete();
@@ -67,7 +49,7 @@ export function IndependentInvestigationPage() {
   const payloadPreview = failureDrill?.payloadPreview;
   const recovery = record(recoveryRun?.resultSummary.recovery);
 
-  const diagnosisCorrect = boundary === 'BUSINESS_VALIDATION' && diagnosis === 'duplicate-no-idempotency';
+  const diagnosisCorrect = boundary === 'BUSINESS_VALIDATION' && independentDiagnosisIsCorrect(diagnosis);
   const diagnosisAccepted = diagnosisSubmitted && diagnosisCorrect;
   const fixReady =
     retryMode === 'IDEMPOTENT_REPLAY'
@@ -580,15 +562,16 @@ function IndependentAnswer({
 
         <label>
           <span>Primary diagnosis</span>
-          <select value={diagnosis} onChange={(event) => onDiagnosis(event.target.value)}>
-            <option value="">Choose a diagnosis</option>
-            {diagnosisOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
+          <textarea
+            value={diagnosis}
+            onChange={(event) => onDiagnosis(event.target.value)}
+            placeholder="Explain what happened and why FreightBridge rejected the retry."
+            rows={4}
+          />
+          <small>Write this in your own words. There are no diagnosis choices in this module.</small>
         </label>
 
-        <button className="secondary-button" type="button" onClick={onSubmitDiagnosis} disabled={!boundary || !diagnosis}>
+        <button className="secondary-button" type="button" onClick={onSubmitDiagnosis} disabled={!boundary || diagnosis.trim().length < 20}>
           Submit Diagnosis
         </button>
 
@@ -654,6 +637,18 @@ function IndependentAnswer({
       </button>
     </div>
   );
+}
+
+function independentDiagnosisIsCorrect(value: string): boolean {
+  const normalized = value.toLowerCase();
+  const namesDuplicate = normalized.includes('duplicate');
+  const identifiesRetryIdentity =
+    normalized.includes('idempot')
+    || normalized.includes('same load')
+    || normalized.includes('same shipment')
+    || normalized.includes('repeated request')
+    || normalized.includes('retry');
+  return namesDuplicate && identifiesRetryIdentity;
 }
 
 function record(value: unknown): Record<string, unknown> | null {
