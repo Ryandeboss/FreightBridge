@@ -51,7 +51,9 @@ class CreateLabRunRequest(LabModel):
     'X12_214_CONTROL_MISMATCH',
     'X12_214_UNSUPPORTED_STATUS',
     'X12_214_WRONG_VERSION',
+    'X12_214_UNKNOWN_SHIPMENT',
     'SFTP_HOST_KEY_MISMATCH',
+    'REPLAY_SEQUENCE_PRACTICE',
   ] = Field(alias='scenarioKey')
   load_id: str | None = Field(default=None, alias='loadId', min_length=6, max_length=30)
   equipment_type: Literal['VAN_53', 'REEFER_53', 'FLATBED'] | None = Field(default='VAN_53', alias='equipmentType')
