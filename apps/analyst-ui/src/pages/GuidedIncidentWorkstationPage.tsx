@@ -24,7 +24,6 @@ import { AnalystNotes } from '../components/training/TrainingComponents';
 import { completeMission, hasCompletedMission, loadTrainingProgress } from '../training/progress';
 import { trainingMissions } from '../training/missions';
 import type {
-  IncidentEvidencePoint,
   IncidentEvidenceSource,
   IncidentMissionDefinition,
   IncidentOption,
@@ -1072,14 +1071,6 @@ function EvidenceIcon({ status }: { status: string }) {
   if (status === 'SUCCEEDED') return <CheckCircle2 size={15} />;
   if (status === 'FAILED') return <XCircle size={15} />;
   return <Circle size={15} />;
-}
-
-function statusIcon(status: string) {
-  return <EvidenceIcon status={status} />;
-}
-
-function statusLabel(status: string): string {
-  return status === 'NOT_REACHED' ? 'NOT REACHED' : status;
 }
 
 function renderRawEvidence(
