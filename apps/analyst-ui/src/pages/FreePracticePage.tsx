@@ -18,7 +18,6 @@ const tools = [
     title: 'Integration Lab',
     description: 'Create a healthy shipment or controlled failure drill and run the integration one step at a time.',
     icon: Beaker,
-    primary: true,
   },
   {
     to: '/trace',
@@ -92,7 +91,7 @@ export function FreePracticePage() {
           const Icon = tool.icon;
           return (
             <Link
-              className={`free-practice-tool ${tool.primary ? 'featured' : ''}`}
+              className="free-practice-tool"
               to={tool.to}
               key={tool.to}
             >
