@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
-  Circle,
   FileCode2,
   FileJson2,
   ListTree,
@@ -1065,12 +1064,6 @@ function displayValue(value: unknown): string {
   if (value === true) return 'PRESENT';
   if (value === false) return 'NO';
   return String(value);
-}
-
-function EvidenceIcon({ status }: { status: string }) {
-  if (status === 'SUCCEEDED') return <CheckCircle2 size={15} />;
-  if (status === 'FAILED') return <XCircle size={15} />;
-  return <Circle size={15} />;
 }
 
 function renderRawEvidence(
