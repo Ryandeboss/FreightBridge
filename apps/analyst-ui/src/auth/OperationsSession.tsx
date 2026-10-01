@@ -125,15 +125,16 @@ export function OperationsSessionProvider({ children }: { children: ReactNode })
       throw new ApiError('The browser could not save your account session.', 0, 'STORAGE_ERROR');
     }
 
-    setAccountSession(session);
-    setLegacyToken(null);
-    setSessionMessage(null);
-
+    let progressMessage: string | null = null;
     try {
       await hydrateCourseProgress(session.accessToken);
     } catch {
-      setSessionMessage('Signed in. Course progress sync is temporarily unavailable, so this browser will keep your progress locally.');
+      progressMessage = 'Signed in. Course progress sync is temporarily unavailable, so this browser will keep your progress locally.';
     }
+
+    setAccountSession(session);
+    setLegacyToken(null);
+    setSessionMessage(progressMessage);
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
