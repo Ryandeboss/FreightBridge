@@ -18,7 +18,7 @@ import { useOperationsSession } from '../auth/OperationsSession';
 import { LabWorkstation } from '../components/training/LabWorkstation';
 import { TrainingStoryTimeline, type TrainingStoryEvent } from '../components/training/TrainingStoryTimeline';
 import { completeMission, hasCompletedMission, loadTrainingProgress } from '../training/progress';
-import type { IncidentEvidencePoint, IncidentEvidenceSource, IncidentMissionDefinition, IncidentOption } from '../training/types';
+import type { IncidentEvidenceSource, IncidentMissionDefinition, IncidentOption } from '../training/types';
 
 type VersionDraft = {
   isa12: string;
@@ -814,12 +814,6 @@ function sourceRaw(
 function directoryValue(recovery: Record<string, unknown> | null, key: string): string {
   const directories = record(recovery?.directories);
   return directories?.[key] === true ? 'READY' : 'NOT READY';
-}
-
-function statusIcon(status: string) {
-  if (status === 'SUCCEEDED') return <CheckCircle2 size={15} />;
-  if (status === 'FAILED') return <XCircle size={15} />;
-  return <Circle size={15} />;
 }
 
 function record(value: unknown): Record<string, unknown> | null {
