@@ -1,4 +1,6 @@
 import {
+  Award,
+  Beaker,
   BookOpen,
   Code2,
   CheckCircle2,
@@ -265,6 +267,12 @@ export function TrainingShell() {
     else if (mission?.id === PRODUCTION_INCIDENT_MISSION_ID) activeModuleId = 'final';
   }
 
+  const postCourseTitle = pathname.startsWith('/learn/completion')
+    ? 'Course Completion'
+    : pathname.startsWith('/learn/free-practice')
+      ? 'Free Practice'
+      : null;
+
   function toggleSidebar() {
     setCollapsed((current) => {
       const next = !current;
@@ -345,6 +353,18 @@ export function TrainingShell() {
         </nav>
 
         <div className="course-sidebar-footer">
+          {finalComplete && (
+            <>
+              <Link className="course-advanced-link course-post-link" to="/learn/completion" title={collapsed ? 'Course Completion' : undefined}>
+                <Award size={17} />
+                <span className="course-sidebar-head-copy"><strong>Course Completion</strong><small>10 / 10 · 100% complete</small></span>
+              </Link>
+              <Link className="course-advanced-link course-post-link" to="/learn/free-practice" title={collapsed ? 'Free Practice' : undefined}>
+                <Beaker size={17} />
+                <span className="course-sidebar-head-copy"><strong>Free Practice</strong><small>Unguided analyst workspace</small></span>
+              </Link>
+            </>
+          )}
           <Link className="course-advanced-link" to="/dashboard" title={collapsed ? 'Advanced Console' : undefined}>
             <BookOpen size={17} />
             <span className="course-sidebar-head-copy"><strong>Advanced Console</strong><small>Full technical workspace</small></span>
@@ -355,7 +375,7 @@ export function TrainingShell() {
       <header className="course-topbar">
         <div>
           <small>Current module</small>
-          <strong>{modules.find((module) => module.id === activeModuleId)?.title ?? 'Training'}</strong>
+          <strong>{postCourseTitle ?? modules.find((module) => module.id === activeModuleId)?.title ?? 'Training'}</strong>
         </div>
         <div className="course-account">
           {accountEmail && <span title={accountEmail}>{accountEmail}</span>}
