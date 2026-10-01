@@ -7,6 +7,7 @@ import {
   Play,
   RotateCcw,
   Server,
+  XCircle,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -135,8 +136,6 @@ export function ApexBadAuthWorkstation({ mission }: { mission: IncidentMissionDe
         throw new Error('Controlled authentication drill did not reach its expected observed-failure result.');
       }
       setIncidentRun(nextRun);
-      const failedPoint = mission.evidencePoints.find((point) => point.status === 'FAILED');
-      if (failedPoint) setSelectedEvidenceId(failedPoint.id);
     } catch (nextError) {
       handleApiError(nextError);
       setError(nextError instanceof ApiError ? nextError.message : 'The incident drill could not be started.');
