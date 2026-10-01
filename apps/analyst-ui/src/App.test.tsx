@@ -3836,10 +3836,10 @@ test('Training Desk routes healthy progress into the unified workstation and pre
 
     await userEvent.click(screen.getByRole('link', { name: /Continue to Final Shift/i }));
     expect(await screen.findByTestId('incident-mission-page')).toBeInTheDocument();
-    expect(screen.getByText(/Mission 10 - Final Shift Incident/i)).toBeInTheDocument();
+    expect(screen.getByText(/Module 07 · Final Shift · Mission 10/i)).toBeInTheDocument();
   }, 12000);
 
-  test('Mission 10 completes the final shift by correcting the 214 shipment reference', async () => {
+  test('Mission 10 completes the redesigned Final Shift in Console Code Answer', async () => {
     installFetchMock();
     window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({
       version: 1,
@@ -3856,43 +3856,52 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     render(<App />);
 
     expect(await screen.findByTestId('incident-mission-page')).toBeInTheDocument();
-    expect(screen.getByText(/Mission 10 - Final Shift Incident/i)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /Start Incident/i }));
+    expect(screen.getByText(/Module 07 · Final Shift · Mission 10/i)).toBeInTheDocument();
+    expect(screen.getByTestId('final-shift-page')).toHaveTextContent(/No checkpoint classifier, required evidence order, diagnosis choices, or hint ladder/i);
+    await userEvent.click(screen.getByRole('button', { name: /Start Final Shift/i }));
 
-    const workspace = await screen.findByTestId('incident-workspace');
-    expect(workspace).toHaveAttribute('data-scenario-key', 'X12_214_UNKNOWN_SHIPMENT');
+    const workstation = await screen.findByTestId('final-shift-workstation');
+    expect(workstation).toHaveAttribute('data-scenario-key', 'X12_214_UNKNOWN_SHIPMENT');
+    const lab = screen.getByTestId('lab-workstation');
+    expect(within(lab).getByRole('tab', { name: /Console/i })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('heading', { name: /Evidence Checkpoints/i })).not.toBeInTheDocument();
-    expect(screen.getByTestId('healthy-baseline-comparison')).toHaveTextContent(/Independent Investigation/i);
-    expect(screen.getByTestId('healthy-baseline-comparison')).toHaveTextContent(/No checkpoint map or failure classifier/i);
-    expect(screen.getByTestId('incident-analyst-toolbox')).toBeInTheDocument();
+    expect(screen.queryByText(/Hint 1/i)).not.toBeInTheDocument();
 
-    await userEvent.click(within(screen.getByTestId('evidence-source-case-correlation')).getAllByText(/^Inspect/i)[0]);
-    await userEvent.click(within(screen.getByTestId('evidence-source-raw-214')).getAllByText(/^Inspect/i)[0]);
-    await userEvent.click(within(screen.getByTestId('evidence-source-error')).getAllByText(/^Inspect/i)[0]);
+    await userEvent.click(screen.getByRole('button', { name: /Shipment Correlation/i }));
+    expect(screen.getByTestId('final-shift-evidence-viewer')).toHaveTextContent(/LABFINAL900/i);
+    expect(screen.getByTestId('final-shift-evidence-viewer')).toHaveTextContent(/UNKNOWNADADADAD/i);
 
-    expect(screen.getByTestId('evidence-source-case-correlation')).toHaveTextContent(/LABFINAL900/i);
-    expect(screen.getByTestId('evidence-source-case-correlation')).toHaveTextContent(/UNKNOWNADADADAD/i);
-    expect(screen.getByTestId('evidence-source-raw-214')).toHaveTextContent(/004010/i);
-    expect(screen.getByTestId('evidence-source-raw-214')).toHaveTextContent(/AT7\*AF/i);
-    expect(screen.getByTestId('evidence-source-error')).toHaveTextContent(/SHIPMENT_NOT_FOUND/i);
-    expect(screen.getByTestId('evidence-source-error')).toHaveTextContent(/BUSINESS_VALIDATION/i);
+    await userEvent.click(screen.getByRole('button', { name: /Raw 214/i }));
+    expect(screen.getByTestId('final-shift-evidence-viewer')).toHaveTextContent(/004010/i);
+    expect(screen.getByTestId('final-shift-evidence-viewer')).toHaveTextContent(/AT7\*AF/i);
 
-    await chooseIncidentOption(
-      /Where did FreightBridge evidence last look healthy/i,
-      /passed X12 parsing and Midwest mapping/i,
+    await userEvent.click(screen.getByRole('button', { name: /Persisted Failure/i }));
+    expect(screen.getByTestId('final-shift-evidence-viewer')).toHaveTextContent(/SHIPMENT_NOT_FOUND/i);
+    expect(screen.getByTestId('final-shift-evidence-viewer')).toHaveTextContent(/BUSINESS_VALIDATION/i);
+
+    await userEvent.click(within(lab).getByRole('tab', { name: /Answer/i }));
+    await userEvent.type(
+      screen.getByLabelText(/Production incident assessment/i),
+      'The 214 is technically valid, but B10 carries the wrong shipment reference, so FreightBridge fails business validation when it cannot correlate the event to the intended shipment.',
     );
-    await chooseIncidentOption(
-      /What is the most accurate FreightBridge diagnosis/i,
-      /B10 shipment reference does not match the intended canonical shipment/i,
-    );
-    await chooseIncidentOption(
-      /What should you do next/i,
-      /correct the B10 reference/i,
-    );
+    await userEvent.click(screen.getByRole('button', { name: /Submit Assessment/i }));
+    expect(screen.getByTestId('final-shift-assessment-result')).toHaveTextContent(/Assessment accepted/i);
+    expect(screen.getByRole('button', { name: /Apply Correction & Verify/i })).toBeDisabled();
 
-    await userEvent.click(screen.getByRole('button', { name: /Correct the shipment reference and verify recovery/i }));
+    await userEvent.click(within(lab).getByRole('tab', { name: /Code/i }));
+    await userEvent.click(screen.getByRole('button', { name: /Fix\/final_shift_214\.training\.json/i }));
+    const editor = screen.getByTestId('final-shift-fix-editor');
+    const referenceInput = within(editor).getByLabelText(/B10 shipment reference/i);
+    await userEvent.clear(referenceInput);
+    await userEvent.type(referenceInput, 'LABFINAL900');
+    await userEvent.click(within(editor).getByLabelText(/Keep the supported Midwest 004010 profile/i));
+    await userEvent.click(within(editor).getByLabelText(/Generate fresh ST02 \/ SE02 transaction controls/i));
+    expect(editor).toHaveTextContent(/ready for server-backed verification/i);
 
-    const verification = await screen.findByTestId('verification-panel');
+    await userEvent.click(within(lab).getByRole('tab', { name: /Answer/i }));
+    await userEvent.click(screen.getByRole('button', { name: /Apply Correction & Verify/i }));
+
+    const verification = await screen.findByTestId('final-shift-verification');
     expect(verification).toHaveTextContent(/CORRECTED_214_REFERENCE/i);
     expect(verification).toHaveTextContent(/Corrected Shipment Reference/i);
     expect(verification).toHaveTextContent(/LABFINAL900/i);
@@ -3907,13 +3916,13 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(verification).toHaveTextContent(/PRESENT/i);
 
     await userEvent.type(
-      screen.getByLabelText(/Send Mike a concise production-style incident update/i),
-      'Mike, Midwest sent a valid 004010 AF 214, but B10 referenced UNKNOWNADADADAD instead of LABFINAL900. FreightBridge failed at business validation; the corrected reference processed and Apex now shows PICKED_UP.',
+      screen.getByLabelText(/Final incident update to Mike/i),
+      'Mike, Midwest sent a valid 004010 pickup 214, but B10 used the wrong shipment reference. FreightBridge failed business validation; I corrected the reference, preserved the valid profile and AF mapping, and verified Apex now shows PICKED_UP.',
     );
-    await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
+    await userEvent.click(screen.getByRole('button', { name: /Complete Final Shift/i }));
 
-    expect(await screen.findByTestId('incident-debrief')).toHaveTextContent(/MISSION COMPLETE/i);
-    expect(screen.getByTestId('incident-debrief')).toHaveTextContent(/wrong shipment reference/i);
+    expect(await screen.findByTestId('final-shift-completion')).toHaveTextContent(/TRAINING COMPLETE/i);
+    expect(screen.getByTestId('final-shift-completion')).toHaveTextContent(/wrong shipment reference/i);
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('PRODUCTION_INCIDENT');
 
     await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));

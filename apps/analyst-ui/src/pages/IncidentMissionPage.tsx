@@ -5,6 +5,7 @@ import { ApiError } from '../api/client';
 import { ApexBadAuthWorkstation } from './ApexBadAuthWorkstationPage';
 import { GuidedIncidentWorkstation } from './GuidedIncidentWorkstationPage';
 import { AdvancedIncidentWorkstation } from './AdvancedIncidentWorkstationPage';
+import { FinalShiftPage } from './FinalShiftPage';
 import { createLabRun, recoverLabRun, runNextLabStep, type LabRun } from '../api/lab';
 import { useOperationsSession } from '../auth/OperationsSession';
 import {
@@ -51,6 +52,10 @@ export function IncidentMissionPage() {
 
   if (!roadmapPrerequisiteSatisfied || !finalShiftPrerequisiteSatisfied) {
     return <Navigate to="/learn/desk" replace />;
+  }
+
+  if (mission.id === PRODUCTION_INCIDENT_MISSION_ID) {
+    return <FinalShiftPage mission={mission} />;
   }
 
   if (mission.id === APEX_BAD_AUTH_MISSION_ID) {
