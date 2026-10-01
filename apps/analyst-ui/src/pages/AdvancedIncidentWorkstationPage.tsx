@@ -72,7 +72,7 @@ export function AdvancedIncidentWorkstation({ mission }: { mission: IncidentMiss
     : sftpDraft.hostKeyMode === 'verified-configured-fingerprint' && sftpDraft.replayBusinessMessage === false;
   const verified = verifyRecovery(mission, incidentRun, recoveryRun, recovery);
   const canRunFix = requiredEvidenceInspected && lastHealthyCorrect && diagnosisCorrect && fixReady;
-  const canComplete = verified && statusUpdate.trim().length >= 40;
+  const canComplete = verified;
 
   async function startIncident() {
     if (!token) return;
@@ -691,7 +691,7 @@ function AdvancedAnswer({
 
       {verified && (
         <label className="guided-status-update">
-          <span>Write Mike a concise incident update</span>
+          <span>Write Mike a concise incident update <small>(optional)</small></span>
           <textarea value={statusUpdate} onChange={(event) => onStatusUpdate(event.target.value)} placeholder={mission.statusPrompt} />
         </label>
       )}
@@ -699,7 +699,7 @@ function AdvancedAnswer({
       <button
         className="secondary-button"
         type="button"
-        disabled={!verified || statusUpdate.trim().length < 40 || completed}
+        disabled={!verified || completed}
         onClick={onComplete}
       >
         <CheckCircle2 size={16} /> {completed ? 'Debrief Complete' : 'Complete Debrief'}
