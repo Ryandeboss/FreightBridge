@@ -5687,3 +5687,134 @@ input:disabled {
   }
 }
 /* === End Milestone 50 === */
+
+
+/* === Milestone 51: final shift workstation === */
+.final-shift-ticket {
+  display: grid;
+  gap: 1rem;
+}
+.final-shift-ticket-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .65rem;
+}
+.final-shift-ticket-grid > div {
+  display: grid;
+  gap: .28rem;
+  padding: .8rem;
+  border: 1px solid #dde6e8;
+  border-radius: 10px;
+  background: #fafcfc;
+}
+.final-shift-ticket-grid span {
+  color: #7a8b91;
+  font-size: .67rem;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.final-shift-ticket-grid strong {
+  color: #3d555b;
+  font-size: .77rem;
+  line-height: 1.5;
+}
+.final-shift-expectation {
+  display: flex;
+  align-items: flex-start;
+  gap: .6rem;
+  padding: .75rem .8rem;
+  border: 1px solid #d7e4e4;
+  border-radius: 10px;
+  color: #496267;
+  background: #f5f9f9;
+  font-size: .76rem;
+  line-height: 1.45;
+}
+.final-shift-console {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(18rem, .85fr);
+  min-height: 32rem;
+  background: #182227;
+}
+.final-shift-evidence-menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+  padding: .85rem 1rem;
+  border-top: 1px solid #35434a;
+}
+.final-shift-evidence-menu button {
+  padding: .45rem .6rem;
+  border: 1px solid #42535a;
+  border-radius: 7px;
+  color: #c8d4d7;
+  background: #202b30;
+  cursor: pointer;
+  font: inherit;
+  font-size: .7rem;
+  font-weight: 750;
+}
+.final-shift-evidence-menu button.active {
+  border-color: #6f8f87;
+  color: #e2ece9;
+  background: #293b37;
+}
+.final-shift-no-hints {
+  display: flex;
+  align-items: flex-start;
+  gap: .5rem;
+  margin: .15rem 1rem 1rem;
+  padding: .65rem .75rem;
+  border: 1px dashed #46575e;
+  border-radius: 8px;
+  color: #9aabb0;
+  font-size: .7rem;
+  line-height: 1.45;
+}
+.final-shift-no-hints svg {
+  flex: 0 0 auto;
+  margin-top: .08rem;
+}
+.final-shift-answer {
+  gap: .9rem;
+}
+.final-shift-assessment,
+.final-shift-report {
+  display: grid;
+  gap: .35rem;
+}
+.final-shift-assessment > span,
+.final-shift-report > span {
+  color: #41565d;
+  font-size: .74rem;
+  font-weight: 800;
+}
+.final-shift-assessment textarea,
+.final-shift-report textarea {
+  width: 100%;
+  min-height: 7rem;
+  padding: .6rem .7rem;
+  border: 1px solid #cfdadd;
+  border-radius: 8px;
+  color: #344b51;
+  background: #fff;
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+  text-align: left;
+}
+.final-shift-report small {
+  color: #7b8b90;
+  font-size: .68rem;
+}
+.final-shift-complete {
+  border-color: #b7d7c9;
+}
+@media (max-width: 900px) {
+  .final-shift-console,
+  .final-shift-ticket-grid {
+    grid-template-columns: 1fr;
+  }
+}
+/* === End Milestone 51 === */
