@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   Circle,
   FileCode2,
-  FileJson2,
   Play,
   ShieldCheck,
 } from 'lucide-react';
@@ -15,13 +14,13 @@ import { ApiError } from '../api/client';
 import { createLabRun, recoverLabRun, runNextLabStep, type LabRun } from '../api/lab';
 import { useOperationsSession } from '../auth/OperationsSession';
 import { LabWorkstation } from '../components/training/LabWorkstation';
+import { TrainingStoryTimeline, type TrainingStoryEvent } from '../components/training/TrainingStoryTimeline';
 import {
   completeIndependentInvestigation,
   isIndependentInvestigationComplete,
   isReplaySequencePracticeComplete,
 } from '../training/advancedPractice';
 
-type EvidenceView = 'summary' | 'payload' | 'failure';
 type CodeFile = 'policy' | 'contract' | 'fix';
 
 
@@ -31,7 +30,6 @@ export function IndependentInvestigationPage() {
   const { token, handleApiError } = useOperationsSession();
   const [run, setRun] = useState<LabRun | null>(null);
   const [recoveryRun, setRecoveryRun] = useState<LabRun | null>(null);
-  const [selectedEvidence, setSelectedEvidence] = useState<EvidenceView>('summary');
   const [activeFile, setActiveFile] = useState<CodeFile>('policy');
   const [boundary, setBoundary] = useState('');
   const [diagnosis, setDiagnosis] = useState('');
@@ -76,7 +74,6 @@ export function IndependentInvestigationPage() {
     setError(null);
     setRun(null);
     setRecoveryRun(null);
-    setSelectedEvidence('summary');
     setActiveFile('policy');
     setBoundary('');
     setDiagnosis('');
@@ -219,8 +216,6 @@ export function IndependentInvestigationPage() {
             run={run}
             observed={observed}
             payloadPreview={payloadPreview}
-            selected={selectedEvidence}
-            onSelect={setSelectedEvidence}
           />
         }
         code={
@@ -291,94 +286,92 @@ function IndependentConsole({
   run,
   observed,
   payloadPreview,
-  selected,
-  onSelect,
 }: {
   run: LabRun;
   observed: Record<string, unknown> | null;
   payloadPreview: unknown;
-  selected: EvidenceView;
-  onSelect: (value: EvidenceView) => void;
 }) {
-  const evidence = selected === 'summary'
-    ? {
-        title: 'Case summary',
-        value: {
-          businessIdentifier: run.businessIdentifier,
-          runStatus: run.status,
-          attemptsObserved: run.steps.length,
-          transactionEvidencePresent: Boolean(observed?.transactionId),
-        },
-      }
-    : selected === 'payload'
-      ? { title: 'Inbound payload evidence', value: payloadPreview ?? {} }
-      : {
-          title: 'Persisted failure evidence',
-          value: {
-            errorCode: observed?.errorCode ?? null,
-            category: observed?.category ?? null,
-            stage: observed?.stage ?? null,
-            safeMessage: observed?.safeMessage ?? null,
-            transactionId: observed?.transactionId ?? null,
-            businessIdentifier: observed?.businessIdentifier ?? null,
-          },
-        };
+  const events: TrainingStoryEvent[] = [
+    {
+      id: 'baseline',
+      title: 'Original Apex shipment already exists',
+      from: 'Apex Logistics',
+      to: 'FreightBridge',
+      document: 'REST / JSON · original load tender',
+      status: 'ESTABLISHED',
+      tone: 'success',
+      summary: 'FreightBridge already has a shipment record for this business identifier before the second request appears.',
+      logLines: [
+        'level=INFO  component=business.trace',
+        'business_identifier=' + run.businessIdentifier,
+        'original_shipment_present=true',
+        'canonical_shipment_count=1',
+      ],
+    },
+    {
+      id: 'second-request',
+      title: 'Apex submits the same business load again',
+      from: 'Apex Logistics',
+      to: 'FreightBridge API',
+      document: 'REST / JSON · repeated load tender',
+      status: 'OBSERVED',
+      tone: 'warning',
+      summary: 'A later inbound request references the same business shipment. Decide whether the evidence supports a new shipment or a retry of the existing one.',
+      logLines: [
+        'level=INFO  component=inbound.apex',
+        'business_identifier=' + run.businessIdentifier,
+        'request_sequence=2',
+        'payload_preview=' + raw(payloadPreview ?? {}),
+      ],
+    },
+    {
+      id: 'payload',
+      title: 'Payload Evidence',
+      from: 'FreightBridge API',
+      to: 'Business Validation',
+      document: 'Sanitized inbound request',
+      status: 'INSPECT',
+      tone: 'info',
+      summary: 'The payload evidence is available for you to compare with the established shipment and retry policy.',
+      logLines: [
+        raw(payloadPreview ?? {}),
+      ],
+    },
+    {
+      id: 'failure',
+      title: 'Persisted Failure',
+      from: 'Business Validation',
+      to: 'FreightBridge Error Store',
+      document: 'Integration failure record',
+      status: 'FAILED',
+      tone: 'blocked',
+      summary: 'FreightBridge persisted a failure record for the second request. Use its stage, category, and business identifier as evidence.',
+      logLines: [
+        'error_code=' + String(observed?.errorCode ?? null),
+        'category=' + String(observed?.category ?? null),
+        'stage=' + String(observed?.stage ?? null),
+        'safe_message=' + String(observed?.safeMessage ?? null),
+        'transaction_id=' + String(observed?.transactionId ?? null),
+        'business_identifier=' + String(observed?.businessIdentifier ?? run.businessIdentifier),
+      ],
+    },
+  ];
 
   return (
-    <div className="independent-console" data-testid="independent-console">
-      <section className="workstation-console-stream">
-        <div className="workstation-pane-heading">
-          <div><span>FreightBridge activity</span><strong>{run.businessIdentifier}</strong></div>
-          <small>Nothing is pre-classified for you. Decide what matters.</small>
-        </div>
-
-        <div className="workstation-log-list">
-          {run.steps.map((step, index) => (
-            <div className="workstation-log-row succeeded" key={step.id}>
-              <span className="workstation-log-seq">{String(index + 1).padStart(2, '0')}</span>
-              <span className="workstation-log-icon"><CheckCircle2 size={15} /></span>
-              <span className="workstation-log-copy">
-                <strong>{index === 0 ? 'Inbound request 01' : 'Inbound request 02'}</strong>
-                <small>{step.transport} · {step.messageFormat} · {step.documentType}</small>
-              </span>
-              <span className="workstation-log-status">OBSERVED</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="independent-evidence-menu" aria-label="Available case evidence">
-          <button className={selected === 'summary' ? 'active' : ''} type="button" onClick={() => onSelect('summary')}>
-            Case Summary
-          </button>
-          <button className={selected === 'payload' ? 'active' : ''} type="button" onClick={() => onSelect('payload')}>
-            Payload Evidence
-          </button>
-          <button className={selected === 'failure' ? 'active' : ''} type="button" onClick={() => onSelect('failure')}>
-            Persisted Failure
-          </button>
-        </div>
-
-        <div className="independent-no-hints">
-          <Circle size={15} />
-          <span>No evidence source is required. You decide what to inspect and in what order.</span>
-        </div>
-      </section>
-
-      <aside className="workstation-inspector">
-        <div className="workstation-pane-heading">
-          <div><span>Evidence viewer</span><strong>{evidence.title}</strong></div>
-        </div>
-        <div className="workstation-raw" data-testid="independent-evidence-viewer">
-          <div><FileJson2 size={16} /><span>FreightBridge-visible data</span></div>
-          <pre>{raw(evidence.value)}</pre>
-          <small>Partner-private logs and hidden system state are not shown.</small>
-        </div>
-        <div className="independent-case-note">
-          <strong>Analyst rule</strong>
-          <p>The Lab run succeeding means the controlled incident was reproduced as expected. It does not mean the business request itself was healthy.</p>
-        </div>
-      </aside>
-    </div>
+    <TrainingStoryTimeline
+      identifier={run.businessIdentifier}
+      events={events}
+      scenarioTitle="Apex says a repeated load did not behave like a new shipment."
+      scenarioBody="An original shipment already exists. A second Apex request arrives for the same business load. Decide which evidence matters and explain what FreightBridge did with that second attempt."
+      guidance="Nothing is pre-classified for you. Open whichever records you think are relevant and build your diagnosis from the evidence."
+      testId="independent-console"
+      viewerTestId="independent-evidence-viewer"
+    >
+      <div className="independent-no-hints">
+        <Circle size={15} />
+        <span>No evidence source is required. You decide what to inspect and in what order.</span>
+      </div>
+    </TrainingStoryTimeline>
   );
 }
 
