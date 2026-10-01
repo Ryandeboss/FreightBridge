@@ -259,7 +259,7 @@ export function TrainingHomePage() {
           <div>
             <p className="eyebrow">FreightBridge Analyst Training</p>
             <h2>10 / 10 missions complete</h2>
-            <p>You finished orientation, the guided healthy shipment, nine escalating incidents, the replay/sequence clinic, and the independent final shift.</p>
+            <p>You finished orientation, the guided healthy shipment, nine escalating incidents, advanced replay/sequence practice, an independent investigation, and the final production shift.</p>
           </div>
           <div className="training-complete-proof">
             <span><strong>Trace</strong><small>Follow business IDs across REST, X12, SFTP, and canonical state.</small></span>
