@@ -1,3 +1,5 @@
+import { notifyTrainingStateChanged } from './sync';
+
 export const LEARNING_JOURNEY_STORAGE_KEY = 'freightbridge.learningJourneyStarted';
 
 export function hasStartedLearningJourney(): boolean {
@@ -13,4 +15,5 @@ export function hasStartedLearningJourney(): boolean {
 export function startLearningJourney(): void {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(LEARNING_JOURNEY_STORAGE_KEY, 'true');
+  notifyTrainingStateChanged();
 }
