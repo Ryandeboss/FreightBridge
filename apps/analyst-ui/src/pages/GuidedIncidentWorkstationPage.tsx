@@ -364,6 +364,35 @@ export function GuidedIncidentWorkstation({ mission }: { mission: IncidentMissio
     setCompleted(true);
   }
 
+  if (completed) {
+    return (
+      <section className="workstation-case-page" data-testid="incident-mission-page">
+        <article className="panel workstation-complete" data-testid="incident-summary">
+          <CheckCircle2 size={24} />
+          <div>
+            <p className="eyebrow">Guided incident complete</p>
+            <h2>{mission.shortTitle} recovered.</h2>
+            <p>
+              {mission.missionNumber >= 5
+                ? 'FreightBridge verified the correction with the same load correlated through the recovery evidence.'
+                : 'FreightBridge verified a corrected same-load retry through the healthy lifecycle.'}
+            </p>
+          </div>
+          <div className="workstation-complete-actions">
+            <Link className="primary-button" to={nextMissionPath}>
+              {nextMissionLabel} <ArrowRight size={16} />
+            </Link>
+          </div>
+        </article>
+        <article className="panel guided-incident-debrief" data-testid="incident-debrief">
+          <p className="eyebrow">MISSION COMPLETE</p>
+          <h2>What to remember</h2>
+          {mission.debrief.map((item) => <p key={item}>{item}</p>)}
+        </article>
+      </section>
+    );
+  }
+
   if (!incidentRun) {
     return (
       <section className="workstation-case-start" data-testid="incident-mission-page">
@@ -463,36 +492,6 @@ export function GuidedIncidentWorkstation({ mission }: { mission: IncidentMissio
           }
         />
       </div>
-
-      {completed && (
-        <>
-          <article className="panel workstation-complete" data-testid="incident-summary">
-            <CheckCircle2 size={24} />
-            <div>
-              <p className="eyebrow">Guided incident complete</p>
-              <h2>{mission.shortTitle} recovered.</h2>
-              <p>
-                {mission.missionNumber >= 5
-                  ? 'FreightBridge verified the correction with the same load correlated through the recovery evidence.'
-                  : 'FreightBridge verified a corrected same-load retry through the healthy lifecycle.'}
-              </p>
-            </div>
-            <div className="workstation-complete-actions">
-              <Link className="primary-button" to={nextMissionPath}>
-                {nextMissionLabel} <ArrowRight size={16} />
-              </Link>
-              <Link className="secondary-button" to="/learn/desk">
-                Training Desk
-              </Link>
-            </div>
-          </article>
-          <article className="panel guided-incident-debrief" data-testid="incident-debrief">
-            <p className="eyebrow">MISSION COMPLETE</p>
-            <h2>What to remember</h2>
-            {mission.debrief.map((item) => <p key={item}>{item}</p>)}
-          </article>
-        </>
-      )}
     </section>
   );
 }

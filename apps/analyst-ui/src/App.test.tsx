@@ -2214,47 +2214,6 @@ async function chooseIncidentOption(prompt: RegExp, option: RegExp) {
   await userEvent.click(within(screen.getByRole('radiogroup', { name: prompt })).getByRole('radio', { name: option }));
 }
 
-async function completeIncidentMission({
-  startButton = /Start Incident/i,
-  lastHealthy,
-  diagnosis,
-  plan,
-  recoveryButton,
-  evidenceSourceIds = [],
-}: {
-  startButton?: RegExp;
-  lastHealthy: RegExp;
-  diagnosis: RegExp;
-  plan: RegExp;
-  recoveryButton: RegExp;
-  evidenceSourceIds?: string[];
-}) {
-  await userEvent.click(screen.getByRole('button', { name: startButton }));
-  expect(await screen.findByTestId('incident-workspace')).toBeInTheDocument();
-  for (const sourceId of evidenceSourceIds) {
-    await userEvent.click(within(screen.getByTestId(`evidence-source-${sourceId}`)).getAllByText(/^Inspect/i)[0]);
-  }
-  const workstation = screen.queryByTestId('lab-workstation');
-  if (workstation) {
-    await userEvent.click(within(workstation).getByRole('tab', { name: /Answer/i }));
-  }
-  await chooseIncidentOption(/Where did FreightBridge evidence last look healthy/i, lastHealthy);
-  await chooseIncidentOption(/What is the most accurate FreightBridge diagnosis/i, diagnosis);
-  await chooseIncidentOption(/What should you do next/i, plan);
-  await userEvent.click(screen.getByRole('button', { name: recoveryButton }));
-  expect(await screen.findByTestId('verification-panel')).toHaveTextContent(/SUCCEEDED/i);
-  await userEvent.type(
-    screen.getByLabelText(/Write Mike/i),
-    'Mike, FreightBridge found the stop point, completed the safe retry, and verified a healthy lifecycle recovered.',
-  );
-  await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
-  expect(await screen.findByTestId('incident-debrief')).toBeInTheDocument();
-  const completedWorkstation = screen.queryByTestId('lab-workstation');
-  if (completedWorkstation) {
-    await userEvent.click(within(completedWorkstation).getByRole('tab', { name: /Console/i }));
-  }
-}
-
 describe('Analyst Console', () => {
   test('starts on the public journey entry, then validates access and opens orientation', async () => {
     const fetchMock = installFetchMock();
@@ -3324,13 +3283,14 @@ test('Training Desk routes healthy progress into the unified workstation and pre
       expect(calls).not.toContain('FULL_SHIPMENT_LIFECYCLE');
     });
 
-    await userEvent.click(within(screen.getByTestId('incident-summary')).getByRole('link', { name: /^Training Desk$/i }));
-    expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
-    expect(screen.getByTestId('mission-3-card')).toHaveTextContent(/Open Mission/i);
-    expect(screen.getByTestId('mission-4-card')).toHaveTextContent(/Locked/i);
+    expect(screen.getByTestId('curriculum-module-guided')).toHaveTextContent(/1 of 6 labs/i);
+    expect(within(screen.getByTestId('incident-summary')).queryByRole('link', { name: /^Training Desk$/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('link', { name: /Continue to Mission 3/i }));
+    await waitFor(() => expect(window.location.hash).toBe('#/learn/mission/apex-invalid-json'));
+    expect(await screen.findByRole('heading', { name: /Request Arrived, But FreightBridge Can't Read It/i })).toBeInTheDocument();
   });
 
-  test('Mission 3 diagnoses malformed JSON after request arrival and keeps later checkpoints not reached', async () => {
+  test('Mission 3 diagnoses malformed JSON and hands off directly to Mission 4', async () => {
     const fetchMock = installFetchMock();
     window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({ version: 1, completedMissions: ['LEARN_THE_FLOW', 'APEX_BAD_AUTH'] }));
     window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
@@ -3338,19 +3298,31 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     render(<App />);
 
     expect(await screen.findByTestId('incident-mission-page')).toBeInTheDocument();
-    await completeIncidentMission({
-      lastHealthy: /Partner authentication succeeded/i,
-      diagnosis: /malformed JSON/i,
-      plan: /resend parseable JSON/i,
-      recoveryButton: /Retry with corrected JSON/i,
-    });
-
+    await userEvent.click(screen.getByRole('button', { name: /Start Incident/i }));
+    const workstation = await screen.findByTestId('lab-workstation');
     expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/INVALID_JSON/i);
     expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/PARSING/i);
     expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/Business validation/i);
     expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/NOT REACHED/i);
+
+    await userEvent.click(within(workstation).getByRole('tab', { name: /Answer/i }));
+    await chooseIncidentOption(/Where did FreightBridge evidence last look healthy/i, /Partner authentication succeeded/i);
+    await chooseIncidentOption(/What is the most accurate FreightBridge diagnosis/i, /malformed JSON/i);
+    await chooseIncidentOption(/What should you do next/i, /resend parseable JSON/i);
+    await userEvent.click(screen.getByRole('button', { name: /Retry with corrected JSON/i }));
+    expect(await screen.findByTestId('verification-panel')).toHaveTextContent(/SUCCEEDED/i);
+    await userEvent.type(
+      screen.getByLabelText(/Write Mike/i),
+      'Mike, authentication passed, malformed JSON stopped parsing, and the corrected parseable payload recovered the same load.',
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
+
+    expect(await screen.findByTestId('incident-debrief')).toBeInTheDocument();
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('APEX_INVALID_JSON');
+    expect(screen.getByTestId('curriculum-module-guided')).toHaveTextContent(/2 of 6 labs/i);
     expect(screen.getByRole('link', { name: /Continue to Mission 4/i })).toHaveAttribute('href', '#/learn/mission/apex-invalid-contract');
+    expect(within(screen.getByTestId('incident-summary')).queryByRole('link', { name: /^Training Desk$/i })).not.toBeInTheDocument();
+
     await waitFor(() => {
       const calls = fetchMock.mock.calls
         .filter(([input, init]) => String(input).endsWith('/api/lab/runs') && init?.method === 'POST')
@@ -3359,9 +3331,9 @@ test('Training Desk routes healthy progress into the unified workstation and pre
       expect(calls).not.toContain('FULL_SHIPMENT_LIFECYCLE');
     });
 
-    await userEvent.click(within(screen.getByTestId('incident-summary')).getByRole('link', { name: /^Training Desk$/i }));
-    expect(await screen.findByTestId('mission-4-card')).toHaveTextContent(/Open Mission/i);
-    expect(screen.getByText(/Mission 5 - Why Is This Shipment Showing Up Twice/i).closest('article')).toHaveTextContent(/Locked/i);
+    await userEvent.click(screen.getByRole('link', { name: /Continue to Mission 4/i }));
+    await waitFor(() => expect(window.location.hash).toBe('#/learn/mission/apex-invalid-contract'));
+    expect(await screen.findByRole('heading', { name: /JSON Looks Fine/i })).toBeInTheDocument();
   });
 
   test('Mission 4 separates parsed JSON from contract validation and records analyst notes', async () => {
@@ -3416,8 +3388,9 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(await screen.findByTestId('incident-debrief')).toHaveTextContent(/MISSION COMPLETE/i);
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('APEX_INVALID_CONTRACT');
     expect(screen.getByRole('link', { name: /Continue to Mission 5/i })).toHaveAttribute('href', '#/learn/mission/duplicate-shipment');
-    await userEvent.click(within(screen.getByTestId('incident-summary')).getByRole('link', { name: /^Training Desk$/i }));
-    expect(await screen.findByTestId('mission-5-card')).toHaveTextContent(/Open Mission/i);
+    expect(within(screen.getByTestId('incident-summary')).queryByRole('link', { name: /^Training Desk$/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('link', { name: /Continue to Mission 5/i }));
+    await waitFor(() => expect(window.location.hash).toBe('#/learn/mission/duplicate-shipment'));
   }, 10000);
 
   test('Mission 5 requires duplicate and idempotency evidence before diagnosis', async () => {
@@ -3454,9 +3427,9 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('DUPLICATE_SHIPMENT');
     expect(screen.getByRole('link', { name: /Continue to Mission 6/i })).toHaveAttribute('href', '#/learn/mission/x12-envelope-mismatch');
 
-    await userEvent.click(within(screen.getByTestId('incident-summary')).getByRole('link', { name: /^Training Desk$/i }));
-    expect(await screen.findByTestId('mission-6-card')).toHaveTextContent(/Open Mission/i);
-    expect(screen.getByTestId('mission-7-card')).toHaveTextContent(/Locked/i);
+    expect(within(screen.getByTestId('incident-summary')).queryByRole('link', { name: /^Training Desk$/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('link', { name: /Continue to Mission 6/i }));
+    await waitFor(() => expect(window.location.hash).toBe('#/learn/mission/x12-envelope-mismatch'));
   }, 10000);
 
   test('Mission 6 teaches 214 ST02 and SE02 control-number correlation', async () => {
@@ -3489,8 +3462,9 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('X12_ENVELOPE_MISMATCH');
     expect(screen.getByRole('link', { name: /Continue to Mission 7/i })).toHaveAttribute('href', '#/learn/mission/status-callback-missing');
 
-    await userEvent.click(within(screen.getByTestId('incident-summary')).getByRole('link', { name: /^Training Desk$/i }));
-    expect(await screen.findByTestId('mission-7-card')).toHaveTextContent(/Open Mission/i);
+    expect(within(screen.getByTestId('incident-summary')).queryByRole('link', { name: /^Training Desk$/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('link', { name: /Continue to Mission 7/i }));
+    await waitFor(() => expect(window.location.hash).toBe('#/learn/mission/status-callback-missing'));
   }, 10000);
 
   test('Mission 7 separates valid X12 parsing from unsupported 214 status mapping', async () => {
@@ -3531,8 +3505,9 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('STATUS_CALLBACK_MISSING');
     expect(screen.getByRole('link', { name: /Continue to Module 05/i })).toHaveAttribute('href', '#/learn/mission/wrong-x12-version');
 
-    await userEvent.click(within(screen.getByTestId('incident-summary')).getByRole('link', { name: /^Training Desk$/i }));
-    expect(await screen.findByTestId('mission-8-card')).toHaveTextContent(/Open Mission/i);
+    expect(within(screen.getByTestId('incident-summary')).queryByRole('link', { name: /^Training Desk$/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('link', { name: /Continue to Module 05/i }));
+    await waitFor(() => expect(window.location.hash).toBe('#/learn/mission/wrong-x12-version'));
   }, 10000);
 
   test('Mission 8 requires an interactive X12 profile fix in the advanced workstation', async () => {

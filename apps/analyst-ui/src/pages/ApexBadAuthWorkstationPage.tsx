@@ -167,6 +167,26 @@ export function ApexBadAuthWorkstation({ mission }: { mission: IncidentMissionDe
     setCompleted(true);
   }
 
+  if (completed) {
+    return (
+      <section className="workstation-case-page" data-testid="incident-mission-page">
+        <article className="panel workstation-complete" data-testid="incident-summary">
+          <CheckCircle2 size={24} />
+          <div>
+            <p className="eyebrow">Lab complete</p>
+            <h2>Authentication failure diagnosed and recovered.</h2>
+            <p>The request reached FreightBridge, authentication failed first, and the same load completed successfully after a valid authenticated retry.</p>
+          </div>
+          <div className="workstation-complete-actions">
+            <Link className="primary-button" to="/learn/mission/apex-invalid-json">
+              Continue to Mission 3 <ArrowRight size={16} />
+            </Link>
+          </div>
+        </article>
+      </section>
+    );
+  }
+
   if (!incidentRun) {
     return (
       <section className="workstation-case-start" data-testid="incident-mission-page">
@@ -258,25 +278,6 @@ export function ApexBadAuthWorkstation({ mission }: { mission: IncidentMissionDe
           }
         />
       </div>
-
-      {(completed || alreadyCompleted && verified) && (
-        <article className="panel workstation-complete" data-testid="incident-summary">
-          <CheckCircle2 size={24} />
-          <div>
-            <p className="eyebrow">Lab complete</p>
-            <h2>Authentication failure diagnosed and recovered.</h2>
-            <p>The request reached FreightBridge, authentication failed first, and the same load completed successfully after a valid authenticated retry.</p>
-          </div>
-          <div className="workstation-complete-actions">
-            <Link className="primary-button" to="/learn/mission/apex-invalid-json">
-              Continue to Mission 3 <ArrowRight size={16} />
-            </Link>
-            <Link className="secondary-button" to="/learn/desk">
-              Training Desk
-            </Link>
-          </div>
-        </article>
-      )}
     </section>
   );
 }
