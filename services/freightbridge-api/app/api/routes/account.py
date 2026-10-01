@@ -103,7 +103,8 @@ def register_account(
   except SupabaseAuthError as exc:
     raise auth_error(exc) from exc
 
-  if isinstance(payload.get('access_token'), str):
+  access_token = payload.get('access_token')
+  if isinstance(access_token, str) and access_token:
     session = session_view(payload)
     return RegisterAccountResponse(status='SIGNED_IN', session=session, email=session.user.email)
 
