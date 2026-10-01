@@ -4,7 +4,6 @@ import {
   CheckCircle2,
   Circle,
   FileCode2,
-  FileJson2,
   Play,
   ShieldCheck,
 } from 'lucide-react';
@@ -14,10 +13,10 @@ import { ApiError } from '../api/client';
 import { createLabRun, recoverLabRun, runNextLabStep, type LabRun } from '../api/lab';
 import { useOperationsSession } from '../auth/OperationsSession';
 import { LabWorkstation } from '../components/training/LabWorkstation';
+import { TrainingStoryTimeline, type TrainingStoryEvent } from '../components/training/TrainingStoryTimeline';
 import { completeMission, hasCompletedMission, loadTrainingProgress } from '../training/progress';
 import type { IncidentMissionDefinition } from '../training/types';
 
-type EvidenceView = 'overview' | 'raw-214' | 'controls' | 'correlation' | 'failure';
 type CodeFile = 'profile' | 'correlation' | 'fix';
 
 export function FinalShiftPage({ mission }: { mission: IncidentMissionDefinition }) {
@@ -25,7 +24,6 @@ export function FinalShiftPage({ mission }: { mission: IncidentMissionDefinition
   const alreadyComplete = hasCompletedMission(loadTrainingProgress(), mission.id);
   const [run, setRun] = useState<LabRun | null>(null);
   const [recoveryRun, setRecoveryRun] = useState<LabRun | null>(null);
-  const [selectedEvidence, setSelectedEvidence] = useState<EvidenceView>('overview');
   const [activeFile, setActiveFile] = useState<CodeFile>('profile');
   const [assessment, setAssessment] = useState('');
   const [assessmentSubmitted, setAssessmentSubmitted] = useState(false);
@@ -72,7 +70,6 @@ export function FinalShiftPage({ mission }: { mission: IncidentMissionDefinition
     setError(null);
     setRun(null);
     setRecoveryRun(null);
-    setSelectedEvidence('overview');
     setActiveFile('profile');
     setAssessment('');
     setAssessmentSubmitted(false);
@@ -229,15 +226,13 @@ export function FinalShiftPage({ mission }: { mission: IncidentMissionDefinition
           statusTone={verified ? 'success' : 'danger'}
           console={
             <FinalShiftConsole
-              run={run}
-              observed={observed}
-              fault={fault}
-              x12={x12}
-              intendedReference={intendedReference}
-              receivedReference={receivedReference}
-              selected={selectedEvidence}
-              onSelect={setSelectedEvidence}
-            />
+            run={run}
+            observed={observed}
+            fault={fault}
+            x12={x12}
+            intendedReference={intendedReference}
+            receivedReference={receivedReference}
+          />
           }
           code={
             <FinalShiftCode
@@ -308,8 +303,6 @@ function FinalShiftConsole({
   x12,
   intendedReference,
   receivedReference,
-  selected,
-  onSelect,
 }: {
   run: LabRun;
   observed: Record<string, unknown> | null;
@@ -317,103 +310,106 @@ function FinalShiftConsole({
   x12: string;
   intendedReference: string;
   receivedReference: string;
-  selected: EvidenceView;
-  onSelect: (value: EvidenceView) => void;
 }) {
-  const evidence = selected === 'overview'
-    ? {
-        title: 'Incident overview',
-        value: {
-          runStatus: run.status,
-          scenarioEvidence: 'expected failure reproduced',
-          intendedShipment: intendedReference,
-          observedTransaction: observed?.transactionId ?? null,
-          observedStage: observed?.stage ?? null,
-        },
-      }
-    : selected === 'raw-214'
-      ? { title: 'Raw Midwest 214', value: x12 || 'Raw 214 unavailable.' }
-      : selected === 'controls'
-        ? {
-            title: 'Parsed X12 controls',
-            value: {
-              isa12: segmentElement(x12, 'ISA', 12),
-              gs08: segmentElement(x12, 'GS', 8),
-              st02: segmentElement(x12, 'ST', 2),
-              se02: segmentElement(x12, 'SE', 2),
-              at701: segmentElement(x12, 'AT7', 1),
-            },
-          }
-        : selected === 'correlation'
-          ? {
-              title: 'Shipment correlation',
-              value: {
-                intendedShipmentReference: intendedReference,
-                receivedB10ShipmentReference: receivedReference,
-                interchangeControlNumber: fault?.interchangeControlNumber ?? null,
-                groupControlNumber: fault?.groupControlNumber ?? null,
-                transactionControlNumber: fault?.transactionControlNumber ?? null,
-              },
-            }
-          : {
-              title: 'Persisted failure',
-              value: {
-                errorCode: observed?.errorCode ?? null,
-                category: observed?.category ?? null,
-                stage: observed?.stage ?? null,
-                safeMessage: observed?.safeMessage ?? null,
-                businessIdentifier: observed?.businessIdentifier ?? null,
-                transactionId: observed?.transactionId ?? null,
-              },
-            };
+  const events: TrainingStoryEvent[] = [
+    {
+      id: 'raw-214',
+      title: 'Raw 214',
+      from: 'Midwest Carrier',
+      to: 'FreightBridge SFTP Intake',
+      document: 'X12 214 · shipment status',
+      status: 'RECEIVED',
+      tone: 'success',
+      summary: 'A Midwest 214 reached FreightBridge. Inspect the message itself before deciding where processing failed.',
+      logLines: [x12 || 'Raw 214 unavailable.'],
+    },
+    {
+      id: 'controls',
+      title: 'X12 Controls',
+      from: 'FreightBridge SFTP Intake',
+      to: 'X12 Parser',
+      document: 'ISA / GS / ST / SE validation',
+      status: 'PASSED',
+      tone: 'success',
+      summary: 'FreightBridge parsed the envelope and transaction controls successfully.',
+      logLines: [
+        'ISA12=' + String(segmentElement(x12, 'ISA', 12)),
+        'GS08=' + String(segmentElement(x12, 'GS', 8)),
+        'ST02=' + String(segmentElement(x12, 'ST', 2)),
+        'SE02=' + String(segmentElement(x12, 'SE', 2)),
+        'AT7-01=' + String(segmentElement(x12, 'AT7', 1)),
+        'parse_result=PASS',
+      ],
+    },
+    {
+      id: 'mapping',
+      title: '214 status mapping',
+      from: 'X12 Parser',
+      to: 'Midwest 214 Mapper',
+      document: 'AT7 status normalization',
+      status: 'PASSED',
+      tone: 'success',
+      summary: 'The parsed status code is accepted by the active Midwest mapping profile.',
+      logLines: [
+        'partner=MIDWEST',
+        'AT7-01=' + String(segmentElement(x12, 'AT7', 1)),
+        'normalized_status=PICKED_UP',
+        'mapping_result=PASS',
+      ],
+    },
+    {
+      id: 'correlation',
+      title: 'Shipment Correlation',
+      from: 'Midwest 214 Mapper',
+      to: 'Canonical Shipment Lookup',
+      document: 'B10 shipment-reference correlation',
+      status: 'FAILED',
+      tone: 'blocked',
+      summary: 'The technically valid 214 reached business correlation. Compare the intended shipment with the B10 reference FreightBridge received.',
+      logLines: [
+        'intended_shipment_reference=' + intendedReference,
+        'received_B10_shipment_reference=' + receivedReference,
+        'interchange_control_number=' + String(fault?.interchangeControlNumber ?? null),
+        'group_control_number=' + String(fault?.groupControlNumber ?? null),
+        'transaction_control_number=' + String(fault?.transactionControlNumber ?? null),
+        'lookup_result=NO_MATCH',
+      ],
+    },
+    {
+      id: 'failure',
+      title: 'Persisted Failure',
+      from: 'Canonical Shipment Lookup',
+      to: 'FreightBridge Error Store',
+      document: 'Integration failure record',
+      status: 'FAILED',
+      tone: 'blocked',
+      summary: 'FreightBridge persisted the first failing business-stage evidence. Use it together with the raw 214 and correlation data.',
+      logLines: [
+        'error_code=' + String(observed?.errorCode ?? null),
+        'category=' + String(observed?.category ?? null),
+        'stage=' + String(observed?.stage ?? null),
+        'safe_message=' + String(observed?.safeMessage ?? null),
+        'business_identifier=' + String(observed?.businessIdentifier ?? null),
+        'transaction_id=' + String(observed?.transactionId ?? null),
+      ],
+    },
+  ];
 
   return (
-    <div className="final-shift-console" data-testid="final-shift-console">
-      <section className="workstation-console-stream">
-        <div className="workstation-pane-heading">
-          <div><span>FreightBridge incident</span><strong>{run.businessIdentifier}</strong></div>
-          <small>Inspect only the evidence you think is relevant.</small>
-        </div>
-
-        <div className="workstation-log-list">
-          {run.steps.map((step, index) => (
-            <div className="workstation-log-row succeeded" key={step.id}>
-              <span className="workstation-log-seq">{String(index + 1).padStart(2, '0')}</span>
-              <span className="workstation-log-icon"><CheckCircle2 size={15} /></span>
-              <span className="workstation-log-copy">
-                <strong>{step.displayName}</strong>
-                <small>{step.transport} · {step.messageFormat} · {step.documentType}</small>
-              </span>
-              <span className="workstation-log-status">OBSERVED</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="final-shift-evidence-menu" aria-label="Available final-shift evidence">
-          <button className={selected === 'overview' ? 'active' : ''} type="button" onClick={() => onSelect('overview')}>Overview</button>
-          <button className={selected === 'raw-214' ? 'active' : ''} type="button" onClick={() => onSelect('raw-214')}>Raw 214</button>
-          <button className={selected === 'controls' ? 'active' : ''} type="button" onClick={() => onSelect('controls')}>X12 Controls</button>
-          <button className={selected === 'correlation' ? 'active' : ''} type="button" onClick={() => onSelect('correlation')}>Shipment Correlation</button>
-          <button className={selected === 'failure' ? 'active' : ''} type="button" onClick={() => onSelect('failure')}>Persisted Failure</button>
-        </div>
-
-        <div className="final-shift-no-hints">
-          <Circle size={15} />
-          <span>No evidence item is required and no inspection order is enforced. Your diagnosis is graded on the conclusion you submit.</span>
-        </div>
-      </section>
-
-      <aside className="workstation-inspector">
-        <div className="workstation-pane-heading">
-          <div><span>Evidence viewer</span><strong>{evidence.title}</strong></div>
-        </div>
-        <div className="workstation-raw" data-testid="final-shift-evidence-viewer">
-          <div><FileJson2 size={16} /><span>FreightBridge-visible evidence</span></div>
-          <pre>{raw(evidence.value)}</pre>
-          <small>No private Apex or Midwest internal logs are shown.</small>
-        </div>
-      </aside>
-    </div>
+    <TrainingStoryTimeline
+      identifier={run.businessIdentifier}
+      events={events}
+      scenarioTitle="Midwest says a valid pickup 214 was sent, but Apex never received the status."
+      scenarioBody="This is the Final Shift. Follow only FreightBridge-visible evidence from file arrival through parsing, mapping, shipment correlation, and the persisted failure."
+      guidance="No evidence item is required and no inspection order is enforced. The timeline tells you what happened; your diagnosis still has to explain why."
+      testId="final-shift-console"
+      viewerTestId="final-shift-evidence-viewer"
+    >
+      <div className="final-shift-no-hints">
+        <Circle size={15} />
+        <span>No evidence item is required and no inspection order is enforced. Your diagnosis is graded on the conclusion you submit.</span>
+      </div>
+    </TrainingStoryTimeline>
   );
 }
 
