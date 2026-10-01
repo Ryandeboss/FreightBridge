@@ -12,7 +12,7 @@ import {
   ShieldCheck,
   Workflow,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useOperationsSession } from '../../auth/OperationsSession';
 import {
@@ -43,7 +43,7 @@ import {
 } from '../../training/ediBootcamp';
 import { isIndependentInvestigationComplete, isReplaySequencePracticeComplete } from '../../training/advancedPractice';
 import { HEALTHY_LESSON_SCENE_COUNT, loadHealthyLessonState } from '../../training/healthyLesson';
-import { hasCompletedMission, loadTrainingProgress } from '../../training/progress';
+import { TRAINING_PROGRESS_STORAGE_KEY, TRAINING_PROGRESS_UPDATED_EVENT, hasCompletedMission, loadTrainingProgress } from '../../training/progress';
 
 const SIDEBAR_STORAGE_KEY = 'freightbridge.curriculumSidebarCollapsed';
 const GUIDED_MISSION_IDS = [
@@ -89,8 +89,20 @@ export function TrainingShell() {
   const [collapsed, setCollapsed] = useState(
     () => typeof window !== 'undefined' && window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === 'true',
   );
+  const [progress, setProgress] = useState(() => loadTrainingProgress());
 
-  const progress = loadTrainingProgress();
+  useEffect(() => {
+    const refreshProgress = () => setProgress(loadTrainingProgress());
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === TRAINING_PROGRESS_STORAGE_KEY) refreshProgress();
+    };
+    window.addEventListener(TRAINING_PROGRESS_UPDATED_EVENT, refreshProgress);
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener(TRAINING_PROGRESS_UPDATED_EVENT, refreshProgress);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, []);
   const completed = (missionId: string) => hasCompletedMission(progress, missionId);
 
   // Progress is monotonic for the curriculum UI. Older browser state may contain
