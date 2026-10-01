@@ -2214,47 +2214,6 @@ async function chooseIncidentOption(prompt: RegExp, option: RegExp) {
   await userEvent.click(within(screen.getByRole('radiogroup', { name: prompt })).getByRole('radio', { name: option }));
 }
 
-async function completeIncidentMission({
-  startButton = /Start Incident/i,
-  lastHealthy,
-  diagnosis,
-  plan,
-  recoveryButton,
-  evidenceSourceIds = [],
-}: {
-  startButton?: RegExp;
-  lastHealthy: RegExp;
-  diagnosis: RegExp;
-  plan: RegExp;
-  recoveryButton: RegExp;
-  evidenceSourceIds?: string[];
-}) {
-  await userEvent.click(screen.getByRole('button', { name: startButton }));
-  expect(await screen.findByTestId('incident-workspace')).toBeInTheDocument();
-  for (const sourceId of evidenceSourceIds) {
-    await userEvent.click(within(screen.getByTestId(`evidence-source-${sourceId}`)).getAllByText(/^Inspect/i)[0]);
-  }
-  const workstation = screen.queryByTestId('lab-workstation');
-  if (workstation) {
-    await userEvent.click(within(workstation).getByRole('tab', { name: /Answer/i }));
-  }
-  await chooseIncidentOption(/Where did FreightBridge evidence last look healthy/i, lastHealthy);
-  await chooseIncidentOption(/What is the most accurate FreightBridge diagnosis/i, diagnosis);
-  await chooseIncidentOption(/What should you do next/i, plan);
-  await userEvent.click(screen.getByRole('button', { name: recoveryButton }));
-  expect(await screen.findByTestId('verification-panel')).toHaveTextContent(/SUCCEEDED/i);
-  await userEvent.type(
-    screen.getByLabelText(/Write Mike/i),
-    'Mike, FreightBridge found the stop point, completed the safe retry, and verified a healthy lifecycle recovered.',
-  );
-  await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
-  expect(await screen.findByTestId('incident-debrief')).toBeInTheDocument();
-  const completedWorkstation = screen.queryByTestId('lab-workstation');
-  if (completedWorkstation) {
-    await userEvent.click(within(completedWorkstation).getByRole('tab', { name: /Console/i }));
-  }
-}
-
 describe('Analyst Console', () => {
   test('starts on the public journey entry, then validates access and opens orientation', async () => {
     const fetchMock = installFetchMock();
