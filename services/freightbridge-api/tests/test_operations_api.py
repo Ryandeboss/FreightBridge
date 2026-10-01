@@ -50,6 +50,9 @@ def test_operations_auth_valid_token_succeeds() -> None:
 
 
 def test_operations_auth_accepts_learner_session(monkeypatch) -> None:
+  monkeypatch.setenv('SUPABASE_URL', 'https://example.supabase.co')
+  monkeypatch.setenv('SUPABASE_PUBLISHABLE_KEY', 'publishable-test-key')
+  get_settings.cache_clear()
   repository = FakeOperationsRepository()
   app.dependency_overrides[get_operations_repository] = lambda: repository
 
