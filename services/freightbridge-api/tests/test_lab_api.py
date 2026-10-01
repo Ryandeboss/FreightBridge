@@ -6,7 +6,12 @@ from fastapi.testclient import TestClient
 
 from app.api.routes.lab import get_lab_service
 from app.core.config import get_settings
-from app.integrations.lab import IntegrationLabService, LabExecutionError
+from app.integrations.lab import (
+  PARTNER_REQUEST_TIMEOUT_SECONDS,
+  IntegrationLabService,
+  LabExecutionError,
+  PartnerSimulatorClient,
+)
 from app.main import app
 from app.models.lab import CreateLabRunRequest
 
@@ -72,6 +77,35 @@ def lab_run(status: str = 'READY', step_status: str = 'PENDING') -> dict[str, ob
     'completed_at': now if status in ('SUCCEEDED', 'FAILED') else None,
     'steps': [lab_step(status=step_status)],
   }
+
+
+def test_partner_simulator_client_allows_render_cold_start(monkeypatch) -> None:
+  observed: dict[str, object] = {}
+
+  class FakeResponse:
+    status_code = 200
+
+    def json(self) -> dict[str, str]:
+      return {'status': 'ready'}
+
+  def fake_request(method: str, url: str, **kwargs):
+    observed['method'] = method
+    observed['url'] = url
+    observed['timeout'] = kwargs.get('timeout')
+    return FakeResponse()
+
+  monkeypatch.setattr('app.integrations.lab.httpx.request', fake_request)
+  client = PartnerSimulatorClient(
+    base_url='https://partner.example',
+    bearer_token='partner-token',
+    unavailable_code='LAB_PARTNER_UNAVAILABLE',
+  )
+
+  response = client.get('/health')
+
+  assert response['status'] == 'ready'
+  assert observed['timeout'] == PARTNER_REQUEST_TIMEOUT_SECONDS
+  assert PARTNER_REQUEST_TIMEOUT_SECONDS >= 60.0
 
 
 def test_lab_auth_rejects_missing_token() -> None:
