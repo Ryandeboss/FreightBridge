@@ -1,4 +1,4 @@
-import { ArrowLeft, LockKeyhole, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, LogIn, ShieldCheck, UserPlus } from 'lucide-react';
 import { FormEvent, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
@@ -12,11 +12,13 @@ function requestedDestination(search: string): string {
 }
 
 export function AccessPage() {
-  const { connect, isAuthenticated, sessionMessage } = useOperationsSession();
+  const { signIn, register, isAuthenticated, sessionMessage } = useOperationsSession();
   const location = useLocation();
   const navigate = useNavigate();
   const destination = requestedDestination(location.search);
-  const [token, setToken] = useState('');
+  const [mode, setMode] = useState<'signin' | 'register'>('signin');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(sessionMessage);
   const [tone, setTone] = useState<'error' | 'info'>('info');
@@ -31,13 +33,26 @@ export function AccessPage() {
     setMessage(null);
 
     try {
-      await connect(token);
-      startLearningJourney();
-      navigate(destination, { replace: true });
+      if (mode === 'signin') {
+        await signIn(email, password);
+        startLearningJourney();
+        navigate(destination, { replace: true });
+      } else {
+        const result = await register(email, password);
+        if (result === 'SIGNED_IN') {
+          startLearningJourney();
+          navigate(destination, { replace: true });
+        } else {
+          setTone('info');
+          setMessage('Account created. Check your email to confirm the address, then sign in here.');
+          setMode('signin');
+          setPassword('');
+        }
+      }
     } catch (error) {
       const apiError = error instanceof ApiError ? error : null;
-      setTone(apiError?.status === 401 ? 'error' : 'info');
-      setMessage(apiError?.message ?? 'FreightBridge could not validate that access key.');
+      setTone('error');
+      setMessage(apiError?.message ?? 'FreightBridge could not complete the account request.');
     } finally {
       setIsSubmitting(false);
     }
@@ -57,30 +72,74 @@ export function AccessPage() {
 
         <div className="journey-access-copy">
           <p className="journey-wordmark">FreightBridge</p>
-          <h1>One quick step before training.</h1>
-          <p>Enter your access key to open the learning environment. Your training progress stays in this browser for now.</p>
+          <h1>{mode === 'signin' ? 'Sign in to continue training.' : 'Create your learner account.'}</h1>
+          <p>
+            {mode === 'signin'
+              ? 'Your course progress is tied to your account, so you can resume on another browser or device.'
+              : 'Use an email and password to save your FreightBridge course progress securely.'}
+          </p>
+        </div>
+
+        <div className="journey-account-switch" role="group" aria-label="Account action">
+          <button
+            type="button"
+            className={mode === 'signin' ? 'active' : ''}
+            onClick={() => {
+              setMode('signin');
+              setMessage(null);
+            }}
+          >
+            Sign in
+          </button>
+          <button
+            type="button"
+            className={mode === 'register' ? 'active' : ''}
+            onClick={() => {
+              setMode('register');
+              setMessage(null);
+            }}
+          >
+            Create account
+          </button>
         </div>
 
         <form onSubmit={onSubmit} className="journey-access-form">
-          <label htmlFor="operations-token">Access key</label>
+          <label htmlFor="account-email">Email</label>
           <input
-            id="operations-token"
-            name="operations-token"
-            type="password"
-            value={token}
-            onChange={(event) => setToken(event.target.value)}
-            autoComplete="off"
+            id="account-email"
+            name="email"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            autoComplete="email"
             required
             autoFocus
           />
+
+          <label htmlFor="account-password">Password</label>
+          <input
+            id="account-password"
+            name="password"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+            minLength={8}
+            required
+          />
+          {mode === 'register' && <small>Use at least 8 characters.</small>}
+
           {message && (
             <p className={`form-message ${tone === 'error' ? 'form-error' : 'form-info'}`} role="alert">
               {message}
             </p>
           )}
+
           <button className="journey-start-button" type="submit" disabled={isSubmitting}>
-            <LockKeyhole size={16} />
-            {isSubmitting ? 'Opening training…' : 'Enter Training'}
+            {mode === 'signin' ? <LogIn size={16} /> : <UserPlus size={16} />}
+            {isSubmitting
+              ? mode === 'signin' ? 'Signing in…' : 'Creating account…'
+              : mode === 'signin' ? 'Sign In' : 'Create Account'}
           </button>
         </form>
       </section>
