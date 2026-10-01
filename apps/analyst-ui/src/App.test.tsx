@@ -3246,8 +3246,9 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/AUTHENTICATION_ERROR/i);
     expect(screen.getByTestId('incident-workspace')).not.toHaveTextContent(token);
 
-    await userEvent.click(screen.getByRole('button', { name: /View Raw Message/i }));
-    expect(screen.getByTestId('workstation-raw-message')).toHaveTextContent(/REDACTED/i);
+    await userEvent.click(screen.getByTestId('workstation-log-received'));
+    expect(screen.getByTestId('training-story-log-viewer')).toHaveTextContent(/REDACTED/i);
+    await userEvent.click(screen.getByRole('button', { name: /Close log/i }));
 
     await userEvent.click(within(workstation).getByRole('tab', { name: /Code/i }));
     expect(screen.getByTestId('workstation-code')).toHaveTextContent(/Partner Contracts\/apex_contract\.json/i);
@@ -3808,6 +3809,7 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     await userEvent.click(screen.getByRole('button', { name: /Persisted Failure/i }));
     expect(screen.getByTestId('independent-evidence-viewer')).toHaveTextContent(/DUPLICATE_SHIPMENT/i);
     expect(screen.getByTestId('independent-evidence-viewer')).toHaveTextContent(/BUSINESS_VALIDATION/i);
+    await userEvent.click(screen.getByRole('button', { name: /Close log/i }));
 
     await userEvent.click(within(lab).getByRole('tab', { name: /Answer/i }));
     await userEvent.selectOptions(screen.getByLabelText(/Primary failure boundary/i), 'BUSINESS_VALIDATION');
@@ -3884,14 +3886,17 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     await userEvent.click(screen.getByRole('button', { name: /Shipment Correlation/i }));
     expect(screen.getByTestId('final-shift-evidence-viewer')).toHaveTextContent(/LABFINAL900/i);
     expect(screen.getByTestId('final-shift-evidence-viewer')).toHaveTextContent(/UNKNOWNADADADAD/i);
+    await userEvent.click(screen.getByRole('button', { name: /Close log/i }));
 
     await userEvent.click(screen.getByRole('button', { name: /Raw 214/i }));
     expect(screen.getByTestId('final-shift-evidence-viewer')).toHaveTextContent(/004010/i);
     expect(screen.getByTestId('final-shift-evidence-viewer')).toHaveTextContent(/AT7\*AF/i);
+    await userEvent.click(screen.getByRole('button', { name: /Close log/i }));
 
     await userEvent.click(screen.getByRole('button', { name: /Persisted Failure/i }));
     expect(screen.getByTestId('final-shift-evidence-viewer')).toHaveTextContent(/SHIPMENT_NOT_FOUND/i);
     expect(screen.getByTestId('final-shift-evidence-viewer')).toHaveTextContent(/BUSINESS_VALIDATION/i);
+    await userEvent.click(screen.getByRole('button', { name: /Close log/i }));
 
     await userEvent.click(within(lab).getByRole('tab', { name: /Answer/i }));
     await userEvent.type(
