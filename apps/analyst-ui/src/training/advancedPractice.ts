@@ -1,3 +1,5 @@
+import { notifyTrainingStateChanged } from './sync';
+
 export const REPLAY_SEQUENCE_PRACTICE_STORAGE_KEY = 'freightbridge.replaySequencePracticeComplete';
 
 export function isReplaySequencePracticeComplete(): boolean {
@@ -8,6 +10,7 @@ export function isReplaySequencePracticeComplete(): boolean {
 export function completeReplaySequencePractice(): void {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(REPLAY_SEQUENCE_PRACTICE_STORAGE_KEY, 'true');
+  notifyTrainingStateChanged();
 }
 
 
@@ -21,4 +24,5 @@ export function isIndependentInvestigationComplete(): boolean {
 export function completeIndependentInvestigation(): void {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(INDEPENDENT_INVESTIGATION_STORAGE_KEY, 'true');
+  notifyTrainingStateChanged();
 }
