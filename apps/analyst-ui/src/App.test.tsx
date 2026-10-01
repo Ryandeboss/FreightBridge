@@ -4061,6 +4061,8 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(await screen.findByTestId('final-shift-completion')).toHaveTextContent(/TRAINING COMPLETE/i);
     expect(screen.getByTestId('final-shift-completion')).toHaveTextContent(/wrong shipment reference/i);
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('PRODUCTION_INCIDENT');
+    expect(screen.getByRole('link', { name: /View Course Completion/i })).toHaveAttribute('href', '#/learn/completion');
+    expect(screen.getByRole('link', { name: /Open Free Practice/i })).toHaveAttribute('href', '#/learn/free-practice');
 
     await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
     expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
@@ -4077,7 +4079,65 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(screen.getByTestId('curriculum-progress')).toHaveTextContent(/100%/i);
     expect(screen.getByTestId('curriculum-module-final')).toHaveTextContent(/Complete/i);
     expect(screen.getByRole('link', { name: /^Open Advanced Console$/i })).toHaveAttribute('href', '#/dashboard');
+    expect(screen.getByRole('link', { name: /View Course Completion/i })).toHaveAttribute('href', '#/learn/completion');
+    expect(screen.getByRole('link', { name: /Free Practice/i })).toHaveAttribute('href', '#/learn/free-practice');
   }, 15000);
+
+  test('completed training opens the course completion and unguided Free Practice experience', async () => {
+    installFetchMock();
+    window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      completedMissions: [
+        'LEARN_THE_FLOW', 'APEX_BAD_AUTH', 'APEX_INVALID_JSON', 'APEX_INVALID_CONTRACT',
+        'DUPLICATE_SHIPMENT', 'X12_ENVELOPE_MISMATCH', 'STATUS_CALLBACK_MISSING',
+        'WRONG_X12_VERSION', 'SFTP_STOPS_WORKING', 'PRODUCTION_INCIDENT',
+      ],
+    }));
+    window.localStorage.setItem('freightbridge.replaySequencePracticeComplete', 'true');
+    window.localStorage.setItem('freightbridge.independentInvestigationComplete', 'true');
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn/completion';
+    render(<App />);
+
+    const completion = await screen.findByTestId('course-completion-page');
+    expect(completion).toHaveTextContent(/10 \/ 10/i);
+    expect(completion).toHaveTextContent(/100%/i);
+    expect(completion).toHaveTextContent(/7/i);
+    expect(completion).toHaveTextContent(/Trace/i);
+    expect(completion).toHaveTextContent(/Diagnose/i);
+    expect(completion).toHaveTextContent(/Recover/i);
+    expect(completion).toHaveTextContent(/Communicate/i);
+    expect(screen.getByTestId('curriculum-progress')).toHaveTextContent(/100%/i);
+    expect(screen.getByRole('link', { name: /Enter Free Practice/i })).toHaveAttribute('href', '#/learn/free-practice');
+    expect(screen.getByRole('link', { name: /Course Completion/i })).toHaveAttribute('href', '#/learn/completion');
+
+    await userEvent.click(screen.getByRole('link', { name: /Enter Free Practice/i }));
+    const freePractice = await screen.findByTestId('free-practice-page');
+    expect(freePractice).toHaveTextContent(/No guided path/i);
+    expect(screen.getByRole('link', { name: /Integration Lab/i })).toHaveAttribute('href', '#/lab');
+    expect(screen.getByRole('link', { name: /Business Trace/i })).toHaveAttribute('href', '#/trace');
+    expect(screen.getByRole('link', { name: /Transactions/i })).toHaveAttribute('href', '#/transactions');
+    expect(screen.getByRole('link', { name: /Failure Queue/i })).toHaveAttribute('href', '#/failures');
+    expect(screen.getByRole('link', { name: /Partner Profiles/i })).toHaveAttribute('href', '#/partners');
+    expect(screen.getByRole('link', { name: /Mapping Profiles/i })).toHaveAttribute('href', '#/mappings');
+    expect(screen.getByText(/Current module/i).parentElement).toHaveTextContent(/Free Practice/i);
+  });
+
+  test('completion and Free Practice remain locked until the Final Shift is complete', async () => {
+    installFetchMock();
+    window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      completedMissions: ['LEARN_THE_FLOW', 'APEX_BAD_AUTH'],
+    }));
+    window.sessionStorage.setItem(OPERATIONS_TOKEN_STORAGE_KEY, token);
+    window.location.hash = '#/learn/free-practice';
+    render(<App />);
+
+    expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
+    expect(window.location.hash).toBe('#/learn/desk');
+    expect(screen.queryByTestId('free-practice-page')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^Free Practice$/i })).not.toBeInTheDocument();
+  });
 
   test('searches transactions and opens detail with retry action', async () => {
     const fetchMock = installFetchMock();
