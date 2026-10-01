@@ -41,9 +41,13 @@ def require_operations_access(
   if not supplied:
     raise_operations_auth_error()
 
-  expected = get_settings().operations_api_bearer_token
+  settings = get_settings()
+  expected = settings.operations_api_bearer_token
   if expected and hmac.compare_digest(supplied, expected):
     return
+
+  if not settings.supabase_url or not settings.supabase_publishable_key:
+    raise_operations_auth_error()
 
   try:
     SupabaseAuthClient().get_user(supplied)
