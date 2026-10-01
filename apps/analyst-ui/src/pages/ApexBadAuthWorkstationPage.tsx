@@ -267,9 +267,14 @@ export function ApexBadAuthWorkstation({ mission }: { mission: IncidentMissionDe
             <h2>Authentication failure diagnosed and recovered.</h2>
             <p>The request reached FreightBridge, authentication failed first, and the same load completed successfully after a valid authenticated retry.</p>
           </div>
-          <Link className="primary-button" to="/learn/desk">
-            Return to Training Desk <ArrowRight size={16} />
-          </Link>
+          <div className="workstation-complete-actions">
+            <Link className="primary-button" to="/learn/mission/apex-invalid-json">
+              Continue to Mission 3 <ArrowRight size={16} />
+            </Link>
+            <Link className="secondary-button" to="/learn/desk">
+              Training Desk
+            </Link>
+          </div>
         </article>
       )}
     </section>
