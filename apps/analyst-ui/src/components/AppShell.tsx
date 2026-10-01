@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, BarChart3, Beaker, GitBranch, GraduationCap, Handshake, Lock, Route, Search, ShieldCheck } from 'lucide-react';
+import { Activity, AlertTriangle, BarChart3, Beaker, GitBranch, GraduationCap, Handshake, Lock, LogOut, Route, Search, ShieldCheck } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { fetchSystemStatus, type SystemStatus } from '../api/health';
@@ -16,7 +16,7 @@ const navItems = [
 ];
 
 export function AppShell() {
-  const { lock } = useOperationsSession();
+  const { lock, accountEmail, isAccountSession } = useOperationsSession();
   const [status, setStatus] = useState<SystemStatus | null>(null);
 
   useEffect(() => {
@@ -63,17 +63,23 @@ export function AppShell() {
             <span className={`status-light ${apiOnline ? 'ok' : 'error'}`} />
             <span>{apiOnline ? 'API ready' : 'API unavailable'}</span>
           </div>
+          {accountEmail && <small className="console-account-email" title={accountEmail}>{accountEmail}</small>}
           <button className="secondary-button full-width" type="button" onClick={() => lock(null)}>
-            <Lock size={16} />
-            Lock Console
+            {isAccountSession ? <LogOut size={16} /> : <Lock size={16} />}
+            {isAccountSession ? 'Sign Out' : 'Lock Console'}
           </button>
         </div>
       </aside>
 
       <header className="mobile-topbar">
         <strong>FreightBridge</strong>
-        <button className="icon-button" type="button" onClick={() => lock(null)} aria-label="Lock Console">
-          <Lock size={17} />
+        <button
+          className="icon-button"
+          type="button"
+          onClick={() => lock(null)}
+          aria-label={isAccountSession ? 'Sign out' : 'Lock Console'}
+        >
+          {isAccountSession ? <LogOut size={17} /> : <Lock size={17} />}
         </button>
       </header>
 
