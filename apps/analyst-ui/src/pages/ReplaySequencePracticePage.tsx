@@ -10,11 +10,8 @@ import {
   Repeat2,
   Server,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { ApiError } from '../api/client';
-import { createLabRun, runNextLabStep, type LabRun } from '../api/lab';
-import { useOperationsSession } from '../auth/OperationsSession';
 import { LabWorkstation } from '../components/training/LabWorkstation';
 import {
   completeReplaySequencePractice,
@@ -56,13 +53,50 @@ const correctPolicy: PolicyDraft = {
   currentStatus: 'LATEST_OCCURRED_AT',
 };
 
+const evidenceLogRows = [
+  {
+    time: '14:02:11.204',
+    status: 'BLOCKED',
+    title: 'Apex repeated LOAD LABREPLAY900 without retry identity',
+    detail: 'Business key already exists. FreightBridge classifies this as a duplicate business attempt and does not create a second shipment.',
+  },
+  {
+    time: '14:03:09.881',
+    status: 'ACCEPTED',
+    title: 'Original Midwest 214 DELIVERED accepted',
+    detail: 'AT7=D1 · ST02=1080 · occurred_at=14:00:00Z. Shipment history is appended and current status advances to DELIVERED.',
+  },
+  {
+    time: '14:03:14.126',
+    status: 'ARCHIVED',
+    title: 'Original transaction committed',
+    detail: 'transaction=TX-214-1080 · payload_sha256=9f1c…e7a4 · Apex shipment event count=1.',
+  },
+  {
+    time: '14:06:42.515',
+    status: 'REPLAY',
+    title: 'Identical 214 bytes received again',
+    detail: 'Same payload hash and X12 controls match TX-214-1080. FreightBridge records replay linkage for audit instead of treating it as a new business event.',
+  },
+  {
+    time: '14:06:42.529',
+    status: 'SKIPPED',
+    title: 'Duplicate business side effects suppressed',
+    detail: 'replay_of=TX-214-1080 · Apex shipment event count remains 1 → 1. No duplicate status callback is created.',
+  },
+  {
+    time: '14:08:03.774',
+    status: 'PRESERVED',
+    title: 'Late ARRIVED event stored without regressing current status',
+    detail: 'AT7=X1 · occurred_at=13:35:00Z · received_at=14:08:03Z. History keeps ARRIVED, but current status remains DELIVERED because DELIVERED occurred later.',
+  },
+] as const;
+
 export function ReplaySequencePracticePage() {
   const progress = loadTrainingProgress();
   const unlocked = hasCompletedMission(progress, SFTP_STOPS_WORKING_MISSION_ID);
-  const { token, handleApiError } = useOperationsSession();
-  const [run, setRun] = useState<LabRun | null>(null);
-  const [working, setWorking] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [started, setStarted] = useState(false);
+  const [evidenceLoaded, setEvidenceLoaded] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [policy, setPolicy] = useState<PolicyDraft>({
     duplicateBusiness: 'CREATE_NEW_BUSINESS',
@@ -72,66 +106,23 @@ export function ReplaySequencePracticePage() {
   const [activeFile, setActiveFile] = useState('policy');
   const [complete, setComplete] = useState(isReplaySequencePracticeComplete());
 
-  const nextStep = run?.steps.find((step) => step.status !== 'SUCCEEDED') ?? null;
   const checksPassed = checks.every((check) => answers[check.id] === check.answer);
   const policyCorrect = Object.entries(correctPolicy).every(([key, value]) => policy[key as keyof PolicyDraft] === value);
-  const deliveredEvidence = useMemo(() => stepResponse(run, 'FREIGHTBRIDGE_RECEIVE_214_DELIVERED'), [run]);
-  const replayEvidence = useMemo(() => stepResponse(run, 'FREIGHTBRIDGE_RECEIVE_214_REPLAY'), [run]);
-  const sequenceEvidence = useMemo(() => stepResponse(run, 'FREIGHTBRIDGE_RECEIVE_214_LATE_ARRIVED'), [run]);
-
-  const canComplete = Boolean(
-    run?.status === 'SUCCEEDED'
-    && replayEvidence?.businessSideEffectsSkipped === true
-    && replayEvidence?.replayOfTransactionId
-    && sequenceEvidence?.currentStatusPreserved === true
-    && sequenceEvidence?.currentStatus === 'DELIVERED'
-    && checksPassed
-    && policyCorrect
-  );
+  const canComplete = evidenceLoaded && checksPassed && policyCorrect;
 
   if (!unlocked) return <Navigate to="/learn/desk" replace />;
 
-  async function startPractice() {
-    if (!token) return;
-    setWorking(true);
-    setError(null);
+  function startPractice() {
     setAnswers({});
     setPolicy({
       duplicateBusiness: 'CREATE_NEW_BUSINESS',
       exactReplay: 'REPROCESS_SIDE_EFFECTS',
       currentStatus: 'LAST_RECEIVED_MESSAGE',
     });
+    setActiveFile('policy');
+    setEvidenceLoaded(false);
     setComplete(false);
-    try {
-      const created = await createLabRun(token, {
-        scenarioKey: 'REPLAY_SEQUENCE_PRACTICE',
-        equipmentType: 'VAN_53',
-        weightLbs: 42000,
-        pieces: 22,
-        commodityDescription: 'Replay Sequence Training Freight',
-      });
-      setRun(created);
-    } catch (nextError) {
-      handleApiError(nextError);
-      setError(nextError instanceof ApiError ? nextError.message : 'Replay and sequence practice could not be started.');
-    } finally {
-      setWorking(false);
-    }
-  }
-
-  async function runNext() {
-    if (!token || !run || !nextStep) return;
-    setWorking(true);
-    setError(null);
-    try {
-      const result = await runNextLabStep(token, run.id);
-      setRun(result.run);
-    } catch (nextError) {
-      handleApiError(nextError);
-      setError(nextError instanceof ApiError ? nextError.message : 'The next practice step failed.');
-    } finally {
-      setWorking(false);
-    }
+    setStarted(true);
   }
 
   function finish() {
@@ -140,7 +131,7 @@ export function ReplaySequencePracticePage() {
     setComplete(true);
   }
 
-  if (!run) {
+  if (!started) {
     return (
       <section className="workstation-case-start" data-testid="replay-sequence-practice-page">
         <Link className="secondary-button training-back-link" to="/learn/desk"><ArrowLeft size={16} />Training Desk</Link>
@@ -148,18 +139,17 @@ export function ReplaySequencePracticePage() {
           <div>
             <p className="eyebrow">Module 05 · Advanced policy clinic</p>
             <h1>Duplicate, replay, and event sequence are three different problems.</h1>
-            <p>Run one real FreightBridge practice sequence, then configure the policy that should prevent duplicate side effects and current-status regression.</p>
+            <p>Inspect one realistic FreightBridge evidence sequence, then configure the policy that prevents duplicate side effects and current-status regression.</p>
           </div>
           <div className="advanced-concept-strip" data-testid="replay-concept-grid">
             <span><AlertTriangle size={16} /><strong>Duplicate business attempt</strong><small>Same shipment submitted again without safe retry semantics.</small></span>
             <span><Repeat2 size={16} /><strong>Exact replay</strong><small>Same X12 controls and identical bytes arrive again.</small></span>
             <span><History size={16} /><strong>Late event</strong><small>Received later, but occurred earlier than the current event.</small></span>
           </div>
-          <button className="primary-button" type="button" onClick={startPractice} disabled={working}>
-            <Play size={16} />{working ? 'Starting practice…' : complete ? 'Replay Advanced Practice' : 'Start Advanced Practice'}
+          <button className="primary-button" type="button" onClick={startPractice}>
+            <Play size={16} />{complete ? 'Replay Advanced Practice' : 'Start Advanced Practice'}
           </button>
         </article>
-        {error && <PracticeError message={error} />}
       </section>
     );
   }
@@ -167,23 +157,17 @@ export function ReplaySequencePracticePage() {
   return (
     <section className="workstation-case-page" data-testid="replay-sequence-practice-page">
       <Link className="secondary-button training-back-link" to="/learn/desk"><ArrowLeft size={16} />Training Desk</Link>
-      {error && <PracticeError message={error} />}
 
       <LabWorkstation
         caseLabel="Module 05 · Advanced policy clinic"
         title="Replay, duplicate, and chronology policy"
-        subtitle="Observe the real sequence, configure the correct policy, then prove you can classify each behavior."
-        statusLabel={canComplete ? 'Policy verified' : run.status === 'SUCCEEDED' ? 'Configure policy' : 'Evidence running'}
+        subtitle="Run one curated evidence sequence, configure the safe policy, then classify what FreightBridge should do."
+        statusLabel={canComplete ? 'Policy verified' : evidenceLoaded ? 'Analyze evidence' : 'Evidence ready'}
         statusTone={canComplete ? 'success' : 'neutral'}
         console={
           <ReplayConsole
-            run={run}
-            nextStep={nextStep}
-            working={working}
-            deliveredEvidence={deliveredEvidence}
-            replayEvidence={replayEvidence}
-            sequenceEvidence={sequenceEvidence}
-            onRunNext={runNext}
+            evidenceLoaded={evidenceLoaded}
+            onRunEvidence={() => setEvidenceLoaded(true)}
           />
         }
         code={
@@ -229,79 +213,98 @@ export function ReplaySequencePracticePage() {
 }
 
 function ReplayConsole({
-  run,
-  nextStep,
-  working,
-  deliveredEvidence,
-  replayEvidence,
-  sequenceEvidence,
-  onRunNext,
+  evidenceLoaded,
+  onRunEvidence,
 }: {
-  run: LabRun;
-  nextStep: LabRun['steps'][number] | null;
-  working: boolean;
-  deliveredEvidence: Record<string, unknown> | null;
-  replayEvidence: Record<string, unknown> | null;
-  sequenceEvidence: Record<string, unknown> | null;
-  onRunNext: () => void;
+  evidenceLoaded: boolean;
+  onRunEvidence: () => void;
 }) {
-  const completed = run.steps.filter((step) => step.status === 'SUCCEEDED').length;
   return (
     <div className="replay-workstation-console" data-testid="replay-workstation-console">
       <section className="workstation-console-stream">
         <div className="workstation-pane-heading">
-          <div><span>Practice execution log</span><strong>{run.businessIdentifier}</strong></div>
-          <small>{completed} / {run.steps.length} steps observed</small>
+          <div><span>Analyst evidence stream</span><strong>LABREPLAY900</strong></div>
+          <small>{evidenceLoaded ? '6 evidence records loaded' : 'Evidence not yet loaded'}</small>
         </div>
-        <div className="workstation-log-list">
-          {run.steps.map((step, index) => (
-            <div className={'workstation-log-row ' + step.status.toLowerCase()} key={step.stepKey}>
-              <span className="workstation-log-seq">{String(index + 1).padStart(2, '0')}</span>
-              <span className="workstation-log-icon">{step.status === 'SUCCEEDED' ? <CheckCircle2 size={15} /> : <Circle size={15} />}</span>
-              <span className="workstation-log-copy"><strong>{step.displayName}</strong><small>{step.transport} · {step.documentType}</small></span>
-              <span className="workstation-log-status">{step.status}</span>
-            </div>
-          ))}
-        </div>
-        {nextStep ? (
-          <div className="healthy-console-runner">
-            <div><Play size={17} /><span><strong>Run the next real practice checkpoint.</strong> Watch how FreightBridge handles the original event, exact replay, and late event.</span></div>
-            <button className="primary-button" type="button" onClick={onRunNext} disabled={working}>
-              {working ? 'Running…' : 'Run Next Step'} <Play size={15} />
-            </button>
+
+        {evidenceLoaded ? (
+          <div className="workstation-log-list" data-testid="replay-evidence-log">
+            {evidenceLogRows.map((row, index) => (
+              <div className="workstation-log-row succeeded" key={row.time + row.status}>
+                <span className="workstation-log-seq">{String(index + 1).padStart(2, '0')}</span>
+                <span className="workstation-log-icon"><CheckCircle2 size={15} /></span>
+                <span className="workstation-log-copy">
+                  <strong>{row.time} · {row.title}</strong>
+                  <small>{row.detail}</small>
+                </span>
+                <span className="workstation-log-status">{row.status}</span>
+              </div>
+            ))}
           </div>
         ) : (
-          <div className="healthy-console-runner complete"><CheckCircle2 size={18} /><span><strong>Evidence sequence complete.</strong> Configure the policy in Code.</span></div>
+          <div className="healthy-console-runner">
+            <div>
+              <Play size={17} />
+              <span>
+                <strong>Run the evidence sequence once.</strong> Load the analyst-facing records for a duplicate request, an original DELIVERED event, an exact X12 replay, and a late ARRIVED event.
+              </span>
+            </div>
+            <button className="primary-button" type="button" onClick={onRunEvidence}>
+              Run Evidence Sequence <Play size={15} />
+            </button>
+          </div>
+        )}
+
+        {evidenceLoaded && (
+          <div className="healthy-console-runner complete">
+            <CheckCircle2 size={18} />
+            <span><strong>Evidence sequence complete.</strong> Nothing else needs to be executed. Use these records to configure the policy in Code.</span>
+          </div>
         )}
       </section>
 
       <aside className="replay-evidence-stack">
         <EvidenceCard
+          title="Duplicate Apex request"
+          ready={evidenceLoaded}
+          rows={evidenceLoaded ? [
+            ['Load ID', 'LABREPLAY900'],
+            ['Retry identity', 'MISSING'],
+            ['Decision', 'BLOCK DUPLICATE BUSINESS'],
+            ['Shipments before / after', '1 / 1'],
+          ] : pendingRows(['Load ID', 'Retry identity', 'Decision', 'Shipments before / after'])}
+        />
+        <EvidenceCard
           title="Original DELIVERED"
-          ready={Boolean(deliveredEvidence)}
-          rows={[
-            ['Transaction', nested(deliveredEvidence, 'targetProcessed', 'transactionId')],
-            ['Archived file', nested(deliveredEvidence, 'targetProcessed', 'destinationPath')],
-          ]}
+          ready={evidenceLoaded}
+          rows={evidenceLoaded ? [
+            ['AT7', 'D1 · DELIVERED'],
+            ['occurred_at', '14:00:00Z'],
+            ['Transaction', 'TX-214-1080'],
+            ['Current status', 'DELIVERED'],
+          ] : pendingRows(['AT7', 'occurred_at', 'Transaction', 'Current status'])}
         />
         <EvidenceCard
           title="Exact X12 replay"
-          ready={Boolean(replayEvidence)}
-          rows={[
-            ['Replay status', value(replayEvidence?.status)],
-            ['Replay of', value(replayEvidence?.replayOfTransactionId)],
-            ['Side effects skipped', yesNo(replayEvidence?.businessSideEffectsSkipped)],
-            ['Apex events before / after', replayEvidence ? value(replayEvidence.apexEventCountBefore) + ' / ' + value(replayEvidence.apexEventCountAfter) : 'Pending'],
-          ]}
+          ready={evidenceLoaded}
+          rows={evidenceLoaded ? [
+            ['Replay of', 'TX-214-1080'],
+            ['Same payload hash', 'YES'],
+            ['Audit evidence retained', 'YES'],
+            ['Business side effects skipped', 'YES'],
+            ['Apex events before / after', '1 / 1'],
+          ] : pendingRows(['Replay of', 'Same payload hash', 'Audit evidence retained', 'Business side effects skipped', 'Apex events before / after'])}
         />
         <EvidenceCard
           title="Late ARRIVED event"
-          ready={Boolean(sequenceEvidence)}
-          rows={[
-            ['Late event stored', yesNo(sequenceEvidence?.lateEventStored)],
-            ['Current status preserved', yesNo(sequenceEvidence?.currentStatusPreserved)],
-            ['Current status', value(sequenceEvidence?.currentStatus)],
-          ]}
+          ready={evidenceLoaded}
+          rows={evidenceLoaded ? [
+            ['AT7', 'X1 · ARRIVED'],
+            ['occurred_at', '13:35:00Z'],
+            ['received_at', '14:08:03Z'],
+            ['History stored', 'YES'],
+            ['Current status', 'DELIVERED'],
+          ] : pendingRows(['AT7', 'occurred_at', 'received_at', 'History stored', 'Current status'])}
         />
       </aside>
     </div>
@@ -415,7 +418,7 @@ function ReplayAnswer({
       <div className="workstation-answer-intro">
         <span>Classification check</span>
         <h2>Name the behavior and prove the policy matches it.</h2>
-        <p>The real evidence comes from Console. The policy you configured in Code determines whether FreightBridge creates duplicate effects or protects chronology.</p>
+        <p>The case evidence comes from Console. The policy you configured in Code determines whether FreightBridge creates duplicate effects or protects chronology.</p>
       </div>
       {checks.map((check) => (
         <fieldset className="workstation-options" key={check.id}>
@@ -460,27 +463,6 @@ function EvidenceCard({ title, ready, rows }: { title: string; ready: boolean; r
   );
 }
 
-function stepResponse(run: LabRun | null, stepKey: string): Record<string, unknown> | null {
-  return run?.steps.find((step) => step.stepKey === stepKey)?.responseSummary ?? null;
-}
-
-function nested(record: Record<string, unknown> | null, parent: string, child: string): string {
-  if (!record) return 'Pending';
-  const parentValue = record[parent];
-  if (!parentValue || typeof parentValue !== 'object') return 'Pending';
-  return value((parentValue as Record<string, unknown>)[child]);
-}
-
-function yesNo(valueToCheck: unknown): string {
-  if (valueToCheck === true) return 'YES';
-  if (valueToCheck === false) return 'NO';
-  return 'Pending';
-}
-
-function value(valueToFormat: unknown): string {
-  return valueToFormat === null || valueToFormat === undefined || valueToFormat === '' ? 'Pending' : String(valueToFormat);
-}
-
-function PracticeError({ message }: { message: string }) {
-  return <div className="knowledge-feedback incorrect"><AlertTriangle size={17} /><p>{message}</p></div>;
+function pendingRows(labels: string[]): [string, string][] {
+  return labels.map((label) => [label, 'Pending']);
 }

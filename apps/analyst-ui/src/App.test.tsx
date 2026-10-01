@@ -3684,14 +3684,20 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     await userEvent.click(screen.getByRole('button', { name: /Start Advanced Practice/i }));
     const lab = await screen.findByTestId('lab-workstation');
     expect(within(lab).getByRole('tab', { name: /Console/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('button', { name: /Run Next Step/i })).not.toBeInTheDocument();
 
-    for (let index = 0; index < replayPracticeStepKeys.length; index += 1) {
-      await userEvent.click(await screen.findByRole('button', { name: /Run Next Step/i }));
-    }
+    const runEvidence = screen.getByRole('button', { name: /Run Evidence Sequence/i });
+    await userEvent.click(runEvidence);
 
-    expect(screen.getByTestId('replay-workstation-console')).toHaveTextContent(/REPLAY_ACCEPTED/i);
-    expect(screen.getByTestId('replay-workstation-console')).toHaveTextContent(/DELIVERED/i);
-    expect(screen.getByTestId('replay-workstation-console')).toHaveTextContent(/Side effects skipped/i);
+    const replayConsole = screen.getByTestId('replay-workstation-console');
+    expect(replayConsole).toHaveTextContent(/duplicate business attempt/i);
+    expect(replayConsole).toHaveTextContent(/TX-214-1080/i);
+    expect(replayConsole).toHaveTextContent(/Same payload hash and X12 controls/i);
+    expect(replayConsole).toHaveTextContent(/Business side effects skipped/i);
+    expect(replayConsole).toHaveTextContent(/occurred_at=13:35:00Z/i);
+    expect(replayConsole).toHaveTextContent(/current status remains DELIVERED/i);
+    expect(screen.queryByRole('button', { name: /Run Evidence Sequence/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/FreightBridge SFTP poll did not process/i)).not.toBeInTheDocument();
 
     await userEvent.click(within(lab).getByRole('tab', { name: /Code/i }));
     const policyEditor = screen.getByTestId('replay-policy-editor');
