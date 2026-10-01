@@ -1,4 +1,5 @@
 import type { TrainingProgress } from './types';
+import { notifyTrainingStateChanged } from './sync';
 
 export const TRAINING_PROGRESS_STORAGE_KEY = 'freightbridge.trainingProgress';
 export const TRAINING_PROGRESS_VERSION = 1;
@@ -29,6 +30,7 @@ export function loadTrainingProgress(): TrainingProgress {
 export function saveTrainingProgress(progress: TrainingProgress): void {
   window.localStorage.setItem(TRAINING_PROGRESS_STORAGE_KEY, JSON.stringify(progress));
   window.dispatchEvent(new Event(TRAINING_PROGRESS_UPDATED_EVENT));
+  notifyTrainingStateChanged();
 }
 
 export function hasCompletedMission(progress: TrainingProgress, missionId: string): boolean {
