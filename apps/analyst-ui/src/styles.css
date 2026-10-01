@@ -4210,7 +4210,9 @@ input:disabled {
   color: #68787f;
 }
 .workstation-options {
+  width: 100%;
   max-width: 920px;
+  min-width: 0;
   display: grid;
   gap: .45rem;
   margin: 0;
@@ -4226,9 +4228,10 @@ input:disabled {
 }
 .workstation-options label {
   width: 100%;
-  display: flex;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 1fr);
   align-items: flex-start;
-  justify-content: flex-start;
   gap: .6rem;
   padding: .7rem .8rem;
   border: 1px solid #e3e8ea;
@@ -4239,16 +4242,23 @@ input:disabled {
   line-height: 1.45;
 }
 .workstation-options label > span {
-  flex: 1;
   min-width: 0;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: break-word;
   text-align: left;
 }
 .workstation-options label.selected {
   border-color: #9ec4c5;
   background: #f2f8f8;
 }
-.workstation-options input {
+.workstation-options input[type="radio"] {
+  width: 1rem;
+  min-width: 1rem;
+  height: 1rem;
+  min-height: 1rem;
   margin-top: .15rem;
+  padding: 0;
   accent-color: #126064;
 }
 .workstation-option-feedback {
@@ -5378,8 +5388,13 @@ input:disabled {
   align-items: start;
   gap: .5rem !important;
 }
-.advanced-checkbox input {
+.advanced-checkbox input[type="checkbox"] {
+  width: 1rem;
+  min-width: 1rem;
+  height: 1rem;
+  min-height: 1rem;
   margin-top: .2rem;
+  padding: 0;
 }
 .advanced-checkbox span {
   font-weight: 700 !important;
@@ -5638,7 +5653,7 @@ input:disabled {
 .independent-answer-fields input,
 .independent-answer-fields textarea,
 .independent-answer textarea,
-.advanced-edit-form input {
+.advanced-edit-form input:not([type="checkbox"]) {
   width: 100%;
   min-height: 2.5rem;
   padding: .5rem .6rem;
