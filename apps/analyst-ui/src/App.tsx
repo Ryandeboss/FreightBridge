@@ -5,10 +5,12 @@ import { TrainingShell } from './components/training/TrainingShell';
 import { AccessPage } from './pages/AccessPage';
 import { AnalystToolsPage } from './pages/AnalystToolsPage';
 import { BusinessTraceDetailPage, TraceSearchPage } from './pages/BusinessTracePage';
+import { CourseCompletionPage } from './pages/CourseCompletionPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { FailureDetailPage } from './pages/FailureDetailPage';
 import { FailuresPage } from './pages/FailuresPage';
 import { FirstDayOrientationPage } from './pages/FirstDayOrientationPage';
+import { FreePracticePage } from './pages/FreePracticePage';
 import { EdiProtocolBootcampPage } from './pages/EdiProtocolBootcampPage';
 import { HealthyApexTenderPage } from './pages/HealthyApexTenderPage';
 import { HealthyIntegrationLessonPage } from './pages/HealthyIntegrationLessonPage';
@@ -58,6 +60,8 @@ function AppRoutes() {
           <Route path="/learn/tools/:tool" element={<AnalystToolsPage />} />
           <Route path="/learn/practice/replay-sequence" element={<ReplaySequencePracticePage />} />
           <Route path="/learn/practice/independent-investigation" element={<IndependentInvestigationPage />} />
+          <Route path="/learn/completion" element={<CourseCompletionPage />} />
+          <Route path="/learn/free-practice" element={<FreePracticePage />} />
         </Route>
         <Route element={<ConsoleRoute />}>
           <Route path="/dashboard" element={<DashboardPage />} />
