@@ -706,7 +706,3 @@ function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
-function raw(value: unknown): string {
-  if (typeof value === 'string') return value;
-  return JSON.stringify(value ?? {}, null, 2);
-}
