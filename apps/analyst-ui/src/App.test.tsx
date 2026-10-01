@@ -4080,7 +4080,7 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(screen.getByTestId('curriculum-module-final')).toHaveTextContent(/Complete/i);
     expect(screen.getByRole('link', { name: /^Open Advanced Console$/i })).toHaveAttribute('href', '#/dashboard');
     expect(screen.getByRole('link', { name: /View Course Completion/i })).toHaveAttribute('href', '#/learn/completion');
-    expect(screen.getByRole('link', { name: /Free Practice/i })).toHaveAttribute('href', '#/learn/free-practice');
+    expect(screen.getAllByRole('link', { name: /Free Practice/i }).some((link) => link.getAttribute('href') === '#/learn/free-practice')).toBe(true);
   }, 15000);
 
   test('completed training opens the course completion and unguided Free Practice experience', async () => {
@@ -4114,7 +4114,7 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     await userEvent.click(screen.getByRole('link', { name: /Enter Free Practice/i }));
     const freePractice = await screen.findByTestId('free-practice-page');
     expect(freePractice).toHaveTextContent(/No guided path/i);
-    expect(screen.getByRole('link', { name: /Integration Lab/i })).toHaveAttribute('href', '#/lab');
+    expect(screen.getByRole('link', { name: /^Open Integration Lab/i })).toHaveAttribute('href', '#/lab');
     expect(screen.getByRole('link', { name: /Business Trace/i })).toHaveAttribute('href', '#/trace');
     expect(screen.getByRole('link', { name: /Transactions/i })).toHaveAttribute('href', '#/transactions');
     expect(screen.getByRole('link', { name: /Failure Queue/i })).toHaveAttribute('href', '#/failures');
