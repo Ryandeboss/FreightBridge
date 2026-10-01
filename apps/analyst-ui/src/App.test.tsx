@@ -3763,6 +3763,8 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(screen.getByTestId('mission-10-card')).toHaveTextContent(/Locked/i);
     expect(screen.getByTestId('curriculum-module-independent')).toHaveTextContent(/1 independent case/i);
     expect(screen.getByTestId('ops-inbox')).toHaveTextContent(/Independent Investigation/i);
+    expect(screen.getByTestId('ops-current-focus')).toHaveTextContent(/Independent Investigation/i);
+    expect(screen.getByTestId('curriculum-module-final')).toHaveTextContent(/Locked/i);
   });
 
   test('completes Module 06 through a less-guided duplicate retry investigation and unlocks Final Shift', async () => {
