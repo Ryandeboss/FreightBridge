@@ -310,8 +310,6 @@ export function GuidedIncidentWorkstation({ mission }: { mission: IncidentMissio
         throw new Error('Controlled incident drill did not reach its expected observed-failure result.');
       }
       setIncidentRun(nextRun);
-      const failed = mission.evidencePoints.find((point) => point.status === 'FAILED');
-      if (failed) setSelectedEvidenceId(failed.id);
     } catch (nextError) {
       handleApiError(nextError);
       setError(nextError instanceof ApiError ? nextError.message : 'The incident drill could not be started.');
