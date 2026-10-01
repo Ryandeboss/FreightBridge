@@ -111,6 +111,27 @@ def test_lab_create_run_returns_ready_steps_without_side_effects() -> None:
   assert service.created_payloads[0]['equipmentType'] == 'VAN_53'
 
 
+@pytest.mark.parametrize(
+  'scenario_key',
+  [
+    'REPLAY_SEQUENCE_PRACTICE',
+    'X12_214_UNKNOWN_SHIPMENT',
+  ],
+)
+def test_lab_create_run_accepts_registered_training_scenarios(scenario_key: str) -> None:
+  service = FakeLabService()
+  app.dependency_overrides[get_lab_service] = lambda: service
+
+  response = TestClient(app).post(
+    '/api/lab/runs',
+    headers=auth_headers(),
+    json={'scenarioKey': scenario_key},
+  )
+
+  assert response.status_code == 201
+  assert service.created_payloads[0]['scenarioKey'] == scenario_key
+
+
 def test_lab_completed_step_reexecute_is_idempotent() -> None:
   app.dependency_overrides[get_lab_service] = lambda: FakeLabService(completed=True)
 
