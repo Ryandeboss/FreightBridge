@@ -289,7 +289,7 @@ export function FinalShiftPage({ mission }: { mission: IncidentMissionDefinition
           <div className="workstation-complete-actions">
             <Link className="primary-button" to="/learn/completion">View Course Completion</Link>
             <Link className="secondary-button" to="/learn/free-practice">Open Free Practice</Link>
-            <Link className="secondary-button" to="/learn/desk">Training Desk</Link>
+            <Link className="secondary-button" to="/learn/desk">Return to Training Desk</Link>
           </div>
         </article>
       )}
