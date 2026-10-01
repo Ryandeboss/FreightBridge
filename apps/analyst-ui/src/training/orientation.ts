@@ -1,3 +1,5 @@
+import { notifyTrainingStateChanged } from './sync';
+
 export const FIRST_DAY_ORIENTATION_STORAGE_KEY = 'freightbridge.firstDayOrientationComplete';
 
 export function isFirstDayOrientationComplete(): boolean {
@@ -8,4 +10,5 @@ export function isFirstDayOrientationComplete(): boolean {
 export function markFirstDayOrientationComplete(): void {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(FIRST_DAY_ORIENTATION_STORAGE_KEY, 'true');
+  notifyTrainingStateChanged();
 }
