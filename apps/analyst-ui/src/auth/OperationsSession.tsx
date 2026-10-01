@@ -219,7 +219,6 @@ export function OperationsSessionProvider({ children }: { children: ReactNode })
       connect,
       handleApiError,
       isAccountSession,
-      legacyToken,
       lock,
       register,
       sessionMessage,
