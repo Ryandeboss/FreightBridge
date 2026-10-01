@@ -235,7 +235,6 @@ export function IndependentInvestigationPage() {
         console={
           <IndependentConsole
             run={run}
-            failureDrill={failureDrill}
             observed={observed}
             payloadPreview={payloadPreview}
             selected={selectedEvidence}
@@ -308,14 +307,12 @@ export function IndependentInvestigationPage() {
 
 function IndependentConsole({
   run,
-  failureDrill,
   observed,
   payloadPreview,
   selected,
   onSelect,
 }: {
   run: LabRun;
-  failureDrill: Record<string, unknown> | null;
   observed: Record<string, unknown> | null;
   payloadPreview: unknown;
   selected: EvidenceView;
