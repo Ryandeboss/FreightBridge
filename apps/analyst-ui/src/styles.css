@@ -5301,6 +5301,14 @@ input:disabled {
   min-height: 6rem;
   resize: vertical;
 }
+.guided-status-update-progress {
+  color: #687b81;
+  font-size: .7rem;
+  font-weight: 700;
+}
+.guided-status-update-progress.ready {
+  color: #35675e;
+}
 .guided-incident-debrief {
   display: grid;
   gap: .35rem;
