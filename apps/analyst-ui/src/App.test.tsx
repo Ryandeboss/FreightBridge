@@ -3311,11 +3311,25 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     await chooseIncidentOption(/What should you do next/i, /resend parseable JSON/i);
     await userEvent.click(screen.getByRole('button', { name: /Retry with corrected JSON/i }));
     expect(await screen.findByTestId('verification-panel')).toHaveTextContent(/SUCCEEDED/i);
+    const statusUpdate = screen.getByLabelText(/Write Mike/i);
+    const completeDebrief = screen.getByRole('button', { name: /Complete Debrief/i });
+    expect(screen.getByTestId('status-update-progress')).toHaveTextContent(/0 \/ 40 characters/i);
+    expect(screen.getByTestId('status-update-progress')).toHaveTextContent(/40 more needed/i);
+    expect(completeDebrief).toBeDisabled();
+
+    await userEvent.type(statusUpdate, 'Short update');
+    expect(screen.getByTestId('status-update-progress')).toHaveTextContent(/12 \/ 40 characters/i);
+    expect(screen.getByTestId('status-update-progress')).toHaveTextContent(/28 more needed/i);
+    expect(completeDebrief).toBeDisabled();
+
+    await userEvent.clear(statusUpdate);
     await userEvent.type(
-      screen.getByLabelText(/Write Mike/i),
+      statusUpdate,
       'Mike, authentication passed, malformed JSON stopped parsing, and the corrected parseable payload recovered the same load.',
     );
-    await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
+    expect(screen.getByTestId('status-update-progress')).toHaveTextContent(/Minimum reached/i);
+    expect(completeDebrief).toBeEnabled();
+    await userEvent.click(completeDebrief);
 
     expect(await screen.findByTestId('incident-debrief')).toBeInTheDocument();
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('APEX_INVALID_JSON');
