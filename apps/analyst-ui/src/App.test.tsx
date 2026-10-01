@@ -3836,7 +3836,7 @@ test('Training Desk routes healthy progress into the unified workstation and pre
 
     await userEvent.click(screen.getByRole('link', { name: /Continue to Final Shift/i }));
     expect(await screen.findByTestId('incident-mission-page')).toBeInTheDocument();
-    expect(screen.getByText(/Mission 10 - Final Shift Incident/i)).toBeInTheDocument();
+    expect(screen.getByText(/Module 07 · Final Shift · Mission 10/i)).toBeInTheDocument();
   }, 12000);
 
   test('Mission 10 completes the redesigned Final Shift in Console Code Answer', async () => {
