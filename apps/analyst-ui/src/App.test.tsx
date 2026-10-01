@@ -3313,6 +3313,7 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     await userEvent.click(screen.getByRole('button', { name: /Complete Lab/i }));
     expect(screen.getByTestId('incident-summary')).toBeInTheDocument();
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('APEX_BAD_AUTH');
+    expect(screen.getByRole('link', { name: /Continue to Mission 3/i })).toHaveAttribute('href', '#/learn/mission/apex-invalid-json');
 
     await waitFor(() => {
       const calls = fetchMock.mock.calls
@@ -3322,7 +3323,7 @@ test('Training Desk routes healthy progress into the unified workstation and pre
       expect(calls).not.toContain('FULL_SHIPMENT_LIFECYCLE');
     });
 
-    await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
+    await userEvent.click(screen.getByRole('link', { name: /^Training Desk$/i }));
     expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
     expect(screen.getByTestId('mission-3-card')).toHaveTextContent(/Open Mission/i);
     expect(screen.getByTestId('mission-4-card')).toHaveTextContent(/Locked/i);
@@ -3348,6 +3349,7 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/Business validation/i);
     expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/NOT REACHED/i);
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('APEX_INVALID_JSON');
+    expect(screen.getByRole('link', { name: /Continue to Mission 4/i })).toHaveAttribute('href', '#/learn/mission/apex-invalid-contract');
     await waitFor(() => {
       const calls = fetchMock.mock.calls
         .filter(([input, init]) => String(input).endsWith('/api/lab/runs') && init?.method === 'POST')
@@ -3356,7 +3358,7 @@ test('Training Desk routes healthy progress into the unified workstation and pre
       expect(calls).not.toContain('FULL_SHIPMENT_LIFECYCLE');
     });
 
-    await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
+    await userEvent.click(screen.getByRole('link', { name: /^Training Desk$/i }));
     expect(await screen.findByTestId('mission-4-card')).toHaveTextContent(/Open Mission/i);
     expect(screen.getByText(/Mission 5 - Why Is This Shipment Showing Up Twice/i).closest('article')).toHaveTextContent(/Locked/i);
   });
@@ -3412,7 +3414,8 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
     expect(await screen.findByTestId('incident-debrief')).toHaveTextContent(/MISSION COMPLETE/i);
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('APEX_INVALID_CONTRACT');
-    await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
+    expect(screen.getByRole('link', { name: /Continue to Mission 5/i })).toHaveAttribute('href', '#/learn/mission/duplicate-shipment');
+    await userEvent.click(screen.getByRole('link', { name: /^Training Desk$/i }));
     expect(await screen.findByTestId('mission-5-card')).toHaveTextContent(/Open Mission/i);
   }, 10000);
 
@@ -3448,8 +3451,9 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
     expect(await screen.findByTestId('incident-summary')).toHaveTextContent(/same load correlated/i);
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('DUPLICATE_SHIPMENT');
+    expect(screen.getByRole('link', { name: /Continue to Mission 6/i })).toHaveAttribute('href', '#/learn/mission/x12-envelope-mismatch');
 
-    await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
+    await userEvent.click(screen.getByRole('link', { name: /^Training Desk$/i }));
     expect(await screen.findByTestId('mission-6-card')).toHaveTextContent(/Open Mission/i);
     expect(screen.getByTestId('mission-7-card')).toHaveTextContent(/Locked/i);
   }, 10000);
@@ -3482,8 +3486,9 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
     expect(await screen.findByTestId('incident-debrief')).toHaveTextContent(/MISSION COMPLETE/i);
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('X12_ENVELOPE_MISMATCH');
+    expect(screen.getByRole('link', { name: /Continue to Mission 7/i })).toHaveAttribute('href', '#/learn/mission/status-callback-missing');
 
-    await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
+    await userEvent.click(screen.getByRole('link', { name: /^Training Desk$/i }));
     expect(await screen.findByTestId('mission-7-card')).toHaveTextContent(/Open Mission/i);
   }, 10000);
 
@@ -3523,8 +3528,9 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     await userEvent.click(screen.getByRole('button', { name: /Complete Debrief/i }));
     expect(await screen.findByTestId('incident-debrief')).toHaveTextContent(/semantic mapping/i);
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('STATUS_CALLBACK_MISSING');
+    expect(screen.getByRole('link', { name: /Continue to Module 05/i })).toHaveAttribute('href', '#/learn/mission/wrong-x12-version');
 
-    await userEvent.click(screen.getByRole('link', { name: /Return to Training Desk/i }));
+    await userEvent.click(screen.getByRole('link', { name: /^Training Desk$/i }));
     expect(await screen.findByTestId('mission-8-card')).toHaveTextContent(/Open Mission/i);
   }, 10000);
 
