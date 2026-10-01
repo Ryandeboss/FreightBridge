@@ -6366,3 +6366,267 @@ input:disabled {
   }
 }
 /* === End Milestone 51 === */
+
+
+/* === Milestone 53: Completion + Free Practice === */
+.training-complete-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .55rem;
+}
+
+.course-sidebar-footer {
+  display: grid;
+  gap: .35rem;
+}
+.course-post-link {
+  border-color: #cfe2d9;
+  background: #f6fbf8;
+}
+.course-post-link:hover {
+  background: #eef8f2;
+}
+
+.course-completion-page,
+.free-practice-page {
+  width: min(1120px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 1rem;
+}
+
+.course-completion-hero {
+  display: grid;
+  justify-items: center;
+  gap: .8rem;
+  padding: clamp(1.4rem, 4vw, 2.4rem);
+  border: 1px solid #c9e0d6;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f2faf6, #fff);
+  text-align: center;
+}
+.course-completion-hero h1,
+.course-completion-hero p,
+.course-completion-next h2,
+.course-completion-next p,
+.course-completion-skills h2,
+.course-completion-skills p,
+.free-practice-header h1,
+.free-practice-header p,
+.free-practice-start h2,
+.free-practice-start p,
+.free-practice-tool h2,
+.free-practice-tool p,
+.free-practice-prompts h2,
+.free-practice-prompts p {
+  margin: 0;
+}
+.course-completion-hero > p:not(.eyebrow) {
+  max-width: 46rem;
+  color: #53636e;
+  line-height: 1.6;
+}
+.course-completion-mark {
+  width: 4rem;
+  height: 4rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #24624f;
+  background: #dff2e8;
+}
+.course-completion-stats {
+  width: min(620px, 100%);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .6rem;
+}
+.course-completion-stats span {
+  display: grid;
+  gap: .15rem;
+  padding: .75rem;
+  border: 1px solid #d7e7df;
+  border-radius: 9px;
+  background: rgba(255,255,255,.82);
+}
+.course-completion-stats strong {
+  font-size: 1.15rem;
+}
+.course-completion-stats small {
+  color: #667982;
+  font-size: .72rem;
+}
+.course-completion-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  padding: .55rem .7rem;
+  border-radius: 8px;
+  color: #365f52;
+  background: #eaf6f0;
+  font-size: .78rem;
+}
+.course-completion-actions,
+.free-practice-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: .55rem;
+}
+.course-completion-skills {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.course-completion-skills article {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: .75rem;
+  align-items: start;
+}
+.course-completion-skills article > svg {
+  color: #126064;
+}
+.course-completion-skills article > div {
+  display: grid;
+  gap: .3rem;
+}
+.course-completion-skills p,
+.course-completion-next p,
+.free-practice-start p,
+.free-practice-tool p,
+.free-practice-prompts p {
+  color: #5e6f78;
+  line-height: 1.5;
+}
+.course-completion-next {
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr) auto;
+  gap: .8rem;
+  align-items: center;
+  border-color: #d4e2e5;
+}
+.course-completion-next > svg {
+  color: #2f6a58;
+}
+.course-completion-next > div {
+  display: grid;
+  gap: .25rem;
+}
+
+.free-practice-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: .4rem 0;
+}
+.free-practice-header > div {
+  max-width: 48rem;
+  display: grid;
+  gap: .45rem;
+}
+.free-practice-header h1 {
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  line-height: 1.1;
+}
+.free-practice-header > div > p:last-child {
+  color: #5e6f78;
+  line-height: 1.55;
+}
+.free-practice-start {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  border-color: #bfdadd;
+  background: #f5fbfb;
+}
+.free-practice-start > div {
+  display: grid;
+  gap: .3rem;
+}
+.free-practice-tools {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .75rem;
+}
+.free-practice-tool {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: .75rem;
+  align-items: center;
+  padding: .9rem;
+  border: 1px solid #dbe3e8;
+  border-radius: 10px;
+  color: #24333b;
+  background: #fff;
+}
+.free-practice-tool:hover {
+  border-color: #b9d4d6;
+  background: #f8fbfb;
+  text-decoration: none;
+}
+.free-practice-tool.featured {
+  border-color: #a9cfd2;
+  background: #f0f8f8;
+}
+.free-practice-tool > span {
+  width: 2.35rem;
+  height: 2.35rem;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: #126064;
+  background: #dff1f1;
+}
+.free-practice-tool > div {
+  min-width: 0;
+  display: grid;
+  gap: .2rem;
+}
+.free-practice-tool h2 {
+  font-size: .92rem;
+}
+.free-practice-tool p {
+  font-size: .78rem;
+}
+.free-practice-prompts article {
+  display: grid;
+  gap: .3rem;
+}
+.free-practice-footer-actions {
+  justify-content: flex-start;
+}
+
+@media (max-width: 760px) {
+  .course-completion-stats,
+  .course-completion-skills,
+  .free-practice-tools,
+  .free-practice-prompts {
+    grid-template-columns: 1fr;
+  }
+  .course-completion-next,
+  .free-practice-start,
+  .free-practice-header {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .course-completion-next {
+    align-items: start;
+  }
+  .course-completion-actions,
+  .free-practice-footer-actions {
+    display: grid;
+    width: 100%;
+  }
+  .course-completion-actions a,
+  .free-practice-footer-actions a,
+  .free-practice-header > a,
+  .free-practice-start > a {
+    width: 100%;
+  }
+}
+/* === End Milestone 53 === */
