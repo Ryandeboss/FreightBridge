@@ -21,6 +21,7 @@ import { useOperationsSession } from '../auth/OperationsSession';
 import { LabWorkstation } from '../components/training/LabWorkstation';
 import { AnalystNotes } from '../components/training/TrainingComponents';
 import { completeMission, hasCompletedMission, loadTrainingProgress } from '../training/progress';
+import { trainingMissions } from '../training/missions';
 import type {
   IncidentEvidencePoint,
   IncidentEvidenceSource,
@@ -275,6 +276,14 @@ export function GuidedIncidentWorkstation({ mission }: { mission: IncidentMissio
     && planCorrect
     && verified
     && statusUpdate.trim().length >= 40;
+  const currentMissionIndex = trainingMissions.findIndex((candidate) => candidate.id === mission.id);
+  const nextMission = currentMissionIndex >= 0 ? trainingMissions[currentMissionIndex + 1] : undefined;
+  const nextMissionPath = nextMission ? '/learn/mission/' + nextMission.slug : '/learn/desk';
+  const nextMissionLabel = nextMission
+    ? mission.missionNumber === 7
+      ? 'Continue to Module 05'
+      : 'Continue to Mission ' + (mission.missionNumber + 1)
+    : 'Return to Training Desk';
 
   async function startIncident() {
     if (!token) return;
@@ -468,9 +477,14 @@ export function GuidedIncidentWorkstation({ mission }: { mission: IncidentMissio
                   : 'FreightBridge verified a corrected same-load retry through the healthy lifecycle.'}
               </p>
             </div>
-            <Link className="primary-button" to="/learn/desk">
-              Return to Training Desk <ArrowRight size={16} />
-            </Link>
+            <div className="workstation-complete-actions">
+              <Link className="primary-button" to={nextMissionPath}>
+                {nextMissionLabel} <ArrowRight size={16} />
+              </Link>
+              <Link className="secondary-button" to="/learn/desk">
+                Training Desk
+              </Link>
+            </div>
           </article>
           <article className="panel guided-incident-debrief" data-testid="incident-debrief">
             <p className="eyebrow">MISSION COMPLETE</p>
