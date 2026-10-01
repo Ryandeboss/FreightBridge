@@ -3243,8 +3243,12 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(within(workstation).getByRole('tab', { name: /Console/i })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('workstation-console')).toHaveTextContent(/Partner authentication/i);
     expect(screen.getByTestId('workstation-console')).toHaveTextContent(/NOT REACHED/i);
-    expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/AUTHENTICATION_ERROR/i);
     expect(screen.getByTestId('incident-workspace')).not.toHaveTextContent(token);
+
+    await userEvent.click(screen.getByTestId('workstation-log-authentication'));
+    expect(screen.getByTestId('training-story-log-viewer')).toHaveTextContent(/AUTHENTICATION_ERROR/i);
+    expect(screen.getByTestId('training-story-log-viewer')).toHaveTextContent(/stage=AUTHENTICATION/i);
+    await userEvent.click(screen.getByRole('button', { name: /Close log/i }));
 
     await userEvent.click(screen.getByTestId('workstation-log-received'));
     expect(screen.getByTestId('training-story-log-viewer')).toHaveTextContent(/REDACTED/i);
@@ -3301,10 +3305,12 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(await screen.findByTestId('incident-mission-page')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /Start Incident/i }));
     const workstation = await screen.findByTestId('lab-workstation');
-    expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/INVALID_JSON/i);
-    expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/PARSING/i);
     expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/Business validation/i);
     expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/NOT REACHED/i);
+    await userEvent.click(screen.getByTestId('workstation-log-parsing'));
+    expect(screen.getByTestId('training-story-log-viewer')).toHaveTextContent(/INVALID_JSON/i);
+    expect(screen.getByTestId('training-story-log-viewer')).toHaveTextContent(/stage=PARSING/i);
+    await userEvent.click(screen.getByRole('button', { name: /Close log/i }));
 
     await userEvent.click(within(workstation).getByRole('tab', { name: /Answer/i }));
     await chooseIncidentOption(/Where did FreightBridge evidence last look healthy/i, /Partner authentication succeeded/i);
@@ -3349,8 +3355,8 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     await userEvent.click(screen.getByRole('button', { name: /Start Incident/i }));
     expect(await screen.findByTestId('incident-workspace')).toHaveTextContent(/INVALID_APEX_LOAD/i);
     expect(screen.getByTestId('incident-workspace')).toHaveTextContent(/VALIDATION/i);
-    expect(screen.getByRole('heading', { name: /^JSON parsing$/i }).closest('article')).toHaveTextContent(/SUCCEEDED/i);
-    expect(screen.getByRole('heading', { name: /^Apex load contract validation$/i }).closest('article')).toHaveTextContent(/FAILED/i);
+    expect(screen.getByTestId('workstation-log-parsing')).toHaveTextContent(/SUCCEEDED/i);
+    expect(screen.getByTestId('workstation-log-validation')).toHaveTextContent(/FAILED/i);
     expect(screen.getByTestId('contract-mapping-classifier')).toHaveTextContent(/Contract validation vs\. mapping failure/i);
     expect(screen.getByTestId('contract-failure-card')).toHaveClass('active');
     expect(screen.getByTestId('failure-boundary-verdict')).toHaveTextContent(/INVALID_APEX_LOAD/i);
