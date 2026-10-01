@@ -3323,7 +3323,7 @@ test('Training Desk routes healthy progress into the unified workstation and pre
       expect(calls).not.toContain('FULL_SHIPMENT_LIFECYCLE');
     });
 
-    await userEvent.click(screen.getByRole('link', { name: /^Training Desk$/i }));
+    await userEvent.click(within(screen.getByTestId('incident-summary')).getByRole('link', { name: /^Training Desk$/i }));
     expect(await screen.findByTestId('training-home-page')).toBeInTheDocument();
     expect(screen.getByTestId('mission-3-card')).toHaveTextContent(/Open Mission/i);
     expect(screen.getByTestId('mission-4-card')).toHaveTextContent(/Locked/i);
@@ -3358,7 +3358,7 @@ test('Training Desk routes healthy progress into the unified workstation and pre
       expect(calls).not.toContain('FULL_SHIPMENT_LIFECYCLE');
     });
 
-    await userEvent.click(screen.getByRole('link', { name: /^Training Desk$/i }));
+    await userEvent.click(within(screen.getByTestId('incident-summary')).getByRole('link', { name: /^Training Desk$/i }));
     expect(await screen.findByTestId('mission-4-card')).toHaveTextContent(/Open Mission/i);
     expect(screen.getByText(/Mission 5 - Why Is This Shipment Showing Up Twice/i).closest('article')).toHaveTextContent(/Locked/i);
   });
@@ -3415,7 +3415,7 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(await screen.findByTestId('incident-debrief')).toHaveTextContent(/MISSION COMPLETE/i);
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('APEX_INVALID_CONTRACT');
     expect(screen.getByRole('link', { name: /Continue to Mission 5/i })).toHaveAttribute('href', '#/learn/mission/duplicate-shipment');
-    await userEvent.click(screen.getByRole('link', { name: /^Training Desk$/i }));
+    await userEvent.click(within(screen.getByTestId('incident-summary')).getByRole('link', { name: /^Training Desk$/i }));
     expect(await screen.findByTestId('mission-5-card')).toHaveTextContent(/Open Mission/i);
   }, 10000);
 
@@ -3453,7 +3453,7 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('DUPLICATE_SHIPMENT');
     expect(screen.getByRole('link', { name: /Continue to Mission 6/i })).toHaveAttribute('href', '#/learn/mission/x12-envelope-mismatch');
 
-    await userEvent.click(screen.getByRole('link', { name: /^Training Desk$/i }));
+    await userEvent.click(within(screen.getByTestId('incident-summary')).getByRole('link', { name: /^Training Desk$/i }));
     expect(await screen.findByTestId('mission-6-card')).toHaveTextContent(/Open Mission/i);
     expect(screen.getByTestId('mission-7-card')).toHaveTextContent(/Locked/i);
   }, 10000);
@@ -3488,7 +3488,7 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('X12_ENVELOPE_MISMATCH');
     expect(screen.getByRole('link', { name: /Continue to Mission 7/i })).toHaveAttribute('href', '#/learn/mission/status-callback-missing');
 
-    await userEvent.click(screen.getByRole('link', { name: /^Training Desk$/i }));
+    await userEvent.click(within(screen.getByTestId('incident-summary')).getByRole('link', { name: /^Training Desk$/i }));
     expect(await screen.findByTestId('mission-7-card')).toHaveTextContent(/Open Mission/i);
   }, 10000);
 
@@ -3530,7 +3530,7 @@ test('Training Desk routes healthy progress into the unified workstation and pre
     expect(window.localStorage.getItem(TRAINING_PROGRESS_STORAGE_KEY)).toContain('STATUS_CALLBACK_MISSING');
     expect(screen.getByRole('link', { name: /Continue to Module 05/i })).toHaveAttribute('href', '#/learn/mission/wrong-x12-version');
 
-    await userEvent.click(screen.getByRole('link', { name: /^Training Desk$/i }));
+    await userEvent.click(within(screen.getByTestId('incident-summary')).getByRole('link', { name: /^Training Desk$/i }));
     expect(await screen.findByTestId('mission-8-card')).toHaveTextContent(/Open Mission/i);
   }, 10000);
 
