@@ -24,7 +24,7 @@ import {
   PRODUCTION_INCIDENT_MISSION_ID,
   trainingMissions,
 } from '../training/missions';
-import { isIndependentInvestigationComplete, isReplaySequencePracticeComplete } from '../training/advancedPractice';
+import { isIndependentInvestigationComplete } from '../training/advancedPractice';
 import { completeMission, hasCompletedMission, loadTrainingProgress } from '../training/progress';
 import type { IncidentMissionDefinition, IncidentOption, IncidentStatus, MissionPhase } from '../training/types';
 
