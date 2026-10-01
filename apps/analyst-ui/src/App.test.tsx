@@ -2377,7 +2377,7 @@ describe('Analyst Console', () => {
     expect(screen.getByRole('heading', { name: /Sign in to continue training/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Create account/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Show create account/i })).toBeInTheDocument();
   });
 
   test('shows Continue Training and resumes the desk after access validation', async () => {
