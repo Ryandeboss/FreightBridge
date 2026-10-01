@@ -60,6 +60,12 @@ export function TrainingHomePage() {
     (mission) => mission.implemented && isMissionUnlocked(mission.id, progress) && !hasCompletedMission(progress, mission.id),
   ) ?? finalMission;
   const currentMissionComplete = hasCompletedMission(progress, currentMission.id);
+  const independentIsCurrent = replaySequenceComplete && !independentComplete;
+  const focusTitle = independentIsCurrent ? 'Independent Investigation' : currentMission.title;
+  const focusBadge = independentIsCurrent ? 'INDEPENDENT' : currentMission.difficulty;
+  const focusSummary = independentIsCurrent
+    ? 'Choose your own evidence path, diagnose the incident without a hint ladder, configure a safe retry, and prove recovery.'
+    : currentMission.summary;
 
   return (
     <section className="ops-home" data-testid="training-home-page">
@@ -272,10 +278,10 @@ export function TrainingHomePage() {
       <div className="ops-middle-grid">
         <article className="panel ops-focus-card" data-testid="ops-current-focus">
           <div className="ops-section-heading">
-            <div><p className="eyebrow">{trainingComplete ? 'Completed Shift' : 'Current Mission'}</p><h2>{trainingComplete ? 'Training path finished' : currentMission.title}</h2></div>
-            <span className="badge badge-info">{trainingComplete ? '10 / 10' : currentMission.difficulty}</span>
+            <div><p className="eyebrow">{trainingComplete ? 'Completed Shift' : 'Current Mission'}</p><h2>{trainingComplete ? 'Training path finished' : focusTitle}</h2></div>
+            <span className="badge badge-info">{trainingComplete ? '10 / 10' : focusBadge}</span>
           </div>
-          <p className="muted-text">{trainingComplete ? 'The guided queue is complete. Use the review links or Advanced Console to revisit evidence without changing your training completion.' : currentMission.summary}</p>
+          <p className="muted-text">{trainingComplete ? 'The guided queue is complete. Use the review links or Advanced Console to revisit evidence without changing your training completion.' : focusSummary}</p>
           <div className="ops-focus-sequence" aria-label={trainingComplete ? 'Completed analyst skills' : 'Analyst troubleshooting sequence'}>
             {trainingComplete ? (
               <>
