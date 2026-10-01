@@ -1,5 +1,5 @@
 import { ArrowLeft, LogIn, ShieldCheck, UserPlus } from 'lucide-react';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { useOperationsSession } from '../auth/OperationsSession';
@@ -22,13 +22,15 @@ export function AccessPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(sessionMessage);
   const [tone, setTone] = useState<'error' | 'info'>('info');
+  const submittedAuthRef = useRef(false);
 
-  if (isAuthenticated && !isSubmitting) {
+  if (isAuthenticated && !submittedAuthRef.current) {
     return <Navigate to={hasStartedLearningJourney() ? '/learn/desk' : destination} replace />;
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    submittedAuthRef.current = true;
     setIsSubmitting(true);
     setMessage(null);
 
