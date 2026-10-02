@@ -1,150 +1,428 @@
 # FreightBridge
 
+> **A full-stack EDI/API logistics integration simulator and analyst-training platform.**  
+> FreightBridge models how a modern REST/JSON logistics partner can exchange shipment data with an X12 EDI carrier while preserving mapping, correlation, observability, retry, and troubleshooting workflows.
+
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Open_FreightBridge-126064?style=for-the-badge)](https://freightbridge-app.vercel.app/)
 [![CI](https://github.com/Ryandeboss/FreightBridge/actions/workflows/ci.yml/badge.svg)](https://github.com/Ryandeboss/FreightBridge/actions/workflows/ci.yml)
 
-FreightBridge is a synthetic logistics integration platform that translates between a modern REST/JSON broker and an X12 004010 carrier. It demonstrates canonical shipment mapping, SFTP transport, technical and business acknowledgments, idempotency, retry, transaction observability, partner configuration, an Analyst Console, and an Integration Lab for happy-path and controlled-failure demos.
+**Live app:** https://freightbridge-app.vercel.app/
 
-FreightBridge has a public learner entry plus two authenticated workspaces: Training Mode for guided, story-driven integration learning, and the Advanced Analyst Console for direct operational exploration. The learner first sees a minimal three-company screen for Apex Logistics, FreightBridge, and Midwest Carrier; only after choosing Begin/Continue does the small access step appear. Training then moves through First-Day Orientation, a four-part healthy-flow walkthrough, Missions 1–10, compact analyst tools, an advanced replay/sequence clinic, and an independent final shift. After Mission 10, the desk moves into a 10 / 10 completion state for review and demos.
+FreightBridge is a portfolio lab built to learn and demonstrate the core work behind **EDI/API integration engineering** in logistics. It combines a deployed integration system, operational analyst tooling, controlled failure scenarios, and a guided training course in one application.
 
-This is a portfolio lab, not a production TMS. Apex Logistics and Midwest Carrier are fictional trading partners created for the project. The architecture and failure modes are modeled after real EDI/API integration work, but no real customer or partner data is involved.
+Apex Logistics and Midwest Carrier are fictional trading partners. No real customer or partner data is used.
 
-## Project Status
+---
 
-The core integration MVP was accepted through Milestone 22, and the analyst-training experience was subsequently completed through Milestone 40. The deployed project now includes the full integration workflow, Advanced Console, Integration Lab, completed 10-mission Training Mode, replay/sequence practice, and final demo/polish pass.
+## Why I Built It
 
-## What It Demonstrates
+Logistics integrations rarely live in one technology stack.
 
-- REST/JSON ingestion from a synthetic broker/3PL partner.
-- Canonical shipment modeling between partner-specific contracts.
-- Generic X12 parsing, validation, and serialization separate from business mapping.
-- Midwest X12 004010 transaction sets: `204`, `997`, `990`, and `214`.
-- SFTP exchange through SFTPGo with host-key verification, archive/error routing, and atomic upload/rename.
-- Bearer-token protected partner and operations APIs.
-- Idempotency-key replay, business duplicate detection, and stored-payload manual retry.
-- Versioned partner mapping profiles and runtime mapping audit metadata.
-- IntegrationTransaction, ProcessingLog, IntegrationError, business trace, and failure queue observability.
-- Analyst Console screens for dashboard, transactions, failures, trace, partners, mappings, and Integration Lab.
-- Completed Training Mode for a FreightBridge Integration Support Analyst: orientation, guided healthy flow, Missions 1–10, compact tools, replay/sequence practice, and final-shift completion state.
-- Full Analyst Console remains available as Advanced Console for direct operational and configuration exploration.
-- Controlled failure injection for troubleshooting demos.
-- Automated regression testing with contract, X12, UI, real PostgreSQL, and deployed acceptance layers.
+A broker or 3PL may expose a modern **REST API with JSON**, while a carrier may exchange **X12 EDI files over SFTP**. The difficult part is not simply converting one format into another. Integration engineers also have to deal with:
 
-One important EDI concept is intentionally visible throughout the project: `997` is a technical functional acknowledgment that says an EDI document was syntactically received, while `990` is the business tender decision that accepts or rejects a load. FreightBridge records those separately so a technically accepted `204` does not accidentally become a business-accepted tender.
+- partner-specific field names and business rules;
+- transport differences between synchronous APIs and asynchronous file exchange;
+- X12 envelopes, control numbers, and version compatibility;
+- shipment and transaction correlation;
+- technical acknowledgments versus business decisions;
+- idempotency, duplicate submissions, and exact-message replay;
+- out-of-order shipment events;
+- mapping changes and partner-specific configuration;
+- observability when a message fails halfway through a multi-system flow.
+
+**FreightBridge models those problems end to end.**
+
+---
+
+## The Scenario
+
+FreightBridge sits between two synthetic logistics partners:
+
+| System | Role | Integration style |
+| --- | --- | --- |
+| **Apex Logistics** | Broker / 3PL-style partner | REST API + JSON |
+| **FreightBridge** | Integration middleware | Canonical model, mapping, routing, observability |
+| **Midwest Carrier** | Motor-carrier-style partner | X12 004010 + SFTP |
+
+A normal shipment moves through the system like this:
+
+```text
+Apex Logistics
+REST / JSON load tender
+        ↓
+FreightBridge
+Authenticate → Validate → Canonicalize → Map → Audit
+        ↓
+X12 204 over SFTP
+        ↓
+Midwest Carrier
+
+Midwest → 997 technical acknowledgment
+Midwest → 990 tender response
+Midwest → 214 shipment status events
+
+        ↓
+FreightBridge correlates and normalizes the responses
+        ↓
+Apex receives tender and shipment-status updates
+```
+
+One distinction is intentionally emphasized throughout the project:
+
+- **997** = technical / functional acknowledgment of the EDI transaction.
+- **990** = business decision accepting or rejecting the load.
+
+A technically acknowledged 204 is not automatically a business-accepted tender.
+
+---
+
+## What You Can Do In The Live App
+
+### 1. Learn the integration flow
+
+The public learner experience introduces the three-company relationship before moving into an authenticated course.
+
+The completed course contains:
+
+- **7 modules**
+- **10 missions**
+- First-Day Orientation
+- EDI & Protocol Basics
+- Healthy Integration walkthrough
+- Guided Troubleshooting
+- Advanced Incidents
+- Independent Investigation
+- Final Shift
+- Course Completion
+- post-course **Free Practice**
+
+Learner accounts use **Supabase Auth**, and course progress is persisted server-side so a learner can sign in again and continue from another browser.
+
+### 2. Run integrations
+
+The **Integration Lab** can execute healthy shipment scenarios and controlled failures against the deployed backend services.
+
+Examples include:
+
+- full shipment lifecycle;
+- technical acknowledgment only;
+- accepted or rejected tender;
+- authentication failure;
+- malformed JSON;
+- contract validation failure;
+- duplicate shipment attempt;
+- X12 control mismatch;
+- unsupported status mapping;
+- wrong X12 version;
+- SFTP trust failure;
+- unknown shipment reference.
+
+### 3. Investigate what happened
+
+The Advanced Analyst Console includes:
+
+- Dashboard
+- Transactions
+- Transaction Detail
+- Business Trace
+- Failures
+- Failure Detail
+- Partner Profiles
+- Mapping Profiles
+- Integration Lab
+
+The goal is to answer questions such as:
+
+> What did FreightBridge receive?  
+> How far did processing get?  
+> What was the last healthy checkpoint?  
+> Which boundary failed?  
+> What evidence proves the root cause?  
+> Did the correction actually restore the customer-facing outcome?
+
+---
+
+## Quick Demo Path
+
+If you are reviewing the project from a portfolio or LinkedIn post, this is the fastest path through the strongest parts of the application.
+
+| Step | Route | What to look for |
+| --- | --- | --- |
+| 1 | [`#/learn`](https://freightbridge-app.vercel.app/#/learn) | Apex → FreightBridge → Midwest product framing |
+| 2 | `#/learn/bootcamp` | REST vs JSON, SFTP vs X12, 204 / 997 / 990 / 214 |
+| 3 | `#/learn/healthy/workstation` | Healthy JSON → canonical → X12 shipment flow |
+| 4 | `#/lab` | Run a full lifecycle or controlled failure |
+| 5 | `#/trace/<LOAD_ID>` | Follow one business identifier across transactions |
+| 6 | `#/learn/mission/production-incident` | Final Shift: diagnose a valid 214 with the wrong shipment reference |
+| 7 | `#/learn/completion` | 10 / 10 missions, 100% completion |
+| 8 | `#/learn/free-practice` | Unguided access to the analyst toolset |
+| 9 | `#/dashboard` | Full Advanced Analyst Console |
+
+Authenticated routes require a learner account.
+
+---
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  Analyst[Analyst Console / Integration Lab]
-  Apex[Apex Logistics Simulator<br/>REST / JSON]
-  FB[FreightBridge API<br/>FastAPI]
-  Canonical[Canonical Domain<br/>Shipment / Tender / Event]
-  DB[(PostgreSQL / Supabase)]
-  Audit[IntegrationTransaction<br/>ProcessingLog<br/>IntegrationError]
-  Mapper[X12 Mapping / Generation<br/>004010]
-  SFTP[SFTPGo / Railway]
-  Midwest[Midwest Carrier Simulator<br/>X12 / SFTP]
+  UI[React / TypeScript UI<br/>Vercel]
+  Apex[Apex Logistics Simulator<br/>FastAPI / Render]
+  FB[FreightBridge API<br/>FastAPI / Render]
+  DB[(Supabase PostgreSQL<br/>+ Auth)]
+  SFTP[SFTPGo<br/>Railway]
+  Midwest[Midwest Carrier Simulator<br/>FastAPI / Render]
 
-  Analyst -->|Operations, Configuration, Lab APIs| FB
-  Apex -->|Load tender JSON| FB
-  FB --> Canonical
-  FB --> DB
-  FB --> Audit
-  Canonical --> Mapper
-  Mapper -->|204| SFTP
-  SFTP --> Midwest
-  Midwest -->|997 technical ack<br/>990 tender response<br/>214 shipment status| SFTP
-  SFTP --> FB
+  UI -->|Training, operations, configuration, lab APIs| FB
+  Apex -->|REST / JSON load tender| FB
   FB -->|canonical state + audit| DB
-  FB -->|tender/status REST updates| Apex
+  FB -->|X12 204| SFTP
+  SFTP --> Midwest
+  Midwest -->|X12 997 / 990 / 214| SFTP
+  SFTP --> FB
+  FB -->|tender + shipment updates| Apex
 ```
 
-More detail: [portfolio architecture](docs/portfolio/architecture.md), [end-to-end flow](docs/portfolio/end-to-end-flow.md), and [technical decisions](docs/portfolio/technical-decisions.md).
+### Core system boundaries
 
-## Successful Lifecycle
+**REST / JSON side**
+- synchronous API requests;
+- bearer-token authentication;
+- JSON parsing and contract validation;
+- partner-specific Apex mapping.
 
-```mermaid
-sequenceDiagram
-  participant Analyst as Analyst / Integration Lab
-  participant Apex as Apex
-  participant FB as FreightBridge
-  participant DB as PostgreSQL
-  participant SFTP as SFTPGo
-  participant Midwest as Midwest
+**Canonical domain**
+- shipment;
+- locations and stops;
+- references;
+- tender response;
+- shipment events;
+- integration transactions;
+- processing logs;
+- integration errors.
 
-  Analyst->>FB: Start Full Shipment Lifecycle
-  FB->>Apex: Create synthetic load
-  Apex->>FB: Dispatch load tender JSON
-  FB->>DB: Persist canonical shipment + transaction audit
-  FB->>FB: Generate Midwest 204
-  FB->>SFTP: Upload 204 .part, rename final
-  SFTP->>Midwest: Midwest polls inbound 204
-  Midwest->>SFTP: Return 997 technical acknowledgment
-  FB->>SFTP: Poll 997
-  FB->>DB: Correlate AK1/AK2 to original 204 controls
-  Midwest->>SFTP: Return 990 business tender response
-  FB->>SFTP: Poll 990
-  FB->>DB: Record business tender decision
-  FB->>Apex: Send tender status update
-  Midwest->>SFTP: Return 214 events: AF, X6, X1, D1
-  FB->>SFTP: Poll 214 files
-  FB->>DB: Append event history and compute current status
-  FB->>Apex: Send shipment status updates
-  Analyst->>FB: Inspect business trace
-```
+**X12 / SFTP side**
+- X12 004010 parsing and serialization;
+- 204 Load Tender;
+- 997 Functional Acknowledgment;
+- 990 Tender Response;
+- 214 Shipment Status;
+- SFTP transport, host-key verification, archive/error routing, and atomic upload/rename.
 
-## Portfolio Reading Path
+---
 
-- [Portfolio overview](docs/portfolio/README.md)
-- [Architecture](docs/portfolio/architecture.md)
-- [End-to-end flow](docs/portfolio/end-to-end-flow.md)
-- [Troubleshooting case study](docs/portfolio/troubleshooting-case-study.md)
-- [Evidence index](docs/portfolio/evidence.md)
-- [Final MVP summary](docs/portfolio/final-mvp-summary.md)
-- [Demo script](docs/portfolio/demo-script.md)
-- [Interview guide](docs/portfolio/interview-guide.md)
-- [Full documentation index](docs/README.md)
+## Engineering Highlights
 
-## Testing Story
+| Integration problem | FreightBridge approach |
+| --- | --- |
+| Partner contracts do not match | Normalize partner payloads into a stable canonical model |
+| X12 structure and business meaning are different concerns | Keep the generic parser separate from partner-specific mapping |
+| Technical success can be mistaken for business success | Store 997 acknowledgment separately from 990 tender decision |
+| Retries can create duplicate business work | Distinguish idempotent replay from duplicate shipment attempts |
+| Exact X12 files can be received more than once | Retain replay/audit evidence while skipping duplicate side effects |
+| Shipment events can arrive out of order | Preserve event history while using business event time to determine current status |
+| Partner mappings change | Use versioned mapping profiles with draft, validation, activation, and audit history |
+| Multi-system failures are difficult to diagnose | Persist transaction, processing-log, error, mapping, and correlation evidence |
+| Transport failures may happen before a transaction exists | Treat SFTP trust/connectivity as its own observable boundary |
+| Training can become disconnected from real behavior | Run guided scenarios against the same APIs and integration logic used by the Advanced Console |
 
-Coverage gates complement contract, integration, database, frontend, and deployed acceptance tests. Current normal CI includes:
+---
 
-- Frontend lint, Vitest coverage, and production build.
-- FreightBridge API, Apex simulator, and Midwest simulator pytest suites with coverage gates.
-- REST/API contract tests for stable FastAPI route and response surfaces.
-- Apex documented-contract checks against `docs/partners/apex/openapi.yaml`.
-- X12 regression tests for 204, 997, 990, and 214 behavior.
-- Ephemeral PostgreSQL 16 validation that applies migrations `001` through `011` from scratch, verifies schema/seed data, and runs real repository tests.
-- Acceptance harness unit tests.
-- Documentation link validation.
+## Training Mode
 
-Accepted Milestone 20 coverage evidence was approximately:
+Training Mode is designed around one principle:
 
-- FreightBridge API: 76.62%
-- Apex simulator: 85.80%
-- Midwest simulator: 72.94%
-- Analyst UI line coverage: 73.22%
+> **Never show the learner a tool before they understand why they need it.**
 
-Deployed regression is manual `workflow_dispatch` because it mutates shared synthetic test data. Milestone 20 runs the Milestone 18 full happy path and then the Milestone 19 controlled failure drills.
-
-## Repository Map
+The learner begins with the business story and gradually moves toward real operational tooling.
 
 ```text
-apps/analyst-ui/              React + TypeScript Analyst Console
-services/freightbridge-api/   FastAPI integration and operations API
-services/apex-partner-sim/    Synthetic Apex REST/JSON partner simulator
-services/midwest-partner-sim/ Synthetic Midwest X12 partner simulator
-docs/                         Portfolio, architecture, partner, operations, and testing docs
-infrastructure/supabase/      PostgreSQL migrations 001-011
-infrastructure/railway/       SFTPGo/Railway setup notes
-sample-data/                  Synthetic Apex JSON and Midwest X12 fixtures
-scripts/acceptance/           Deployed acceptance harnesses
-scripts/ci/                   CI helpers including migration and docs validation
+01 Orientation
+      ↓
+02 EDI & Protocol Basics
+      ↓
+03 Healthy Integration
+      ↓
+04 Guided Troubleshooting
+      ↓
+05 Advanced Incidents
+      ↓
+06 Independent Investigation
+      ↓
+07 Final Shift
+      ↓
+Course Completion → Free Practice
 ```
 
-## Local Development
+Advanced labs use a reusable:
 
-Frontend:
+**CONSOLE | CODE | ANSWER**
+
+workstation so the learner can inspect evidence, understand configuration, form a diagnosis, apply a controlled correction, and verify recovery.
+
+The Final Shift removes most of the earlier hand-holding. The learner investigates a technically valid Midwest 214 that reaches business validation but references the wrong shipment, then proves the corrected Apex-facing result.
+
+---
+
+## Observability And Troubleshooting
+
+FreightBridge records operational evidence instead of treating integration failures as opaque exceptions.
+
+### `IntegrationTransaction`
+Tracks the message or integration operation being processed.
+
+### `ProcessingLog`
+Records stage-by-stage progress through the integration pipeline.
+
+### `IntegrationError`
+Stores safe diagnostic information such as:
+
+- stage;
+- category;
+- error code;
+- retryability;
+- human-readable message.
+
+### Business Trace
+Correlates transactions and relationships around a business identifier such as a shipment or load.
+
+This makes it possible to distinguish failures at boundaries such as:
+
+```text
+Authentication
+→ Parsing
+→ Contract Validation
+→ Canonical Mapping
+→ X12 Controls
+→ Partner Profile
+→ Status Mapping
+→ Business Correlation
+→ Downstream Update
+```
+
+---
+
+## Technology Stack
+
+| Layer | Technology |
+| --- | --- |
+| Frontend | React, TypeScript, Vite |
+| Frontend deployment | Vercel |
+| Integration API | Python, FastAPI |
+| Partner simulators | Python, FastAPI |
+| Backend deployment | Render |
+| Database | PostgreSQL / Supabase |
+| Authentication | Supabase Auth |
+| SFTP environment | SFTPGo on Railway |
+| EDI | X12 004010 |
+| Testing | Vitest, pytest, PostgreSQL regression tests |
+| CI | GitHub Actions |
+
+---
+
+## Testing And Quality
+
+Normal CI validates the project across multiple layers:
+
+- frontend lint, tests, coverage, and production build;
+- FreightBridge API tests;
+- Apex simulator tests;
+- Midwest simulator tests;
+- REST/API contract checks;
+- X12 regression behavior;
+- PostgreSQL migration-chain regression;
+- acceptance-harness unit tests;
+- documentation validation.
+
+The database regression job creates a fresh PostgreSQL environment and applies migrations **001 through 012** before running repository tests.
+
+Deployed end-to-end acceptance is kept separate because it mutates the shared synthetic environment.
+
+---
+
+## Repository Structure
+
+```text
+apps/analyst-ui/              React + TypeScript learner and analyst UI
+services/freightbridge-api/   FastAPI integration, operations, config, and lab API
+services/apex-partner-sim/    Synthetic REST/JSON broker/3PL simulator
+services/midwest-partner-sim/ Synthetic X12/SFTP carrier simulator
+
+infrastructure/supabase/      PostgreSQL migrations
+infrastructure/railway/       SFTPGo / Railway setup
+sample-data/                  Synthetic JSON and X12 fixtures
+
+scripts/acceptance/           Deployed acceptance harness
+scripts/ci/                   CI and migration helpers
+docs/                         Architecture, mappings, partner guides, runbooks, portfolio docs
+```
+
+---
+
+## Explore The Engineering Details
+
+For reviewers who want to go deeper:
+
+- [Architecture](docs/portfolio/architecture.md)
+- [End-to-end shipment flow](docs/portfolio/end-to-end-flow.md)
+- [Troubleshooting case study](docs/portfolio/troubleshooting-case-study.md)
+- [Technical decisions](docs/portfolio/technical-decisions.md)
+- [Evidence index](docs/portfolio/evidence.md)
+- [Interview / demo guide](docs/portfolio/demo-script.md)
+- [Full documentation index](docs/README.md)
+
+The [evidence index](docs/portfolio/evidence.md) maps major portfolio claims to the implementation, tests, and documentation that support them.
+
+---
+
+## Security And Scope
+
+FreightBridge is intentionally a **portfolio lab, not a production TMS or commercial EDI platform**.
+
+- Apex Logistics and Midwest Carrier are fictional.
+- All shipment data is synthetic.
+- Partner credentials and private SFTP material stay server-side.
+- The frontend does not receive partner bearer tokens, private keys, or database URLs.
+- SFTP host keys are pinned at the transport boundary.
+- The project demonstrates a scoped X12 004010 implementation rather than claiming full X12-standard coverage or production certification.
+
+### Implemented
+
+- REST/JSON load-tender ingestion
+- canonical shipment mapping
+- X12 204 generation
+- SFTP delivery
+- 997 acknowledgment processing
+- 990 tender-response processing
+- 214 shipment-status processing
+- idempotency and replay handling
+- event-time shipment progression
+- transaction observability
+- failure queue and business trace
+- retry workflows
+- partner configuration
+- versioned mapping profiles
+- controlled failure injection
+- Integration Lab
+- learner accounts and persistent course progress
+- completed 10-mission training course
+- course completion and Free Practice
+
+### Possible future extensions
+
+- X12 210 Freight Invoice
+- AS2 / MDN
+- X12 999 / TA1
+- SOAP/XML partner
+- broader mapping-designer tooling
+- production-grade environment promotion and change management
+
+---
+
+<details>
+<summary><strong>Local development</strong></summary>
+
+### Frontend
 
 ```bash
 cd apps/analyst-ui
@@ -155,7 +433,7 @@ npm run build
 npm run dev
 ```
 
-FreightBridge API:
+### FreightBridge API
 
 ```bash
 cd services/freightbridge-api
@@ -166,7 +444,7 @@ python -m pytest
 uvicorn app.main:app --reload
 ```
 
-Apex simulator:
+### Apex simulator
 
 ```bash
 cd services/apex-partner-sim
@@ -177,7 +455,7 @@ python -m pytest
 uvicorn app.main:app --reload
 ```
 
-Midwest simulator:
+### Midwest simulator
 
 ```bash
 cd services/midwest-partner-sim
@@ -188,45 +466,19 @@ python -m pytest
 uvicorn app.main:app --reload
 ```
 
-Documentation validation:
+### Documentation validation
 
 ```bash
 python scripts/ci/validate_docs.py
 python -m unittest discover scripts/ci/tests
 ```
 
-## Sample Data
+</details>
 
-- Apex JSON fixtures: [sample-data/json/apex](sample-data/json/apex/)
-- Midwest X12 fixtures: [sample-data/x12/midwest](sample-data/x12/midwest/)
-- Midwest mapping requirements: [docs/mappings](docs/mappings/README.md)
-- Partner contracts: [docs/partners](docs/partners/README.md)
+---
 
-## Security And Boundaries
+## Project Goal
 
-Partner credentials stay server-side. The frontend never receives partner bearer tokens, SFTP credentials, database URLs, or private keys. The operations token is entered at runtime by an authorized user and stored only in browser session storage. SFTP host keys are pinned, private keys remain server-side, and normal CI uses local processes plus an ephemeral PostgreSQL service rather than deployed production infrastructure.
+FreightBridge is meant to demonstrate more than the ability to build pages or APIs.
 
-## Implemented Vs Deferred
-
-Implemented:
-
-- Apex REST/JSON load tender ingestion.
-- Canonical shipment, tender, and event persistence.
-- Midwest X12 204 generation and SFTP delivery.
-- Midwest 997 technical acknowledgment processing.
-- Midwest 990 tender response processing.
-- Midwest 214 shipment event processing.
-- Operations observability, failure queue, business trace, manual retry, partner configuration, mapping versioning, Analyst Console, Integration Lab, and regression hardening.
-
-Deferred / future:
-
-- 210 Freight Invoice.
-- SOAP/XML third partner.
-- AS2 and MDN.
-- X12 999 and TA1.
-- Broad arbitrary graphical mapping designer.
-- Full production environment promotion and change-management workflow.
-
-## Known Limitations
-
-FreightBridge is intentionally scoped as a portfolio lab. It uses synthetic partners, supports a limited project-specific X12 004010 profile, and demonstrates production-style integration concerns without claiming full X12 standard coverage or production readiness.
+The goal is to show how I approach a system where **multiple partners, protocols, document formats, business rules, and failure boundaries have to work together** — and how I make that system observable enough for another person to understand, troubleshoot, and learn from.
